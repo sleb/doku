@@ -72,7 +72,7 @@ engine/
   rules.ts        findConflicts(), isSolved(), judgeTap()
   candidates.ts   Candidates type, fromBoard(), placeFace(), contradiction()
   techniques.ts   TECHNIQUES ladder, Deduction type
-  solver.ts       solveByTechniques(), countSolutions()
+  solver.ts       solveByTechniques(), solve(), countSolutions()
   difficulty.ts   rate()
   hints.ts        nextHint()
   generator.ts    generate()
@@ -172,7 +172,14 @@ interface SolveTrace {
 
 Loop: `cand = fromBoard(p, board ?? empty)`; repeatedly try techniques in ladder order, apply the first deduction found (placing, or eliminating), then restart from technique 1. Stop when every unit is satisfied (`solved`) or no technique makes progress (`!solved`). Because it always prefers the simplest applicable technique, `hardest` is the lowest tier at which the puzzle is solvable by this ladder.
 
-### 7.2 `countSolutions(p, limit = 2, board?)` — the uniqueness checker
+### 7.2 `solve` and `countSolutions` — the backtracking solver
+
+```ts
+function solve(p: Puzzle, board?: Board): number[] | null;   // solution[r] = column in row r
+function countSolutions(p: Puzzle, limit = 2, board?: Board): number;
+```
+
+`solve` returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. `countSolutions` and `solve` share one backtracking routine; `solve` stops at the first solution (`limit = 1`) and returns it.
 
 Plain backtracking, independent of the ladder, optimized for speed:
 - Place one face per row, top to bottom.
@@ -229,7 +236,7 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `CellState`, `Coord`, `compile`, `validateLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `CellState`, `Coord`, `compile`, `validateLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 
@@ -237,7 +244,7 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `CellState`, 
 |---|---|
 | Soundness (property) | For many generated puzzles, run `solveByTechniques` and assert no `Deduction` eliminates a solution cell and every `place` is a solution cell. This is the most important test. |
 | Uniqueness | `countSolutions(p, 2) === 1` for every generated and every fixture level; the backtracker's solution equals `level.solution`. |
-| Solver agreement | When `solveByTechniques` solves, its placements equal `level.solution`. |
+| Solver agreement | When `solveByTechniques` solves, its placements equal `level.solution`. `solve(p)` equals `level.solution` for every unique level, and returns `null` for a fixture with no valid placement. |
 | Determinism | `generate(o)` called twice (and across runs) returns deep-equal levels. |
 | Golden fixtures | A handful of hand-written levels per tier with expected `rate()` and expected first-hint technique. Locks the ladder's behavior against regressions. |
 | Technique unit tests | One small crafted board per technique showing exactly the deduction it should make (and that earlier techniques make none). |
