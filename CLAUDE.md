@@ -17,5 +17,6 @@ Read these before building, and update them (not this file) when a decision chan
 
 - **Strict TDD:** write a failing test first, then the minimum code to pass, then refactor. No production code without a test that demanded it.
 - **Fearless refactoring:** this is a personal project. Until the first MVP release there is no backwards compatibility, no deprecation shims, and no saved-data versioning or migrations. Change the shape of code, types, and saved data directly and update all callers.
+- **Planning:** use `/doku-plan` to plan an issue before implementing it. It drafts a plan, reviews it with the user in `ptal`, and posts it to the issue.
 - Branch off `main` and open PRs; commits and PRs use the attribution lines from the session reminder.
 - All branding, names and art are original; do not reference any specific existing game.
