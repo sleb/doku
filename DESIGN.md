@@ -1,17 +1,17 @@
-# Doku — Component-Level Design (draft 1)
+# Doku — Component-Level Design (draft 2)
 
-A Tauri 2 puzzle game in the style of Meowdoku (a "Queens"-type logic puzzle). Desktop first, mobile (iOS/Android via Tauri 2 mobile) second.
+A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first, mobile (iOS/Android via Tauri 2 mobile) second.
 
-## 1. Game rules (from meowdoku.org/how-to-play)
+## 1. Game rules
 
-Grid is N×N and divided into N colored regions. Place N cats such that:
+Grid is N×N and divided into N colored regions. Place N smiley faces such that:
 
-1. **Region:** exactly one cat per colored region.
-2. **Row/column:** exactly one cat per row and per column.
-3. **Adjacency:** no two cats touch, including diagonally.
+1. **Region:** exactly one face per colored region.
+2. **Row/column:** exactly one face per row and per column.
+3. **Adjacency:** no two faces touch, including diagonally.
 4. **Mistakes:** wrong taps cost hearts (lives).
 
-The source page does not specify grid size, win conditions, controls, hints, scoring or modes. Those are proposals below, marked *(proposed)*.
+Grid sizes, controls, hints, scoring and modes are our own design; items not yet agreed are marked *(proposed)*.
 
 ## 2. Architecture overview
 
@@ -30,7 +30,7 @@ The source page does not specify grid size, win conditions, controls, hints, sco
 
 **Key decision: game logic lives in pure TypeScript, not Rust.** Validation, solving, hints and generation are small, need instant feedback, and must behave identically on desktop and mobile. Rust stays a thin shell for storage and native features. This avoids IPC latency on every tap and keeps the engine unit-testable with no Tauri runtime (and runnable in a browser for fast dev). Revisit only if generation proves too slow in a Worker.
 
-Suggested stack: Tauri 2, Vite, React, TypeScript, Zustand (store), CSS Modules or Tailwind, Vitest, Playwright (against the Vite build).
+Suggested stack: Tauri 2, Vite, React, TypeScript, Zustand (store), Tailwind CSS, Vitest, Playwright (against the Vite build).
 
 ## 3. Repository layout
 
@@ -55,7 +55,7 @@ doku/
 
 | Module | Responsibility |
 |---|---|
-| `types.ts` | `Level { id, size, regions: number[][] }`, `Cell = empty \| mark \| cat`, `Board`, `Coord` |
+| `types.ts` | `Level { id, size, regions: number[][] }`, `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → set of violating cells + reason (`region`/`row`/`col`/`adjacent`); `isSolved()` |
 | `solver.ts` | Constraint-propagation solver; `solve()`, `countSolutions(limit=2)` for uniqueness |
 | `hints.ts` | `nextHint(board, level)` → `{ cell, technique, explanation }` using the human-technique ladder (single-cell region, region confined to one row/col, etc.) |
@@ -64,7 +64,7 @@ doku/
 | `seed.ts` | Seeded PRNG so daily puzzles are deterministic across devices |
 
 Design notes:
-- A placed cat that violates a rule is the "wrong tap" that costs a heart. Decide whether wrongness means **rule conflict** (cheap, local) or **differs from the unique solution** (stricter). Recommend **rule conflict** by default, since it matches the stated rules and is explainable to the player.
+- A placed face that violates a rule is the "wrong tap" that costs a heart. Decide whether wrongness means **rule conflict** (cheap, local) or **differs from the unique solution** (stricter). Recommend **rule conflict** by default, since it matches the stated rules and is explainable to the player.
 - Every function takes a board and returns new data. This makes undo/redo and tests trivial.
 
 ## 5. State management (`src/store`)
@@ -77,7 +77,7 @@ idle → playing ⇄ paused → won | lost
 
 State: `level`, `board`, `hearts`, `history[]` (for undo/redo), `elapsedMs`, `hintsUsed`, `conflicts` (derived), `status`.
 
-Actions: `startLevel`, `tapCell` (cycles empty → mark → cat, or per input mode), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
+Actions: `startLevel`, `tapCell` (cycles empty → mark → face, or per input mode), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
 
 Secondary stores: `progressStore` (completed levels, best times, stars), `settingsStore` (theme, sound, haptics, color-blind palette, input mode), `dailyStore` (*proposed*).
 
@@ -98,7 +98,7 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
      ├─ <GameScreen>
      │    ├─ <TopBar>  <BackButton/> <LevelTitle/> <Timer/> <Hearts/> <MenuButton/>
      │    ├─ <Board>
-     │    │    └─ <Cell> → <CatIcon/> | <MarkIcon/> | <ConflictHighlight/>
+     │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | <ConflictHighlight/>
      │    ├─ <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/> <InputModeToggle/>
      │    ├─ <PauseOverlay/>
      │    ├─ <HintToast/>
@@ -109,10 +109,10 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
 
 ### Component notes
 
-- **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell` with `aria-label` ("Row 3, column 5, green region, cat").
+- **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell` with `aria-label` ("Row 3, column 5, green region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
 - **`<Hearts>`**: N hearts, animates loss. Zero hearts triggers `lost`.
-- **`<InputModeToggle>`**: tap cycles (empty → ✕ → 🐱) vs. explicit "place cat / place mark" tool. Needed on mobile where right-click/drag are unavailable.
+- **`<InputModeToggle>`**: tap cycles (empty → ✕ → 😀) vs. explicit "place face / place mark" tool. Needed on mobile where right-click/drag are unavailable.
 - **`<HintButton>`**: calls `engine.nextHint`, highlights the cell and region and shows the technique text in `<HintToast>`. Costs a star or time penalty *(proposed)*.
 - **`<ResultModal>`**: purely driven by `status`.
 - **Theming**: region palette is a token set with a color-blind-safe variant, plus a pattern/number overlay option, since regions are distinguished by color alone otherwise.
@@ -149,18 +149,22 @@ Intentionally small for v1: plugins (store, fs), window config, capabilities fil
 
 ## 12. Milestones
 
-1. **Engine + tests** (rules, solver, a few hand-made levels).
+1. **Engine + tests** (rules, solver, a few fixture levels for tests).
 2. **Playable desktop board** (Board/Cell, store, hearts, win/lose).
 3. **Full desktop app** (level select, persistence, undo/redo, hints, settings, keyboard).
 4. **Generator + level packs + difficulty tiers.**
 5. **Mobile**: touch input, responsive layout, safe areas, haptics, Android then iOS builds.
 6. **Polish**: sound, animations, daily puzzle, accessibility pass.
 
-## 13. Open questions
+## 13. Decisions and open questions
 
-1. Grid sizes and level count: fixed range (e.g. 5×5 to 10×10)? Hand-authored, generated, or both?
-2. Wrong-tap definition: rule conflict vs. mismatch with the solution (see §4)?
-3. Hearts: 3 per level? Any recovery or ads/monetization (assume none)?
-4. Theme: cats literally (art needed), or a neutral skin to avoid copying Meowdoku's branding? (The mechanics are a generic puzzle type; art, name and levels should be our own.)
-5. Frontend framework: React assumed; Svelte or Solid are equally viable if you prefer.
-6. Do you want accounts, leaderboards or cloud sync? Assumed no for v1.
+Decided:
+1. **Grid sizes:** variable, with a configured min and max *(proposed: 5×5 to 10×10)*. **Levels are generated** for v1; hand-authored levels are a possible future addition (the level JSON format should not preclude them).
+2. **Hearts:** 3 per level, no recovery, no ads or monetization. (Avoiding interstitial ads is the reason this app exists.)
+3. **Theme:** smiley faces. All branding, names, art and levels are our own; no references to any specific existing game.
+4. **Frontend:** React, styled with Tailwind CSS.
+5. **Accounts, leaderboards, cloud sync:** not for v1.
+
+Still open:
+1. **Wrong-tap definition:** currently defaults to "rule conflict" (see §4); confirm or switch to "differs from the unique solution".
+2. **Exact min/max grid size** and how difficulty scales with size.
