@@ -19,6 +19,10 @@ bun run tauri dev   # full desktop app
 bun run build       # tsc && vite build
 ```
 
-No test or lint scripts exist yet. The design calls for Vitest (engine, store, components) and Playwright (against the Vite build); add the scripts when introducing them.
+```sh
+bun run test        # Vitest (node environment)
+```
+
+No lint script exists yet. The design also calls for Playwright (against the Vite build); add it when introducing it.
 
 Recommended IDE setup: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
