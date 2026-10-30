@@ -28,11 +28,11 @@ interface Level {
   seed?: string;            // for generated levels
 }
 
-enum CellState { Empty = 0, Mark = 1, Face = 2 }
+enum Cell { Empty = 0, Mark = 1, Face = 2 }
 
 // Player board: one byte per cell. Marks are free notes and are NEVER read by
 // the engine's reasoning (a mark may be wrong); only Face cells are facts.
-type Board = Readonly<Uint8Array>;      // length N*N, values of CellState
+type Board = Readonly<Uint8Array>;      // length N*N, values of Cell
 
 type Tier = 'easy' | 'medium' | 'hard' | 'expert';
 ```
@@ -66,7 +66,7 @@ interface Unit {
 
 ```
 engine/
-  types.ts        Level, Board, Tier, CellState, Coord
+  types.ts        Level, Board, Tier, Cell, Coord
   compile.ts      compile(), validateLevel(), idx/coord helpers
   board.ts        emptyBoard(), setCell(), facesOf() (immutable helpers)
   rules.ts        findConflicts(), isSolved(), judgeTap()
@@ -236,7 +236,7 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `CellState`, `Coord`, `compile`, `validateLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile`, `validateLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 
