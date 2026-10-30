@@ -55,9 +55,11 @@ doku/
 
 ## 4. Engine (`src/engine`) — pure, no side effects
 
+Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
+
 | Module | Responsibility |
 |---|---|
-| `types.ts` | `Level { id, size, regions: number[][], solution: Coord[] }`, `Cell = empty \| mark \| face`, `Board`, `Coord` |
+| `types.ts` | `Level { id, size, regions: number[][], solution: number[] }` (`solution[r]` is the column of the face in row r), `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → set of violating cells + reason (`region`/`row`/`col`/`adjacent`); `isSolved()` |
 | `solver.ts` | Constraint-propagation solver; `solve()`, `countSolutions(limit=2)` for uniqueness |
 | `hints.ts` | `nextHint(board, level)` → `{ cell, technique, explanation }`; runs the same ladder from `techniques.ts` and reports the simplest applicable technique |
@@ -78,7 +80,7 @@ A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.
 |---|---|
 | Easy | Region with one candidate cell left; row/column with one candidate cell left; eliminate cells in the row, column and neighbors of a placed face |
 | Medium | A region confined to one row or column eliminates the rest of that line (and the reverse: a row/column confined to one region) |
-| Hard | N regions confined to the same N rows or columns (pairs, triples) eliminate everything else in those lines |
+| Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. N regions confined to the same N rows or columns (pairs, triples) eliminate everything else in those lines |
 | Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
 
 Rules of the system:
