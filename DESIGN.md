@@ -13,7 +13,7 @@ Grid is N×N and divided into N colored regions. Place N smiley faces (one per r
 
 Grid sizes, controls, hints, scoring and modes are our own design; items not yet agreed are marked *(proposed)*.
 
-**Grid sizes:** 7×7 to 11×11, so an 11×11 puzzle has 11 faces. Smaller grids are easier: fewer cells and regions to reason about, and shorter chains of deduction. Difficulty tiers within a size come from how deep the required deduction is (see `difficulty.ts`).
+**Grid sizes:** 7×7 to 11×11, so an 11×11 puzzle has 11 faces. Smaller grids are easier: fewer cells and regions to reason about, and shorter chains of deduction. Difficulty is a separate axis from size; see §4.1.
 
 ## 2. Architecture overview
 
@@ -60,14 +60,32 @@ doku/
 | `types.ts` | `Level { id, size, regions: number[][], solution: Coord[] }`, `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → set of violating cells + reason (`region`/`row`/`col`/`adjacent`); `isSolved()` |
 | `solver.ts` | Constraint-propagation solver; `solve()`, `countSolutions(limit=2)` for uniqueness |
-| `hints.ts` | `nextHint(board, level)` → `{ cell, technique, explanation }` using the human-technique ladder (single-cell region, region confined to one row/col, etc.) |
+| `hints.ts` | `nextHint(board, level)` → `{ cell, technique, explanation }`; runs the same ladder from `techniques.ts` and reports the simplest applicable technique |
 | `generator.ts` | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
-| `difficulty.ts` | Maps required techniques → tier (Easy/Medium/Hard/Expert) |
+| `techniques.ts` | The ordered technique ladder; each technique is a pure function `(board, level) → Deduction[]` (forced faces and eliminated cells). Shared by the hint system and difficulty rating |
+| `difficulty.ts` | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
 | `seed.ts` | Seeded PRNG so daily puzzles are deterministic across devices |
 
 Design notes:
 - **Wrong tap = deviation from the unique solution.** Placing a face on a cell that is not in `level.solution` costs a heart. The wrong face is not placed; the cell is auto-marked ✕ instead, so the player is never stuck in a dead-end board and a mistake is never silently carried forward. Rule conflicts (`findConflicts`) are still used for optional highlighting, but cost nothing by themselves. Because correctness depends on the stored solution, the generator must guarantee uniqueness (`countSolutions == 1`) and the loader should verify `solution` against `rules.ts` in dev/test builds.
 - Every function takes a board and returns new data. This makes undo/redo and tests trivial.
+
+### 4.1 Difficulty tiers
+
+A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.ts`):
+
+| Tier | Techniques required |
+|---|---|
+| Easy | Region with one candidate cell left; row/column with one candidate cell left; eliminate cells in the row, column and neighbors of a placed face |
+| Medium | A region confined to one row or column eliminates the rest of that line (and the reverse: a row/column confined to one region) |
+| Hard | N regions confined to the same N rows or columns (pairs, triples) eliminate everything else in those lines |
+| Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
+
+Rules of the system:
+- The solver applies the simplest technique that makes progress each step, so the rating is the minimum hardest technique, not whatever a particular path happened to use.
+- Players choose a size (7–11) and a tier (Easy–Expert). The generator keeps puzzles only if `rate(level)` matches the requested tier, and `countSolutions == 1`. Combinations it cannot fill reliably (e.g. 7×7 Expert, 11×11 Easy) are hidden in level select.
+- Techniques are also the hint vocabulary, so hint text ("This region only fits in row 4") needs no separate content.
+- Tier definitions are v1 starting points; adjust the ladder after playtesting.
 
 ## 5. State management (`src/store`)
 
@@ -170,4 +188,4 @@ Decided:
 7. **Wrong tap:** deviation from the unique solution (see §4). Dead-end boards are avoided by not placing wrong faces.
 
 Still open:
-1. **Difficulty scaling** across 7–11 and tier definitions.
+1. **Which size/tier combinations to ship:** decide after seeing what the generator can produce reliably.
