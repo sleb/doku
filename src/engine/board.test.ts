@@ -1,8 +1,8 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { level7 } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
-import { Cell } from "./types";
 import type { Board, Coord, Level, Tier } from "./index";
+import { Cell } from "./types";
 
 describe("emptyBoard", () => {
   it("creates an N×N board with every cell empty", () => {

@@ -23,6 +23,20 @@ bun run build       # tsc && vite build
 bun run test        # Vitest (node environment)
 ```
 
-No lint script exists yet. The design also calls for Playwright (against the Vite build); add it when introducing it.
+## Quality gates
+
+CI (`.github/workflows/ci.yml`) runs on every PR and every push to `main`. All of these must pass:
+
+| Gate | Command |
+| --- | --- |
+| Biome lint, format and import order | `bun run lint` (`bunx biome check --write .` fixes) |
+| TypeScript typecheck (strict, no unused locals/params) | `bun run typecheck` |
+| Unit tests | `bun run test` |
+| Production build | `bun run build` |
+| Rust formatting | `cargo fmt --check` (in `src-tauri/`) |
+| Rust lints, warnings denied | `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`) |
+| Rust tests | `cargo test` (in `src-tauri/`) |
+
+`bun run check` runs the web gates locally. Biome covers `src/` and root TS/JSON config. Not yet gated: coverage thresholds, and Playwright (add each when introducing it).
 
 Recommended IDE setup: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).

@@ -55,17 +55,24 @@ export function validateLevel(level: Level): LevelIssue[] {
 
   const badIds: Coord[] = [];
   const ids = new Set<number>();
-  regions.forEach((row, r) =>
-    row.forEach((id, c) => {
+  for (const [r, row] of regions.entries()) {
+    for (const [c, id] of row.entries()) {
       if (inRange(id, n)) ids.add(id);
       else badIds.push({ r, c });
-    }),
-  );
+    }
+  }
   if (badIds.length > 0) {
-    return [issue("region-count", `region ids must be integers 0..${n - 1}`, badIds)];
+    return [
+      issue("region-count", `region ids must be integers 0..${n - 1}`, badIds),
+    ];
   }
   if (ids.size !== n) {
-    return [issue("region-count", `expected ${n} distinct regions, found ${ids.size}`)];
+    return [
+      issue(
+        "region-count",
+        `expected ${n} distinct regions, found ${ids.size}`,
+      ),
+    ];
   }
 
   return [...connectivityIssues(regions, n), ...solutionIssues(level)];
@@ -81,12 +88,16 @@ function connectivityIssues(regions: number[][], n: number): LevelIssue[] {
     const piece: Coord[] = [];
     const stack = [start];
     seen.add(start);
-    while (stack.length > 0) {
-      const cur = stack.pop()!;
+    for (let cur = stack.pop(); cur !== undefined; cur = stack.pop()) {
       const r = Math.floor(cur / n);
       const c = cur % n;
       piece.push({ r, c });
-      for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (const [dr, dc] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
         const rr = r + dr;
         const cc = c + dc;
         if (rr < 0 || cc < 0 || rr >= n || cc >= n) continue;
@@ -98,7 +109,9 @@ function connectivityIssues(regions: number[][], n: number): LevelIssue[] {
       }
     }
     if (reached.has(id)) {
-      issues.push(issue("region-connected", `region ${id} is not 4-connected`, piece));
+      issues.push(
+        issue("region-connected", `region ${id} is not 4-connected`, piece),
+      );
     }
     reached.add(id);
   }
@@ -107,7 +120,9 @@ function connectivityIssues(regions: number[][], n: number): LevelIssue[] {
 
 function solutionIssues({ size: n, regions, solution }: Level): LevelIssue[] {
   if (solution.length !== n || !solution.every((c) => inRange(c, n))) {
-    return [issue("solution-shape", `solution must be ${n} columns in 0..${n - 1}`)];
+    return [
+      issue("solution-shape", `solution must be ${n} columns in 0..${n - 1}`),
+    ];
   }
   const faces: Coord[] = solution.map((c, r) => ({ r, c }));
   const issues: LevelIssue[] = [];
@@ -120,7 +135,9 @@ function solutionIssues({ size: n, regions, solution }: Level): LevelIssue[] {
     }
     for (const [k, cells] of groups) {
       if (cells.length > 1) {
-        issues.push(issue(rule, `${cells.length} faces share ${rule} ${k}`, cells));
+        issues.push(
+          issue(rule, `${cells.length} faces share ${rule} ${k}`, cells),
+        );
       }
     }
   };
