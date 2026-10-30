@@ -105,7 +105,7 @@ Secondary stores: `progressStore` (completed levels, best times, stars), `settin
 
 ## 6. Persistence (`src/platform/storage`)
 
-Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-store, JSON file in app data dir) and `LocalStorage` (web/dev/tests). Autosave the in-progress board on every move so the app can be killed on mobile without loss. Version the saved schema from day one.
+Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-store, JSON file in app data dir) and `LocalStorage` (web/dev/tests). Autosave the in-progress board on every move so the app can be killed on mobile without loss. Until the first MVP release the saved schema is unversioned and may change freely (no migrations; stale saves can simply be discarded). Add schema versioning and migrations before that release ships.
 
 ## 7. UI component tree
 
