@@ -89,12 +89,12 @@ Dependency direction (no cycles): `types ← compile ← board ← rules`; `comp
 
 ```ts
 function judgeTap(p: Puzzle, cell: number): 'correct' | 'wrong';
-function findConflicts(p: Puzzle, b: Board): Conflict[];
+function findConflicts(b: Board, level: Level): Conflict[];
 function isSolved(p: Puzzle, b: Board): boolean;
 ```
 
 - **`judgeTap`** is the heart-cost rule from `DESIGN.md` §4: `wrong` iff `!p.solution[cell]`. O(1). The store calls it before placing; on `wrong` it spends a heart and marks the cell instead of placing a face.
-- **`findConflicts`** is for optional highlighting only. A `Conflict` is `{ cells: number[]; kind: 'row' | 'col' | 'region' | 'adjacent' }`. One pass over faces: count per row/col/region, plus a neighbor scan. Since wrong faces are never placed, conflicts should not occur in normal play; keeping it is cheap and guards against a corrupted save.
+- **`findConflicts`** is for optional highlighting only. A `Conflict` is `{ reason: ConflictReason; cells: Coord[] }` (one per offending row, column, region, or adjacent pair; cells ascending). `ConflictReason` is currently `'row' | 'col'`; `'region'` and `'adjacent'` are added with their rules. One pass over faces: count per row/col/region, plus a neighbor scan. Since wrong faces are never placed, conflicts should not occur in normal play; keeping it is cheap and guards against a corrupted save.
 - **`isSolved`**: face count == N and every face is `judgeTap == correct`. (Equivalent to "all rules satisfied" because the solution is unique.)
 
 ## 5. Candidates and propagation (candidates.ts)
