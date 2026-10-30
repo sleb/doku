@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { level7 } from "./__fixtures__/levels";
-import { LevelError, loadLevel, validateLevel } from "./validate";
 import type { Level } from "./types";
+import { LevelError, loadLevel, validateLevel } from "./validate";
 
 const withRegions = (edit: (regions: number[][]) => void): Level => {
   const regions = level7.regions.map((row) => [...row]);
@@ -68,8 +68,10 @@ describe("validateLevel", () => {
   });
 
   it("rejects two faces in the same column", () => {
-    const issues = validateLevel({ ...level7, solution: [1, 4, 6, 1, 3, 5, 0] })
-      .filter((i) => i.rule === "col");
+    const issues = validateLevel({
+      ...level7,
+      solution: [1, 4, 6, 1, 3, 5, 0],
+    }).filter((i) => i.rule === "col");
     expect(issues).toHaveLength(1);
     expect(issues[0].cells).toEqual([
       { r: 0, c: 1 },
@@ -88,7 +90,10 @@ describe("validateLevel", () => {
   });
 
   it("rejects faces that touch diagonally, naming the cells", () => {
-    const issues = validateLevel({ ...level7, solution: [0, 1, 3, 5, 2, 4, 6] });
+    const issues = validateLevel({
+      ...level7,
+      solution: [0, 1, 3, 5, 2, 4, 6],
+    });
     expect(issues).toEqual([
       {
         rule: "adjacent",
