@@ -11,7 +11,7 @@ Read these before building, and update them (not this file) when a decision chan
 - `README.md`: build/run commands (Bun) and the docs index.
 - `DESIGN.md`: architecture, layering, milestones, decisions. Notably §2 (pure-TS engine, thin Rust shell), §4 (wrong tap = deviation from the unique solution) and §13 (decisions).
 - `docs/ENGINE_DESIGN.md`: engine internals. Takes precedence over `DESIGN.md` on low-level detail; keep the two in sync.
-- `docs/USER_STORIES_M1.md`: milestone 1 stories, each a GitHub issue titled `M1-NN: ...`.
+- GitHub issues in the "engine" milestone: milestone 1 user stories, titled `M1-NN: ...`.
 
 ## Conventions
 
