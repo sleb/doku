@@ -4,14 +4,24 @@ A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same
 
 ## 1. Game rules
 
-Grid is N×N and divided into N colored regions. Place N smiley faces such that:
+Grid is N×N and divided into N colored regions. Place k smiley faces in every region, row and column (N·k total) such that, where k = `facesPerLine(N)` (see below):
 
-1. **Region:** exactly one face per colored region.
-2. **Row/column:** exactly one face per row and per column.
+1. **Region:** exactly k faces per colored region.
+2. **Row/column:** exactly k faces per row and per column.
 3. **Adjacency:** no two faces touch, including diagonally.
 4. **Mistakes:** wrong taps cost hearts (lives).
 
 Grid sizes, controls, hints, scoring and modes are our own design; items not yet agreed are marked *(proposed)*.
+
+**Scaling *(proposed)*:** grid sizes run 10×10 to 20×20, and k grows with N so large boards stay constrained and solvable by deduction (same convention as Star Battle puzzles):
+
+| Grid size N | k (faces per region/row/column) | Total faces |
+|---|---|---|
+| 10–13 | 2 | 20–26 |
+| 14–16 | 3 | 42–48 |
+| 17–20 | 4 | 68–80 |
+
+`facesPerLine(N)` is a single function in the engine; `Level` also stores `k` so the rules never hard-code it. Adjacency still forbids touching faces (diagonals included).
 
 ## 2. Architecture overview
 
@@ -55,7 +65,7 @@ doku/
 
 | Module | Responsibility |
 |---|---|
-| `types.ts` | `Level { id, size, regions: number[][] }`, `Cell = empty \| mark \| face`, `Board`, `Coord` |
+| `types.ts` | `Level { id, size, k, regions: number[][] }`, `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → set of violating cells + reason (`region`/`row`/`col`/`adjacent`); `isSolved()` |
 | `solver.ts` | Constraint-propagation solver; `solve()`, `countSolutions(limit=2)` for uniqueness |
 | `hints.ts` | `nextHint(board, level)` → `{ cell, technique, explanation }` using the human-technique ladder (single-cell region, region confined to one row/col, etc.) |
@@ -64,7 +74,7 @@ doku/
 | `seed.ts` | Seeded PRNG so daily puzzles are deterministic across devices |
 
 Design notes:
-- A placed face that violates a rule is the "wrong tap" that costs a heart. Decide whether wrongness means **rule conflict** (cheap, local) or **differs from the unique solution** (stricter). Recommend **rule conflict** by default, since it matches the stated rules and is explainable to the player.
+- **Wrong tap = rule violation.** Placing a face that breaks region/row/column/adjacency limits for the current board costs a heart. A placement that is legal now but cannot lead to the unique solution is *not* penalized (it will show up as a violation later, or the player undoes it). `rules.ts` only needs the board, not the solution.
 - Every function takes a board and returns new data. This makes undo/redo and tests trivial.
 
 ## 5. State management (`src/store`)
@@ -111,7 +121,7 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
 
 - **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell` with `aria-label` ("Row 3, column 5, green region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
-- **`<Hearts>`**: N hearts, animates loss. Zero hearts triggers `lost`.
+- **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
 - **`<InputModeToggle>`**: tap cycles (empty → ✕ → 😀) vs. explicit "place face / place mark" tool. Needed on mobile where right-click/drag are unavailable.
 - **`<HintButton>`**: calls `engine.nextHint`, highlights the cell and region and shows the technique text in `<HintToast>`. Costs a star or time penalty *(proposed)*.
 - **`<ResultModal>`**: purely driven by `status`.
@@ -159,12 +169,13 @@ Intentionally small for v1: plugins (store, fs), window config, capabilities fil
 ## 13. Decisions and open questions
 
 Decided:
-1. **Grid sizes:** variable, with a configured min and max *(proposed: 5×5 to 10×10)*. **Levels are generated** for v1; hand-authored levels are a possible future addition (the level JSON format should not preclude them).
+1. **Grid sizes:** variable, 10×10 to 20×20. **Levels are generated** for v1; hand-authored levels are a possible future addition (the level JSON format should not preclude them).
 2. **Hearts:** 3 per level, no recovery, no ads or monetization. (Avoiding interstitial ads is the reason this app exists.)
 3. **Theme:** smiley faces. All branding, names, art and levels are our own; no references to any specific existing game.
 4. **Frontend:** React, styled with Tailwind CSS.
 5. **Accounts, leaderboards, cloud sync:** not for v1.
+6. **Wrong tap:** rule violation (see §4).
 
 Still open:
-1. **Wrong-tap definition:** currently defaults to "rule conflict" (see §4); confirm or switch to "differs from the unique solution".
-2. **Exact min/max grid size** and how difficulty scales with size.
+1. **Faces per line (k):** the table in §1 is a proposal. Alternative: k = 1 at every size.
+2. **Difficulty scaling** across 10–20 and whether smaller starter grids (e.g. a tutorial 5×5) are allowed outside the 10–20 range.
