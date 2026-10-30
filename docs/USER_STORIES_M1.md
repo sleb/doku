@@ -1,6 +1,6 @@
 # Milestone 1 — Engine + Tests: User Stories
 
-Scope per DESIGN.md §12: `types.ts`, `rules.ts`, `solver.ts`, and a few fixture levels for tests. Hints, techniques, difficulty, generator and seed are out of scope (milestones 3–4). Wrong-tap/heart handling belongs to the store (milestone 2).
+Scope per DESIGN.md §12: `types.ts`, `rules.ts`, `solver.ts`, and a few fixture levels for tests. Hints, techniques, difficulty, generator and seed are out of scope (milestones 3–4). Heart spending and state transitions belong to the store (milestone 2), but the pure rule that decides whether a tap is wrong (`judgeTap`) lives in the engine.
 
 Milestone 1 ships no player-facing UI, so the personas are the people who consume the engine: the **UI/store developer** (milestone 2), the **level author** (milestone 4 generator), and the **maintainer** who must trust the engine. Each story's value to the eventual player is noted in its "so that."
 
@@ -100,6 +100,11 @@ Milestone 1 ships no player-facing UI, so the personas are the people who consum
 - **Given:** a board with faces at (3,3) and (4,4), in different regions
 - **When:** I call `findConflicts(board, level)`
 - **Then:** both cells are returned with reason `adjacent`
+
+- **Scenario:** A cell breaking several rules reports each one
+- **Given:** a board with faces at (3,3) and (3,4), in the same region
+- **When:** I call `findConflicts(board, level)`
+- **Then:** the result includes `row`, `region` and `adjacent` conflicts, each listing both cells
 
 - **Scenario:** Faces a knight's move apart are not adjacent
 - **Given:** a board with faces at (3,3) and (5,4)
@@ -264,12 +269,29 @@ Milestone 1 ships no player-facing UI, so the personas are the people who consum
 
 ---
 
+### User Story M1-14:
+
+- **Summary:** Judge whether a tap is correct against the unique solution
+
+#### Use Case:
+- **As a** UI/store developer
+- **I want to** call `judgeTap(level, cell)`
+- **so that** the store can spend a heart on a wrong tap, and the rule defining a mistake lives in one place
+
+#### Acceptance Criteria:
+- **Scenario:** Tap on a solution cell is correct, any other is wrong
+- **Given:** a fixture level with a known unique solution
+- **When:** I call `judgeTap(level, cell)` for every cell
+- **Then:** it returns `correct` for exactly the N solution cells and `wrong` for all others
+
+---
+
 ## Suggested order
 
-M1-01 → M1-10 (types and fixtures first) → M1-03…M1-06 → M1-07 → M1-02 → M1-08 → M1-09 → M1-12 → M1-13, with M1-11 set up at the start as the test harness.
+M1-01 → M1-10 (types and fixtures first) → M1-03…M1-06 → M1-07 → M1-14 → M1-02 → M1-08 → M1-09 → M1-12 → M1-13, with M1-11 set up at the start as the test harness.
 
-## Open points to settle before building
+## Decisions
 
-1. What `solve` returns for an unsolvable level (`null` vs. empty array).
-2. Whether a helper like `isCorrectPlacement(level, cell)` belongs in the engine now or in the store in milestone 2 (the wrong-tap rule in §4 depends on it).
-3. Whether a cell can carry more than one conflict reason (e.g. both `row` and `adjacent`); M1-03 to M1-05 assume yes.
+1. **`solve` on an unsolvable level returns `null`** and does not throw. Unsolvable is an expected outcome when validating candidates, and the type forces callers to handle it.
+2. **`judgeTap` lives in the engine** (`rules.ts`), as already specified in `docs/ENGINE_DESIGN.md` §4. The store calls it and spends the heart (M1-14).
+3. **`findConflicts` may report several conflicts for the same cell.** Each `Conflict` is `{ cells, kind }`, so one cell can appear under multiple kinds (M1-05).
