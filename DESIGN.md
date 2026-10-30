@@ -166,8 +166,8 @@ Decided:
 3. **Theme:** smiley faces. All branding, names, art and levels are our own; no references to any specific existing game.
 4. **Frontend:** React, styled with Tailwind CSS.
 5. **Accounts, leaderboards, cloud sync:** not for v1.
-6. **Wrong tap:** deviation from the unique solution (see §4). Dead-end boards are avoided by not placing wrong faces.
+6. **Marks (✕):** free notes, never cost a heart, even on a cell that holds a face.
+7. **Wrong tap:** deviation from the unique solution (see §4). Dead-end boards are avoided by not placing wrong faces.
 
 Still open:
 1. **Difficulty scaling** across 7–11 and tier definitions.
-2. **Mistake on a mark:** does placing a wrong ✕ (marking a cell that actually holds a face) cost a heart? Proposed: no, marks are free notes.
