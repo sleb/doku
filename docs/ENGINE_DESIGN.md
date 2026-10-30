@@ -60,14 +60,17 @@ interface Unit {
 }
 ```
 
-`validateLevel(level): LevelIssue[]` runs at load in dev/test builds and in the generator: sizes in range, region ids 0..N-1 each used, every region 4-connected, solution is a valid placement (one per row/col/region, no adjacency).
+`validateLevel(level): LevelIssue[]` (pure, never throws) checks: size in 7..11 (`size`), `regions` is N×N (`regions-shape`), ids 0..N-1 each used (`region-count`), every region 4-connected (`region-connected`), and the solution is a valid placement: `solution-shape`, then `col`, `region`, `adjacent` (consecutive rows with column difference ≤ 1). `row` is not checked since `solution` is column-per-row. `LevelIssue = { rule, message, cells: Coord[] }`. Structural failures (size, shape, count) short-circuit the rest; connectivity and solution issues report together.
+
+`loadLevel(level): Level` calls `validateLevel` and throws `LevelError` (carrying `issues`; message names each rule and its cells) when non-empty. It only validates when `import.meta.env.DEV` is true, so release builds skip it. The generator calls `validateLevel` directly.
 
 ## 3. Module map
 
 ```
 engine/
   types.ts        Level, Board, Tier, Cell, Coord
-  compile.ts      compile(), validateLevel(), idx/coord helpers
+  compile.ts      compile(), idx/coord helpers
+  validate.ts     validateLevel(), loadLevel(), LevelError
   board.ts        emptyBoard(), setCell(), facesOf() (immutable helpers)
   rules.ts        findConflicts(), isSolved(), judgeTap()
   candidates.ts   Candidates type, fromBoard(), placeFace(), contradiction()
@@ -236,7 +239,7 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile`, `validateLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile`, `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 
