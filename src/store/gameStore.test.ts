@@ -200,12 +200,20 @@ describe("createGameStore", () => {
       for (const c of cells) store.getState().placeFace(c);
       expect(store.getState().status).toBe(status);
       const before = store.getState();
+      if (before.status === "idle") throw new Error("unreachable");
+      // Cells that would be editable if the game were still playing.
+      const probes = Array.from({ length: size * size }, (_, i) => i).filter(
+        (i) => before.board[i] !== Cell.Face && !before.wrong.has(i),
+      );
+      expect(probes.length).toBeGreaterThan(0);
       let calls = 0;
       store.subscribe(() => {
         calls++;
       });
-      store.getState().placeFace(winCells[1]);
-      store.getState().toggleMark(winCells[1]);
+      for (const c of probes) {
+        store.getState().placeFace(c);
+        store.getState().toggleMark(c);
+      }
       expect(calls).toBe(0);
       expect(store.getState()).toBe(before);
     }
