@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-region-0: #fca5a5;
+  --color-region-1: #fdba74;
+  --color-region-2: #fcd34d;
+  --color-region-3: #bef264;
+  --color-region-4: #4ade80;
+  --color-region-5: #5eead4;
+  --color-region-6: #7dd3fc;
+  --color-region-7: #818cf8;
+  --color-region-8: #c4b5fd;
+  --color-region-9: #f9a8d4;
+  --color-region-10: #d6d3d1;
+}
