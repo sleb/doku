@@ -88,12 +88,13 @@ Dependency direction (no cycles): `types ← compile ← board ← rules`; `comp
 ## 4. rules.ts
 
 ```ts
-function judgeTap(p: Puzzle, cell: number): 'correct' | 'wrong';
+type TapJudgement = 'correct' | 'wrong';
+function judgeTap(level: Level, cell: number): TapJudgement;
 function findConflicts(b: Board, level: Level): Conflict[];
 function isSolved(b: Board, level: Level): boolean;
 ```
 
-- **`judgeTap`** is the heart-cost rule from `DESIGN.md` §4: `wrong` iff `!p.solution[cell]`. O(1). The store calls it before placing; on `wrong` it spends a heart and marks the cell instead of placing a face.
+- **`judgeTap`** is the heart-cost rule from `DESIGN.md` §4: `cell` is a flat row-major index (`r * size + c`), and the result is `correct` iff `level.solution[floor(cell / size)] === cell % size`, else `wrong`. O(1); it reads no board and calls neither `findConflicts` nor `solve`. A non-integer or out-of-range `cell` (-1, N*N, 1.5, NaN) throws `RangeError`: a bad index is a caller bug and must not cost a heart. It takes a `Level` for now; a `Puzzle` form returns with `compile`. The store calls it before placing; on `wrong` it spends a heart and marks the cell instead of placing a face.
 - **`findConflicts`** is for optional highlighting only. A `Conflict` is `{ reason: ConflictReason; cells: Coord[] }` (one per offending row, column, region, or adjacent pair; cells ascending). `ConflictReason` is `'row' | 'col' | 'region' | 'adjacent'`. Only faces are considered; marks and empty cells never produce a conflict. A first scan groups faces per row/col/region, then a second scan (forward offsets only: E, SW, S, SE) emits one 2-cell `adjacent` conflict per touching pair, diagonals included. Result order: `row`, `col`, `region`, then `adjacent` in row-major order of each pair's first cell. Since wrong faces are never placed, conflicts should not occur in normal play; keeping it is cheap and guards against a corrupted save.
 - **`isSolved`**: face count == N and every face sits at `(r, level.solution[r])`. Compared directly against the stored solution, O(N^2); marks and empty cells are ignored. (Equivalent to "all rules satisfied" because the solution is unique.)
 
@@ -254,7 +255,7 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coor
 | Fixture set | `src/engine/__fixtures__/levels.ts` exports `uniqueLevel7`, `uniqueLevel11`, `multiSolutionLevel7`, `noSolutionLevel7` and a `fixtures` list with each one's purpose. `fixtures.test.ts` proves the properties each claims. `noSolutionLevel7` has a dummy solution and deliberately fails `validateLevel`. |
 | Golden fixtures | A handful of hand-written levels per tier with expected `rate()` and expected first-hint technique. Locks the ladder's behavior against regressions. |
 | Technique unit tests | One small crafted board per technique showing exactly the deduction it should make (and that earlier techniques make none). |
-| Rules | `judgeTap`, `findConflicts` on crafted boards covering each conflict kind; `isSolved` on partial, full, and wrong boards. |
+| Rules | `judgeTap` exhaustively over every cell of the unique fixtures (exactly N `correct`, related cells `wrong`, bad indices throw); `findConflicts` on crafted boards covering each conflict kind; `isSolved` on partial, full, and wrong boards. |
 | Validation | `validateLevel` rejects disconnected regions, wrong region counts, invalid solutions, out-of-range sizes. |
 | Performance | Benchmarks in CI as soft thresholds: `rate` N=11 < 10 ms, `countSolutions` < 5 ms, `nextHint` < 10 ms. |
 
