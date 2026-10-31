@@ -8,7 +8,13 @@ import {
 } from "../../engine/__fixtures__/levels";
 import { type GameState, idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
+import { conflictCells } from "../../store/selectors";
 import { GameScreen } from "./GameScreen";
+
+vi.mock("../../store/selectors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../store/selectors")>();
+  return { ...actual, conflictCells: vi.fn(actual.conflictCells) };
+});
 
 const n = level.size;
 const solution = level.solution.map((c, r) => r * n + c);
@@ -155,5 +161,14 @@ describe("GameScreen", () => {
     act(() => gameStore.getState().toggleMark(solution[0]));
     expect(label(solution[0])).toBe("marked");
     expect(error).not.toHaveBeenCalled();
+  });
+
+  test("never computes conflicts for a board from a different level", () => {
+    vi.mocked(conflictCells).mockClear();
+    gameStore.setState(startLevel(uniqueLevel11), false);
+    render(<GameScreen level={level} />);
+    for (const [board, lvl] of vi.mocked(conflictCells).mock.calls) {
+      expect(board).toHaveLength(lvl.size * lvl.size);
+    }
   });
 });

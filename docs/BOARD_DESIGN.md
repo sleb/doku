@@ -190,7 +190,7 @@ interface BoardProps {
 
 - `const geometry = useMemo(() => cellGeometry(level), [level])`.
 - Renders `role="grid"` with `aria-label="Puzzle board"`, `aria-rowcount`/`aria-colcount`, and N `role="row"` wrappers using `display: contents` so the CSS grid sees the cells directly. Each `role="gridcell"` contains one `<button>` (the focusable, labelled element).
-- Sizing: container sets `--n: {size}` and `--cell: min((100vw - 2rem) / var(--n), (100vh - 9rem) / var(--n), 4.5rem)`; `grid-template-columns: repeat(var(--n), var(--cell))`. At the default 800×600 window an 11×11 board is ≈ 40 px per cell, which stays tappable with a pointer.
+- Sizing: the page `main` is `w-fit max-w-full px-4` (no fixed max width) so it grows to the board and the TopBar spans exactly the board's width; the 2rem horizontal budget below equals that padding. Container sets `--n: {size}` and `--cell: min((100vw - 2rem) / var(--n), (100vh - 9rem) / var(--n), 4.5rem)`; `grid-template-columns: repeat(var(--n), var(--cell))`. At the default 800×600 window an 11×11 board is ≈ 40 px per cell, which stays tappable with a pointer.
 - Tab order: every button is tabbable in M2 (no roving tabindex). Enter/Space work natively. Real keyboard navigation is milestone 3.
 
 ### 4.3 `<Cell>`
@@ -254,7 +254,7 @@ Hex values were chosen under two requirements: the 11 colors are pairwise distin
 **Landed in M2-10 (#49):** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` is now just `<main><GameScreen level={demoLevel} /></main>`.
 
 - `ResultModal`: Retry is focused by a `useEffect` + ref when the dialog opens (not the `autoFocus` attribute, which Biome's `noAutofocus` flags). There is no Escape handler, since Retry is the only exit. A `Tab` keydown on Retry is `preventDefault`ed so focus cannot leave the dialog.
-- `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. `conflicts` is `useMemo(conflictCells(board, level))`. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute; the M2-11 e2e checks the behaviour in a real browser with `disabled` stripped (§7). It renders `null` while `idle` (the first render before the start effect).
+- `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. `conflicts` is a `useMemo` that calls `conflictCells(board, level)` only once the board is known to belong to `level` (start effect has run and the store holds this level); otherwise it is an empty set. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute; the M2-11 e2e checks the behaviour in a real browser with `disabled` stripped (§7). It renders `null` while `idle` (the first render before the start effect).
 - The page `h1` is owned by `TopBar` (level id); the old "Doku" title was dropped.
 - After Retry, focus falls to `body` because the focused button unmounts; accepted for M2, like the locked-cell focus loss in M2-08 (restoring focus is milestone 3).
 - The Playwright playthrough landed in M2-11 (§7).

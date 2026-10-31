@@ -21,9 +21,12 @@ export function GameScreen({ level }: { level: Level }) {
     setStartedFor(level);
   }, [startLevel, level]);
 
+  // Only for a board that belongs to this level; the singleton may still hold
+  // another level's board until this mount's start effect has run.
+  const fresh = startedFor === level && storeLevel === level;
   const conflicts = useMemo(
-    () => (board ? conflictCells(board, level) : new Set<number>()),
-    [board, level],
+    () => (board && fresh ? conflictCells(board, level) : new Set<number>()),
+    [board, level, fresh],
   );
 
   // Until this mount's start effect runs, the singleton may hold a previous
