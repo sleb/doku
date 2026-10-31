@@ -49,7 +49,7 @@ e2e/
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command is left alone; removing it is a shell cleanup, not a board concern.
 
-`src/levels/demo-7.json` is a copy of `uniqueLevel7`, loaded with `loadLevel`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). Playwright imports the same JSON to learn the solution.
+`src/levels/demo-7.json` is a copy of `uniqueLevel7`, loaded with `loadLevel`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright spec reads it with `node:fs` and `JSON.parse` (path from `import.meta.url`); it does not import the JSON module.
 
 ## 3. Store (`src/store`)
 
@@ -153,7 +153,7 @@ Flattens `findConflicts(board, level)` into a set of cell indices. M2-10 changed
 
 **Landed in M2-07 (#46):** `geometry.ts`, `selectors.ts` (`conflictCells`), `icons.tsx`, `Cell.tsx`, `Board.tsx`. Input was added in M2-08. Conflicts show as a ring class plus `data-conflict="true"` and are not part of the label (the label vocabulary is `empty|marked|face|wrong`). `WRONG_COLOR` (`#7f1d1d`, in `palette.ts`) is the wrong-tap red, chosen by computing 3:1 against all 11 region colors (a brighter red fails on indigo). The grid role and ARIA props are spread from an object, and row/gridcell carry `biome-ignore` comments, to satisfy the a11y lints (native table elements do not fit a CSS grid).
 
-**Landed in M2-08 (#47):** `Board` now also takes `disabled` (status is not `playing`), `onToggleMark` and `onPlaceFace`; `CellView` takes `disabled` plus the two callbacks. `Board` derives each cell's `disabled` as `disabled || Face || wrong.has(index)` and passes it as a primitive, passing the callbacks through untouched so `memo` holds (callbacks must be stable, e.g. taken from `store.getState()`). The player's own mark stays enabled. In `CellView`, `onClick` with `e.detail >= 2` places a face, otherwise toggles; Enter keeps the native click (toggle), but a repeating (held) Enter keydown is `preventDefault`ed so the click does not repeat. `onKeyDown`: `x`/`X` toggles, Space places a face; both `preventDefault`, ignore ctrl/meta/alt combos, and ignore `e.repeat` so a held key does not flicker. Space `keyup` (without ctrl/meta/alt) is also `preventDefault`ed so no engine synthesizes a click on release (jsdom cannot prove this; real-browser coverage is M2-11). A cell that becomes a face or wrong mark turns disabled while focused and loses focus, so a keyboard player must Tab back in; accepted for M2 (arrow navigation and focus handling are milestone 3). The `useGameStore` singleton landed in M2-10.
+**Landed in M2-08 (#47):** `Board` now also takes `disabled` (status is not `playing`), `onToggleMark` and `onPlaceFace`; `CellView` takes `disabled` plus the two callbacks. `Board` derives each cell's `disabled` as `disabled || Face || wrong.has(index)` and passes it as a primitive, passing the callbacks through untouched so `memo` holds (callbacks must be stable, e.g. taken from `store.getState()`). The player's own mark stays enabled. In `CellView`, `onClick` with `e.detail >= 2` places a face, otherwise toggles; Enter keeps the native click (toggle), but a repeating (held) Enter keydown is `preventDefault`ed so the click does not repeat. `onKeyDown`: `x`/`X` toggles, Space places a face; both `preventDefault`, ignore ctrl/meta/alt combos, and ignore `e.repeat` so a held key does not flicker. Space `keyup` (without ctrl/meta/alt) is also `preventDefault`ed so no engine synthesizes a click on release (jsdom cannot prove this and neither can e2e: Space places the face on keydown, the cell is then `disabled`, and a disabled button never gets the release click, so a test passes with the guard removed; the guard is unverified, see §7). A cell that becomes a face or wrong mark turns disabled while focused and loses focus, so a keyboard player must Tab back in; accepted for M2 (arrow navigation and focus handling are milestone 3). The `useGameStore` singleton landed in M2-10.
 
 ### 4.1 Geometry (`geometry.ts`, pure)
 
@@ -247,17 +247,17 @@ Hex values were chosen under two requirements: the 11 colors are pairwise distin
 
 - **`<Hearts remaining max>`**: renders `max` heart icons, the first `remaining` filled. Container has `role="img"` and `aria-label="{remaining} of {max} hearts"`. Loss is a CSS transition on the icon's fill/scale (no JS animation).
 - **`<TopBar level hearts>`**: level id/title on the left, `<Hearts>` on the right. Back button, timer, menu arrive in M3.
-- **Landed in M2-09 (#48):** `src/ui/hud/Hearts.tsx` (with a private `HeartIcon`) and `src/ui/hud/TopBar.tsx`. Each icon carries `data-filled="true|false"` (filled = `fill-current`, empty = `fill-transparent` stroke only and `scale-90`, with `transition-[scale,fill,stroke]` and `motion-reduce:transition-none`; Tailwind v4 compiles `scale-90` to the standalone `scale` property, not `transform`, and `fill-none` cannot interpolate, hence both choices) and is `aria-hidden`; only the container is exposed. `Hearts` is presentational and does not clamp. `TopBar` shows `level.id` because `Level` has no title field, and takes `max` from `MAX_HEARTS` in `store/game`. `TopBarPlay.test.tsx` covers "wrong face shows 2 hearts" with a harness over a real `createGameStore()`; `GameScreen` (M2-10) reuses `TopBar` unchanged. The transition is not verifiable in jsdom (visual check deferred to M2-11).
+- **Landed in M2-09 (#48):** `src/ui/hud/Hearts.tsx` (with a private `HeartIcon`) and `src/ui/hud/TopBar.tsx`. Each icon carries `data-filled="true|false"` (filled = `fill-current`, empty = `fill-transparent` stroke only and `scale-90`, with `transition-[scale,fill,stroke]` and `motion-reduce:transition-none`; Tailwind v4 compiles `scale-90` to the standalone `scale` property, not `transform`, and `fill-none` cannot interpolate, hence both choices) and is `aria-hidden`; only the container is exposed. `Hearts` is presentational and does not clamp. `TopBar` shows `level.id` because `Level` has no title field, and takes `max` from `MAX_HEARTS` in `store/game`. `TopBarPlay.test.tsx` covers "wrong face shows 2 hearts" with a harness over a real `createGameStore()`; `GameScreen` (M2-10) reuses `TopBar` unchanged. The transition is not verifiable in jsdom (the heart transition is deliberately not tested in the browser, see §8.7).
 - **`<ResultModal status onRetry>`**: renders nothing unless `status` is `won` or `lost`. `div role="dialog" aria-modal="true" aria-labelledby`, heading "You solved it" / "Out of hearts", one **Retry** button (autofocused) calling `restart`. Plain `div`, not `<dialog>`: jsdom does not implement `showModal`, and the board is already inert via `disabled`. Win has no "next" button until level select exists.
 - **`<GameScreen level>`**: on mount `startLevel(level)` in an effect (idempotent, so StrictMode's double-invoke is harmless); selects `status`, `board`, `hearts`; renders `TopBar`, `Board`, `ResultModal`. Renders nothing board-related while `idle`.
 
 **Landed in M2-10 (#49):** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` is now just `<main><GameScreen level={demoLevel} /></main>`.
 
 - `ResultModal`: Retry is focused by a `useEffect` + ref when the dialog opens (not the `autoFocus` attribute, which Biome's `noAutofocus` flags). There is no Escape handler, since Retry is the only exit. A `Tab` keydown on Retry is `preventDefault`ed so focus cannot leave the dialog.
-- `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. `conflicts` is `useMemo(conflictCells(board, level))`. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute, real behaviour is M2-11. It renders `null` while `idle` (the first render before the start effect).
+- `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. `conflicts` is `useMemo(conflictCells(board, level))`. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute; the M2-11 e2e checks the behaviour in a real browser with `disabled` stripped (§7). It renders `null` while `idle` (the first render before the start effect).
 - The page `h1` is owned by `TopBar` (level id); the old "Doku" title was dropped.
 - After Retry, focus falls to `body` because the focused button unmounts; accepted for M2, like the locked-cell focus loss in M2-08 (restoring focus is milestone 3).
-- No win/lose e2e flow was added here; M2-11 owns the Playwright playthrough.
+- The Playwright playthrough landed in M2-11 (§7).
 
 ## 6. Dependencies and tooling
 
@@ -309,10 +309,12 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
 - `GameScreen` (real store): double-clicking each solution cell shows the win dialog; three wrong double-clicks show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; focusing a solution cell and pressing `Space` places a face, `x` toggles a ✕; Retry returns to a fresh board with 3 hearts.
 
-**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7.json`, locating cells by `aria-label` and reading the solution from the JSON:
+**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7.json`, locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
 
 1. Win: focus each of the 7 solution cells and press `Space` (plus a double-click on one cell to cover the mouse gesture) → "You solved it" → Retry → fresh board.
 2. Lose: focus three different non-solution cells and press `Space` (one heart each) → "Out of hearts" → Retry.
+
+**Landed in M2-11 (#50):** `e2e/playthrough.spec.ts` has three tests. Win (double-click on the row-0 solution cell, Space on the other six) and lose (wrong cell per rows 0-2 at `(solution[r]+1) % size`, each with a red ✕ svg and the hearts label stepping 2, 1, 0) both end with Retry yielding `size*size` empty cells and `3 of 3 hearts`. The inert test removes `disabled` from every cell via `page.evaluate` (cells are otherwise disabled and would mask a missing `inert`), asserts the cell's wrapper has `inert === true`, then asserts that `focus()`, Tab and Shift+Tab leave focus on Retry. Verified by mutation: replacing `inert={finished}` with a plain `div` fails the property assertion and, with that assertion removed, fails the `toBeFocused` assertion on Retry. Not verified in e2e: the Space `keyup` guard in `Cell` (see §4; an earlier e2e test for it passed with the guard deleted, so it was removed). Hearts stay in the accessibility tree behind the modal, so the inert test locates them by role like the other tests. Cells are located by the prefix `^Row r, column c,` because the state suffix changes. The heart transition is not tested (§8.7).
 
 ## 8. Decisions
 
@@ -322,6 +324,7 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 4. **Button inside gridcell**, rather than `role="gridcell"` on a button, to keep native button semantics. `DESIGN.md` §7 is updated accordingly.
 5. **Plain `div role="dialog"`** over `<dialog>` for jsdom compatibility.
 6. **Demo level as JSON in `src/levels`**, not imported from engine fixtures.
+7. **Heart transition is not verified in a browser in M2.** jsdom and Playwright cannot cheaply assert a CSS animation; e2e asserts hearts by role/label only. Revisit if it regresses.
 
 ## 9. Open questions
 
