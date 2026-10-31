@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell } from "../../engine";
@@ -117,5 +117,48 @@ describe("CellView", () => {
     await userEvent.tripleClick(b);
     expect(b.onToggleMark).toHaveBeenCalledTimes(1);
     expect(b.onPlaceFace).toHaveBeenCalledTimes(2);
+  });
+
+  test.each(["x", "X"])("key %s toggles the mark", async (key) => {
+    const b = renderCell();
+    b.focus();
+    await userEvent.keyboard(key);
+    expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
+  });
+
+  test("Space places a face without a click", async () => {
+    const b = renderCell();
+    b.focus();
+    await userEvent.keyboard(" ");
+    expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    expect(b.onToggleMark).not.toHaveBeenCalled();
+  });
+
+  test("Enter keeps the native click and toggles", async () => {
+    const b = renderCell();
+    b.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
+  });
+
+  test("ctrl/meta/alt combos and held-key repeats do nothing", () => {
+    const b = renderCell();
+    for (const mod of ["ctrlKey", "metaKey", "altKey"])
+      fireEvent.keyDown(b, { key: "x", [mod]: true });
+    fireEvent.keyDown(b, { key: "x", repeat: true });
+    fireEvent.keyDown(b, { key: " ", repeat: true });
+    expect(b.onToggleMark).not.toHaveBeenCalled();
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
+  });
+
+  test("handled keys are default-prevented, including Space on keyup", () => {
+    const b = renderCell();
+    expect(fireEvent.keyDown(b, { key: "x" })).toBe(false);
+    expect(fireEvent.keyDown(b, { key: " " })).toBe(false);
+    expect(fireEvent.keyUp(b, { key: " " })).toBe(false);
+    expect(fireEvent.keyDown(b, { key: "a" })).toBe(true);
+    expect(fireEvent.keyUp(b, { key: "a" })).toBe(true);
   });
 });

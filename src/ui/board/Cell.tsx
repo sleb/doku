@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { type KeyboardEvent, memo } from "react";
 import { Cell } from "../../engine";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
 import { REGION_BG, REGION_NAMES } from "./palette";
@@ -23,6 +23,27 @@ function stateLabel(state: Cell, isWrong: boolean): string {
   if (state === Cell.Mark) return "marked";
   if (state === Cell.Face) return "face";
   return "empty";
+}
+
+function onKeyDown(
+  e: KeyboardEvent<HTMLButtonElement>,
+  index: number,
+  onToggleMark: (index: number) => void,
+  onPlaceFace: (index: number) => void,
+) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const isX = e.key === "x" || e.key === "X";
+  if (!isX && e.key !== " ") return;
+  // Always swallow, so Space never scrolls or synthesizes a click.
+  e.preventDefault();
+  if (e.repeat) return; // a held key must not flicker the mark
+  if (isX) onToggleMark(index);
+  else onPlaceFace(index);
+}
+
+// Space click-on-release differs between engines; suppress it.
+function onKeyUp(e: KeyboardEvent<HTMLButtonElement>) {
+  if (e.key === " ") e.preventDefault();
 }
 
 // Tailwind only emits literal class names, so keep these as full strings.
@@ -57,6 +78,8 @@ export const CellView = memo(function CellView({
       data-conflict={isConflict ? "true" : undefined}
       className={className}
       disabled={disabled}
+      onKeyDown={(e) => onKeyDown(e, index, onToggleMark, onPlaceFace)}
+      onKeyUp={onKeyUp}
       onClick={(e) =>
         e.detail >= 2 ? onPlaceFace(index) : onToggleMark(index)
       }
