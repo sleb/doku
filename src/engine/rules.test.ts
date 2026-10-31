@@ -359,6 +359,11 @@ describe("isSolved", () => {
     expect(isSolved(board, level7)).toBe(false);
   });
 
+  it("is false with N faces in N distinct rows but off the solution", () => {
+    const shifted = level7.solution.map((c, r) => ({ r, c: (c + 1) % 7 }));
+    expect(isSolved(boardWithFaces(level7, shifted), level7)).toBe(false);
+  });
+
   it("ignores marks", () => {
     const board = boardWithFaces(level7, solution);
     const spare = [0, 1, 2, 3, 4, 5, 6].find((c) => c !== level7.solution[0]);
