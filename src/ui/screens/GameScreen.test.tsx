@@ -6,7 +6,7 @@ import {
   uniqueLevel7 as level,
   uniqueLevel11,
 } from "../../engine/__fixtures__/levels";
-import { idleState, startLevel } from "../../store/game";
+import { type GameState, idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { GameScreen } from "./GameScreen";
 
@@ -84,7 +84,10 @@ describe("GameScreen", () => {
   });
 
   test("does not render a stale result from a previous mount on first paint", () => {
-    gameStore.setState({ ...startLevel(level), status: "won" }, false);
+    gameStore.setState(
+      { ...startLevel(level), status: "won" } as GameState,
+      false,
+    );
     const seen: (Element | null)[] = [];
     render(
       <>
