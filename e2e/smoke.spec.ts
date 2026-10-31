@@ -8,16 +8,19 @@ test("the app loads and mounts into #root", async ({ page }) => {
 
 test("the region color tokens are applied", async ({ page }) => {
   await page.goto("/");
-  const token = await page.evaluate(() => {
+  const cell = page.getByRole("button", { name: /^Row 1, column 1,/ });
+  const cls = (await cell.getAttribute("class")) ?? "";
+  const region = /bg-region-(\d+)/.exec(cls)?.[1];
+  expect(region).toBeDefined();
+  const token = await page.evaluate((r) => {
     const probe = document.createElement("div");
     probe.style.color = getComputedStyle(document.documentElement)
-      .getPropertyValue("--color-region-3")
+      .getPropertyValue(`--color-region-${r}`)
       .trim();
     document.body.append(probe);
     const c = getComputedStyle(probe).color;
     probe.remove();
     return c;
-  });
-  const swatch = page.locator(".bg-region-3");
-  await expect(swatch).toHaveCSS("background-color", token);
+  }, region);
+  await expect(cell).toHaveCSS("background-color", token);
 });
