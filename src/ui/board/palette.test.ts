@@ -48,6 +48,21 @@ describe("region palette", () => {
     expect(new Set(hexes).size).toBe(11);
   });
 
+  test("every pair of region colors is at least 40 apart in RGB distance", () => {
+    const rgb = (hex: string) =>
+      [1, 3, 5].map((o) => Number.parseInt(hex.slice(o, o + 2), 16));
+    for (let i = 0; i < 11; i++) {
+      for (let j = i + 1; j < 11; j++) {
+        const [a, b] = [rgb(tokenHex(i)), rgb(tokenHex(j))];
+        const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        expect(
+          d,
+          `${REGION_NAMES[i]} vs ${REGION_NAMES[j]}`,
+        ).toBeGreaterThanOrEqual(40);
+      }
+    }
+  });
+
   test("glyph color reaches 3:1 contrast on every region color", () => {
     REGION_BG.forEach((_, i) => {
       expect(contrast(GLYPH_COLOR, tokenHex(i))).toBeGreaterThanOrEqual(3);

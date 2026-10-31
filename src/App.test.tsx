@@ -20,6 +20,6 @@ test("has no Tauri scaffold", () => {
 test("renders a palette swatch per region with its class", () => {
   render(<App />);
   REGION_NAMES.forEach((name, i) => {
-    expect(screen.getByLabelText(name)).toHaveClass(REGION_BG[i]);
+    expect(screen.getByTestId(`swatch-${name}`)).toHaveClass(REGION_BG[i]);
   });
 });

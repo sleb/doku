@@ -11,8 +11,8 @@ function App() {
         {REGION_NAMES.map((name, i) => (
           <div
             key={name}
-            role="presentation"
-            aria-label={name}
+            data-testid={`swatch-${name}`}
+            title={name}
             className={`h-8 w-8 rounded ${REGION_BG[i]}`}
           />
         ))}
