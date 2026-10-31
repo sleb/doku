@@ -1,22 +1,10 @@
 import { demoLevel } from "./levels/demoLevel";
-import { REGION_BG, REGION_NAMES } from "./ui/board/palette";
+import { GameScreen } from "./ui/screens/GameScreen";
 
 function App() {
   return (
-    <main className="mx-auto flex max-w-md flex-col items-center gap-4 p-6">
-      <h1 className="text-3xl font-bold">Doku</h1>
-      <p className="text-sm text-stone-600">{demoLevel.id}</p>
-      {/* Temporary palette strip; removed when Board lands. */}
-      <div className="flex gap-1">
-        {REGION_NAMES.map((name, i) => (
-          <div
-            key={name}
-            data-testid={`swatch-${name}`}
-            title={name}
-            className={`h-8 w-8 rounded ${REGION_BG[i]}`}
-          />
-        ))}
-      </div>
+    <main className="mx-auto flex w-fit max-w-full flex-col gap-4 px-4 py-6">
+      <GameScreen level={demoLevel} />
     </main>
   );
 }

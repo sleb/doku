@@ -30,3 +30,6 @@ export const REGION_NAMES = [
 
 // Face/mark glyph stroke; must reach 3:1 contrast on every region color.
 export const GLYPH_COLOR = "#1f1f1f";
+
+// Wrong-tap ✕ stroke; must reach 3:1 contrast on every region color.
+export const WRONG_COLOR = "#7f1d1d";
