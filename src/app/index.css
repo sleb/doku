@@ -13,3 +13,42 @@
   --color-region-9: #f9a8d4;
   --color-region-10: #d6d3d1;
 }
+
+/* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS. */
+.hold-glow rect {
+  fill: none;
+  stroke: #171717;
+  stroke-width: 4px;
+  stroke-dasharray: 1;
+  animation: hold-trace linear forwards;
+}
+
+@keyframes hold-trace {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes hold-ramp {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hold-glow rect {
+    stroke-dasharray: none;
+    animation-name: hold-ramp;
+  }
+}
+
+button {
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}

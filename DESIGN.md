@@ -101,7 +101,7 @@ idle → playing ⇄ paused → won | lost
 
 State: `level`, `board`, `hearts`, `history[]` (for undo/redo), `elapsedMs`, `hintsUsed`, `conflicts` (derived), `status`.
 
-Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (double-tap or `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
+Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (press-and-hold or hold `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
 
 Secondary stores: `progressStore` (completed levels, best times, stars), `settingsStore` (theme, sound, haptics, color-blind palette, input mode), `dailyStore` (*proposed*).
 
@@ -136,7 +136,7 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
 - **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
 - **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
-- **`<InputModeToggle>`**: double-tap is awkward on touch, so offer an explicit "place face / place mark" tool in place of single-tap = ✕, double-tap = face. Needed on mobile where right-click/drag are unavailable.
+- **`<InputModeToggle>`**: double-tap is awkward on touch, so offer an explicit "place face / place mark" tool in place of single-tap = ✕, hold = face. Needed on mobile where right-click/drag are unavailable.
 - **`<HintButton>`**: calls `engine.nextHint`, highlights the cell and region and shows the technique text in `<HintToast>`. Costs a star or time penalty *(proposed)*.
 - **`<ResultModal>`**: purely driven by `status`.
 - **Theming**: region palette is a token set with a color-blind-safe variant, plus a pattern/number overlay option, since regions are distinguished by color alone otherwise.
@@ -148,7 +148,7 @@ Hides differences so UI code stays platform-agnostic:
 | Adapter | Desktop | Mobile (phase 2) |
 |---|---|---|
 | `storage` | tauri-plugin-store | same |
-| `input` | click = toggle ✕, double-click = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 3) | tap = toggle ✕, double-tap = face (or per toggle); long-press = mark |
+| `input` | click = toggle ✕, hold (500 ms) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 3) | tap = toggle ✕, hold = face (or per toggle); long-press = mark |
 | `haptics` | no-op | vibrate on place/conflict/win |
 | `audio` | WebAudio | same (respect silent switch) |
 | `window` | min size, remembered size | safe-area insets, orientation lock to portrait |
