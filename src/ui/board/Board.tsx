@@ -2,7 +2,7 @@ import { type CSSProperties, useMemo } from "react";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
 import { CellView } from "./Cell";
-import { cellGeometry } from "./geometry";
+import { type CellGeometry, cellGeometry } from "./geometry";
 
 export interface BoardProps {
   level: Level;
@@ -44,7 +44,7 @@ export function Board({
       aria-label="Puzzle board"
       aria-rowcount={size}
       aria-colcount={size}
-      className="grid w-max border-4 border-neutral-800"
+      className="relative grid w-max border-4 border-neutral-800"
       style={style}
     >
       {rows.map((cells) => (
@@ -58,8 +58,6 @@ export function Board({
                 row={g.row}
                 col={g.col}
                 region={g.region}
-                thickRight={g.thickRight}
-                thickBottom={g.thickBottom}
                 state={board[g.index]}
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
@@ -71,6 +69,59 @@ export function Board({
           ))}
         </div>
       ))}
+      {geometry.map((g) => (
+        <EdgeSegments key={g.index} g={g} />
+      ))}
     </div>
+  );
+}
+
+const THICK = 4; // px, region edge width
+const THIN = 1; // px, cell border width
+
+/**
+ * Thick region edges, drawn as an overlay centered on the thin grid line (the
+ * 1px border inside the cell, whose center is THIN/2 before the boundary), so
+ * they straddle it without changing cell size. Segments extend THICK/2 past
+ * each end so corners join square. Later in the DOM and absolutely positioned,
+ * so they paint above cell fills and thin lines.
+ */
+function EdgeSegments({ g }: { g: CellGeometry }) {
+  const half = THICK / 2;
+  const line = THIN / 2;
+  const common = "pointer-events-none absolute bg-neutral-800";
+  return (
+    <>
+      {g.thickRight && (
+        <div
+          aria-hidden="true"
+          data-edge="right"
+          data-row={g.row}
+          data-col={g.col}
+          className={common}
+          style={{
+            left: `calc(var(--cell) * ${g.col + 1} - ${line + half}px)`,
+            top: `calc(var(--cell) * ${g.row} - ${line + half}px)`,
+            width: THICK,
+            height: `calc(var(--cell) + ${THICK}px)`,
+          }}
+        />
+      )}
+      {g.thickBottom && (
+        <div
+          aria-hidden="true"
+          data-edge="bottom"
+          data-row={g.row}
+          data-col={g.col}
+          className={common}
+          style={{
+            left: `calc(var(--cell) * ${g.col} - ${line + half}px)`,
+            top: `calc(var(--cell) * ${g.row + 1} - ${line + half}px)`,
+            width: `calc(var(--cell) + ${THICK}px)`,
+            height: THICK,
+          }}
+        />
+      )}
+    </>
   );
 }

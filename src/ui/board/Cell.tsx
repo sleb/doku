@@ -8,8 +8,6 @@ export interface CellProps {
   row: number;
   col: number;
   region: number;
-  thickRight: boolean;
-  thickBottom: boolean;
   state: Cell;
   isWrong: boolean;
   isConflict: boolean;
@@ -59,8 +57,6 @@ export const CellView = memo(function CellView({
   row,
   col,
   region,
-  thickRight,
-  thickBottom,
   state,
   isWrong,
   isConflict,
@@ -72,8 +68,8 @@ export const CellView = memo(function CellView({
   const className = [
     "relative flex size-full items-center justify-center border-neutral-800",
     REGION_BG[region],
-    thickRight ? "border-r-4" : "border-r",
-    thickBottom ? "border-b-4" : "border-b",
+    // Thin grid lines only; thick region edges are drawn by Board's overlay.
+    "border-r border-b",
     isConflict ? "ring-4 ring-inset ring-neutral-900" : "",
   ]
     .filter(Boolean)

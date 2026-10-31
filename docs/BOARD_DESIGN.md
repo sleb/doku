@@ -163,16 +163,16 @@ export interface CellGeometry {
   row: number;
   col: number;
   region: number;
-  // The border on this cell's right and bottom edge is thick when the neighbor
-  // across it is in a different region. Top/left edges are drawn by the
-  // neighbor (or by the board frame), so a shared edge is drawn exactly once.
+  // The edge on this cell's right and bottom is thick when the neighbor across
+  // it is in a different region. Top/left edges belong to the neighbor (or the
+  // board frame), so each shared edge has exactly one owner and one segment.
   thickRight: boolean;
   thickBottom: boolean;
 }
 export function cellGeometry(level: Level): CellGeometry[];
 ```
 
-Single-owner edges avoid the doubled-border problem you get when both cells draw the shared edge. The board container draws the outer frame.
+Single-owner edges mean each shared edge yields exactly one overlay segment. Cells draw only the thin 1px right/bottom grid border; `Board` renders each thick edge as an absolutely positioned, `aria-hidden` segment (`data-edge="right|bottom"`, `data-row`, `data-col`) after the cells, 4px wide and centered on the thin line (`boundary - 0.5px`), extended 2px past each end so corners join square. A border on one cell would sit wholly inside it and look offset from the thin line; the overlay straddles it with no layout shift and paints above fills and thin lines. The board container draws the outer frame. `e2e/borders.spec.ts` verifies the centering from screenshot pixels.
 
 ### 4.2 `<Board>`
 
@@ -320,7 +320,7 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 
 1. **Pure transitions + thin Zustand wrapper** over logic written inside `create()`. The state machine is a function table that tests call directly; the store adds only subscription.
 2. **`GameState` is a discriminated union** (idle has no level/board), so UI code narrows once.
-3. **Single-owner cell borders** (right/bottom + frame) instead of per-side borders on every cell, to avoid doubled region edges.
+3. **Single-owner region edges** (right/bottom + frame), drawn as a centered overlay rather than cell borders, so thick lines straddle the thin grid line.
 4. **Button inside gridcell**, rather than `role="gridcell"` on a button, to keep native button semantics. `DESIGN.md` §7 is updated accordingly.
 5. **Plain `div role="dialog"`** over `<dialog>` for jsdom compatibility.
 6. **Demo level as JSON in `src/levels`**, not imported from engine fixtures.

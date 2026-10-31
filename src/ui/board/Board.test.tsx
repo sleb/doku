@@ -101,7 +101,7 @@ describe("Board", () => {
     expect(cell.match(/- 8px/g)).toHaveLength(2);
   });
 
-  test("thick borders match cellGeometry for every cell", () => {
+  test("thick edge overlay segments match cellGeometry, and cells stay thin", () => {
     render(
       <Board
         level={level}
@@ -112,13 +112,22 @@ describe("Board", () => {
         {...handlers()}
       />,
     );
-    for (const g of cellGeometry(level)) {
-      const cls = screen.getByRole("button", {
-        name: new RegExp(`^Row ${g.row + 1}, column ${g.col + 1},`),
-      }).className;
-      expect(cls.includes("border-r-4")).toBe(g.thickRight);
-      expect(cls.includes("border-b-4")).toBe(g.thickBottom);
-    }
+    const grid = screen.getByRole("grid");
+    const edges = (kind: "right" | "bottom") =>
+      Array.from(grid.querySelectorAll<HTMLElement>(`[data-edge=${kind}]`))
+        .map((e) => Number(e.dataset.row) * n + Number(e.dataset.col))
+        .sort((x, y) => x - y);
+    const geo = cellGeometry(level);
+    expect(edges("right")).toEqual(
+      geo.filter((g) => g.thickRight).map((g) => g.index),
+    );
+    expect(edges("bottom")).toEqual(
+      geo.filter((g) => g.thickBottom).map((g) => g.index),
+    );
+    for (const e of grid.querySelectorAll("[data-edge]"))
+      expect(e).toHaveAttribute("aria-hidden", "true");
+    for (const b of screen.getAllByRole("button"))
+      expect(b.className).not.toContain("border-r-4");
   });
 
   describe("input", () => {

@@ -15,8 +15,6 @@ function renderCell(over: Partial<Props> = {}) {
     row: 1,
     col: 2,
     region: REGION,
-    thickRight: false,
-    thickBottom: false,
     state: Cell.Empty,
     isWrong: false,
     isConflict: false,
@@ -84,13 +82,7 @@ describe("CellView", () => {
     expect(b.className).not.toContain("ring-");
   });
 
-  test("thick flags select thick borders, thin otherwise", () => {
-    const thick = renderCell({ thickRight: true, thickBottom: true });
-    expect(thick.className).toContain("border-r-4");
-    expect(thick.className).toContain("border-b-4");
-  });
-
-  test("thin borders when flags are false", () => {
+  test("cells draw only thin grid borders (thick edges are Board's overlay)", () => {
     const b = renderCell();
     expect(b.className).not.toContain("border-r-4");
     expect(b.className).not.toContain("border-b-4");
