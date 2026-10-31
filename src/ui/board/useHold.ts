@@ -24,9 +24,8 @@ export function useHold(onComplete: () => void, disabled: boolean) {
   }, []);
 
   const start = useCallback((source: Source) => {
-    if (off.current) return;
+    if (off.current || timer.current !== undefined) return;
     completed.current = false;
-    if (timer.current !== undefined) return;
     setHolding(true);
     timer.current = setTimeout(() => {
       timer.current = undefined;
@@ -34,6 +33,11 @@ export function useHold(onComplete: () => void, disabled: boolean) {
       setHolding(false);
       latest.current();
     }, HOLD_MS);
+  }, []);
+
+  /** Forget a pending swallow when its trailing click can no longer come. */
+  const clearSwallow = useCallback(() => {
+    completed.current = false;
   }, []);
 
   const swallowClick = useCallback(() => {
@@ -47,5 +51,5 @@ export function useHold(onComplete: () => void, disabled: boolean) {
   }, [disabled, cancel]);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  return { holding, start, cancel, swallowClick };
+  return { holding, start, cancel, clearSwallow, swallowClick };
 }

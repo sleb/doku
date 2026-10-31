@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
+import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
-import { HOLD_MS } from "./hold";
 import { REGION_NAMES } from "./palette";
 
 const n = level.size;
@@ -178,13 +178,7 @@ describe("Board", () => {
       await userEvent.click(at(10));
       expect(h.onToggleMark).toHaveBeenCalledExactlyOnceWith(10);
       expect(h.onPlaceFace).not.toHaveBeenCalled();
-      vi.useFakeTimers();
-      try {
-        fireEvent.pointerDown(at(11), { button: 0, pointerId: 1 });
-        act(() => vi.advanceTimersByTime(HOLD_MS));
-      } finally {
-        vi.useRealTimers();
-      }
+      holdCell(at(11));
       expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(11);
     });
   });

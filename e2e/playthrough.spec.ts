@@ -186,6 +186,67 @@ test("the glow shows while holding and is gone after commit", async ({
   await page.mouse.up();
 });
 
+test("the glow traces a visible border mid-hold", async ({ page }) => {
+  await page.goto("/");
+  const target = cell(page, 0, (solution[0] + 1) % size);
+  await target.hover();
+  await page.mouse.down();
+  const rect = target.locator("[data-hold-glow] rect");
+  const read = () =>
+    rect.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        offset: Number.parseFloat(cs.strokeDashoffset),
+        width: Number.parseFloat(cs.strokeWidth),
+        dash: cs.strokeDasharray,
+        len: (el as SVGGeometryElement).getTotalLength(),
+        box: el.getBoundingClientRect().width,
+      };
+    });
+  await page.waitForTimeout(HOLD_MS * 0.3);
+  const a = await read();
+  await page.waitForTimeout(HOLD_MS * 0.3);
+  const b = await read();
+  // The dash offset advances toward 0 as the stroke is traced.
+  expect(b.offset).toBeLessThan(a.offset);
+  expect(a.dash).toBe("1px"); // user units, scaled by pathLength
+  // Stroke is normalised by pathLength (not 1px), and visibly thick.
+  expect(a.width).toBeGreaterThan(2);
+  // A traced fraction of the border is painted: screenshot shows dark pixels
+  // inside the cell's outer edge that the unheld neighbour lacks.
+  const box = await target.boundingBox();
+  if (!box) throw new Error("no box");
+  const shot = await page.screenshot({ clip: box });
+  // keep a screenshot for manual inspection
+  await page.screenshot({
+    path: "test-results/hold-glow.png",
+    clip: box,
+  });
+  expect(shot.length).toBeGreaterThan(0);
+  const dark = await page.evaluate(async (png) => {
+    const img = await createImageBitmap(
+      await (await fetch(`data:image/png;base64,${png}`)).blob(),
+    );
+    const c = new OffscreenCanvas(img.width, img.height);
+    const ctx = c.getContext("2d");
+    if (!ctx) throw new Error("no 2d context");
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, img.width, img.height).data;
+    let n = 0;
+    // Count near-black pixels in the 6px band just inside the edge.
+    for (let y = 0; y < img.height; y++)
+      for (let x = 0; x < img.width; x++) {
+        const edge = Math.min(x, y, img.width - 1 - x, img.height - 1 - y);
+        if (edge < 2 || edge > 7) continue;
+        const i = (y * img.width + x) * 4;
+        if (d[i] + d[i + 1] + d[i + 2] < 120) n++;
+      }
+    return n;
+  }, shot.toString("base64"));
+  expect(dark).toBeGreaterThan(40);
+  await page.mouse.up();
+});
+
 test("releasing Space early places nothing", async ({ page }) => {
   await page.goto("/");
   const target = cell(page, 0, (solution[0] + 1) % size);

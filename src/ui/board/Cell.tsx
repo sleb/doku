@@ -41,7 +41,7 @@ export const CellView = memo(function CellView({
   const hold = useHold(() => onPlaceFace(index), disabled);
   const label = stateLabel(state, isWrong);
   const className = [
-    "relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
+    "cell relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
     REGION_BG[region],
     // Thin grid lines only; thick region edges are drawn by Board's overlay.
     "border-r border-b",
@@ -67,10 +67,14 @@ export const CellView = memo(function CellView({
       }}
       onPointerUp={hold.cancel}
       onPointerCancel={hold.cancel}
-      onPointerLeave={hold.cancel}
+      onPointerLeave={() => {
+        hold.cancel();
+        hold.clearSwallow();
+      }}
       onBlur={hold.cancel}
       onContextMenu={(e) => e.preventDefault()}
       onKeyDown={(e) => {
+        hold.clearSwallow();
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         // Native click repeats on auto-repeat Enter; swallow repeats so a
         // held key does not flicker the mark. The first press still clicks.
@@ -111,7 +115,6 @@ export const CellView = memo(function CellView({
             width="92"
             height="92"
             pathLength={1}
-            vectorEffect="non-scaling-stroke"
             style={{ animationDuration: `${HOLD_MS}ms` }}
           />
         </svg>

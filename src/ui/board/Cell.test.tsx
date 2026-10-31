@@ -241,6 +241,37 @@ describe("CellView", () => {
       expect(b.onToggleMark).toHaveBeenCalledTimes(1);
     });
 
+    test("a second input source while holding does not corrupt the swallow", () => {
+      const b = renderCell();
+      down(b);
+      tick(100);
+      fireEvent.keyDown(b, { key: " " }); // ignored: a hold is running
+      tick(HOLD_MS);
+      expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
+      fireEvent.pointerUp(b);
+      fireEvent.click(b, { detail: 1 });
+      expect(b.onToggleMark).not.toHaveBeenCalled(); // pointer hold's click
+    });
+
+    test("a pointer hold then pointerleave does not swallow a later Enter click", () => {
+      const b = renderCell();
+      down(b);
+      tick(HOLD_MS);
+      fireEvent.pointerLeave(b); // dragged off: the trailing click never comes
+      fireEvent.keyDown(b, { key: "Enter" });
+      fireEvent.click(b, { detail: 0 });
+      expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
+    test("a pointer hold then a key press does not swallow the Enter click", () => {
+      const b = renderCell();
+      down(b);
+      tick(HOLD_MS);
+      fireEvent.keyDown(b, { key: "Enter" });
+      fireEvent.click(b, { detail: 0 });
+      expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
     test("clicks toggle every time, including detail >= 2", () => {
       const b = renderCell();
       for (const detail of [1, 2, 3]) fireEvent.click(b, { detail });
