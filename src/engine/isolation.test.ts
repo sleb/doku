@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 const FORBIDDEN =
-  /^(?:(?:\.{1,2}\/)+(?:ui|store|platform)(?:\/|$)|@tauri-apps\/)/;
+  /^(?:(?:(?:\.{1,2}\/)+|\/|@\/)(?:src\/)?(?:ui|store|platform)(?:\/|$)|@tauri-apps\/)/;
 
 const SPECIFIER_PATTERNS = [
   /\bfrom\s*["']([^"']+)["']/g,
@@ -32,6 +32,12 @@ describe("findForbiddenImports", () => {
     [`export * from "../ui";`, "../ui"],
     [`import {\n  a,\n  b,\n} from "../ui";`, "../ui"],
     [`import "../ui/side-effect";`, "../ui/side-effect"],
+    [`import { g } from "../../src/store/game";`, "../../src/store/game"],
+    [`import { B } from "../../../src/ui/Board";`, "../../../src/ui/Board"],
+    [`import { x } from "/src/ui/x";`, "/src/ui/x"],
+    [`import { x } from "@/ui/x";`, "@/ui/x"],
+    [`import { x } from "@/store/x";`, "@/store/x"],
+    [`import { x } from "@/platform/x";`, "@/platform/x"],
   ])("flags %j", (source, specifier) => {
     expect(findForbiddenImports(source)).toEqual([specifier]);
   });
@@ -46,7 +52,7 @@ describe("findForbiddenImports", () => {
 });
 
 describe("engine isolation", () => {
-  const sources = import.meta.glob("./**/*.ts", {
+  const sources = import.meta.glob("./**/*.{ts,tsx,js,jsx,mts,cts}", {
     query: "?raw",
     import: "default",
     eager: true,
