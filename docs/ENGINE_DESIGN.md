@@ -179,10 +179,10 @@ Loop: `cand = fromBoard(p, board ?? empty)`; repeatedly try techniques in ladder
 
 ```ts
 function solve(level: Level): number[] | null;   // result[r] = column in row r; no board seed yet (add when hints/generation need it)
-function countSolutions(p: Puzzle, limit = 2, board?: Board): number;
+function countSolutions(level: Level, limit = 2): number;   // stops once `limit` placements are found; limit <= 0 gives 0
 ```
 
-`solve` takes a `Level` directly (no `compile`/`Puzzle` yet) and never reads `level.solution`. It returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. For now `solve` is a private backtracker over a `Level`, and `countSolutions` does not exist yet. M1-09 will generalize it into one shared routine over a `Puzzle` (with `limit`); `solve` will then be the `limit = 1` case and return the first solution.
+`solve` takes a `Level` directly (no `compile`/`Puzzle` yet) and never reads `level.solution`. It returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. Both are thin wrappers over one private `search(level, limit, onSolution)` backtracker: `countSolutions` counts solutions and stops at `limit` (default 2, enough to tell unique from ambiguous), and `solve` is the `limit = 1` case that captures the placement. Neither takes a `Puzzle` or board seed yet; add those when hints and generation need them.
 
 Plain backtracking, independent of the ladder, optimized for speed:
 - Place one face per row, top to bottom.

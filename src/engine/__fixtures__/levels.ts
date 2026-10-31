@@ -10,8 +10,8 @@ export const level7: Level = {
   solution: [1, 3, 5, 0, 2, 4, 6],
 };
 
-// Exactly one valid placement, verified by brute force (M1-09 will make that
-// a test). Use where a test needs a unique solution.
+// Exactly one valid placement, verified by brute force (see the countSolutions
+// tests). Use where a test needs a unique solution.
 export const uniqueLevel7: Level = {
   id: "fixture-unique-7",
   size: 7,
