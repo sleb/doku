@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { level7 } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
-import { findConflicts } from "./rules";
+import { findConflicts, isSolved } from "./rules";
 import { type Board, Cell, type Coord, type Level } from "./types";
 
 function boardWithFaces(level: Level, faces: Coord[]): Board {
@@ -335,5 +335,47 @@ describe("findConflicts: marks and clean boards", () => {
     expect(
       findConflicts(markAll(latinLevel, others, board), latinLevel),
     ).toEqual([{ reason: "row", cells: faces }]);
+  });
+});
+
+describe("isSolved", () => {
+  const solution: Coord[] = level7.solution.map((c, r) => ({ r, c }));
+
+  it("is true for exactly the solution", () => {
+    expect(isSolved(boardWithFaces(level7, solution), level7)).toBe(true);
+  });
+
+  it("is false one face short", () => {
+    expect(isSolved(boardWithFaces(level7, solution.slice(1)), level7)).toBe(
+      false,
+    );
+  });
+
+  it("is false with N faces where two share a row", () => {
+    const board = boardWithFaces(level7, [
+      ...solution.slice(0, 6),
+      { r: 5, c: (level7.solution[5] + 2) % 7 },
+    ]);
+    expect(isSolved(board, level7)).toBe(false);
+  });
+
+  it("ignores marks", () => {
+    const board = boardWithFaces(level7, solution);
+    const spare = [0, 1, 2, 3, 4, 5, 6].find((c) => c !== level7.solution[0]);
+    (board as Uint8Array)[spare as number] = Cell.Mark;
+    expect(isSolved(board, level7)).toBe(true);
+  });
+
+  it("is false with an extra face", () => {
+    const spare = [0, 1, 2, 3, 4, 5, 6].find((c) => c !== level7.solution[0]);
+    const board = boardWithFaces(level7, [
+      ...solution,
+      { r: 0, c: spare as number },
+    ]);
+    expect(isSolved(board, level7)).toBe(false);
+  });
+
+  it("is false for an empty board", () => {
+    expect(isSolved(emptyBoard(level7), level7)).toBe(false);
   });
 });
