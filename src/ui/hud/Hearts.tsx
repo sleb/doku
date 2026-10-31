@@ -1,12 +1,5 @@
-export function Hearts({
-  remaining,
-  max,
-}: {
-  remaining: number;
-  max: number;
-}) {
+export function Hearts({ remaining, max }: { remaining: number; max: number }) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a group of decorative svgs exposed as one image
     <div role="img" aria-label={`${remaining} of ${max} hearts`}>
       {Array.from({ length: max }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, order-stable list
