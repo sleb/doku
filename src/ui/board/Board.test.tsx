@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
+import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
 import { REGION_NAMES } from "./palette";
@@ -172,12 +173,12 @@ describe("Board", () => {
       for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
     });
 
-    test("click and double-click pass the flat index to the callbacks", async () => {
+    test("click and hold pass the flat index to the callbacks", async () => {
       const h = renderMixed(false);
       await userEvent.click(at(10));
       expect(h.onToggleMark).toHaveBeenCalledExactlyOnceWith(10);
       expect(h.onPlaceFace).not.toHaveBeenCalled();
-      await userEvent.dblClick(at(11));
+      holdCell(at(11));
       expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(11);
     });
   });

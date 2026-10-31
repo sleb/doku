@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test } from "vitest";
 import App from "./App";
 import { demoLevel } from "./levels/demoLevel";
 import { idleState } from "./store/game";
 import { gameStore } from "./store/gameStore";
+import { holdCell } from "./test/hold";
 import { REGION_BG } from "./ui/board/palette";
 
 beforeEach(() => gameStore.setState(idleState, false));
@@ -35,10 +35,9 @@ test("has no scaffold input or palette swatches", () => {
 
 test("solving the demo level shows the result dialog", async () => {
   render(<App />);
-  const user = userEvent.setup();
   const { size, solution } = demoLevel;
   for (let r = 0; r < size; r++) {
-    await user.dblClick(
+    holdCell(
       screen.getByRole("button", {
         name: new RegExp(`^Row ${r + 1}, column ${solution[r] + 1},`),
       }),

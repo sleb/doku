@@ -9,6 +9,7 @@ import {
 import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
+import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
 
 vi.mock("../../store/selectors", async (importOriginal) => {
@@ -40,10 +41,8 @@ function Probe({ seen }: { seen: (Element | null)[] }) {
   return null;
 }
 
-async function dbl(cells: number[]) {
-  const user = userEvent.setup();
-  for (const i of cells) await user.dblClick(cell(i));
-  return user;
+function hold(cells: number[]) {
+  for (const i of cells) holdCell(cell(i));
 }
 
 describe("GameScreen", () => {
@@ -73,7 +72,7 @@ describe("GameScreen", () => {
 
   test("solving shows 'You solved it', focused Retry, and an inert board", async () => {
     render(<GameScreen level={level} />);
-    await dbl(solution);
+    hold(solution);
     expect(
       screen.getByRole("dialog", { name: "You solved it" }),
     ).toBeInTheDocument();
@@ -84,14 +83,14 @@ describe("GameScreen", () => {
       expect(label(i)).toBe("empty");
     }
     await userEvent.click(cell(nonSolution[0]));
-    await userEvent.dblClick(cell(nonSolution[0]));
+    holdCell(cell(nonSolution[0]));
     expect(label(nonSolution[0])).toBe("empty");
     expect(gameStore.getState().hearts).toBe(3);
   });
 
   test("unmounting resets the store to idle", async () => {
     const { unmount } = render(<GameScreen level={level} />);
-    await dbl([nonSolution[0]]);
+    hold([nonSolution[0]]);
     expect(gameStore.getState().hearts).toBe(2);
     unmount();
     expect(gameStore.getState().status).toBe("idle");
@@ -101,7 +100,7 @@ describe("GameScreen", () => {
 
   test("a remount after a finished game shows no old dialog on first paint", async () => {
     const first = render(<GameScreen level={level} />);
-    await dbl(solution);
+    hold(solution);
     first.unmount();
     const seen: (Element | null)[] = [];
     render(
@@ -122,7 +121,7 @@ describe("GameScreen", () => {
         <GameScreen level={level} />
       </StrictMode>,
     );
-    await dbl([nonSolution[0]]);
+    hold([nonSolution[0]]);
     expect(gameStore.getState().status).toBe("playing");
     expect(gameStore.getState().hearts).toBe(2);
   });
@@ -138,7 +137,7 @@ describe("GameScreen", () => {
   test("three wrong taps show 'Out of hearts' with wrong marks", async () => {
     render(<GameScreen level={level} />);
     const wrongs = nonSolution.slice(0, 3);
-    await dbl(wrongs);
+    hold(wrongs);
     expect(
       screen.getByRole("dialog", { name: "Out of hearts" }),
     ).toBeInTheDocument();
@@ -155,7 +154,7 @@ describe("GameScreen", () => {
     "Retry after a %s gives a fresh board with 3 hearts",
     async (_n, cells) => {
       render(<GameScreen level={level} />);
-      await dbl(cells());
+      hold(cells());
       await userEvent.click(screen.getByRole("button", { name: "Retry" }));
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(
@@ -168,7 +167,7 @@ describe("GameScreen", () => {
 
   test("one wrong tap keeps the dialog hidden and shows 2 hearts", async () => {
     render(<GameScreen level={level} />);
-    await dbl([nonSolution[0]]);
+    hold([nonSolution[0]]);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(
       screen.getByRole("img", { name: "2 of 3 hearts" }),

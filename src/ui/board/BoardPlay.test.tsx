@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { memo } from "react";
 import { describe, expect, test, vi } from "vitest";
@@ -6,7 +6,9 @@ import type { StoreApi } from "zustand";
 import { useStore } from "zustand";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { createGameStore, type GameStore } from "../../store/gameStore";
+import { holdCell as hold } from "../../test/hold";
 import { Board } from "./Board";
+import { HOLD_TOTAL_MS } from "./hold";
 
 // Count the CellView renders that get past memo, per cell index.
 const renders = vi.hoisted(() => ({ byIndex: new Map<number, number>() }));
@@ -24,6 +26,19 @@ vi.mock("./Cell", async (importOriginal) => {
   });
   return { ...orig, CellView };
 });
+
+// Hold Space on the focused cell for HOLD_TOTAL_MS.
+function holdSpace(el: HTMLElement) {
+  el.focus();
+  vi.useFakeTimers();
+  try {
+    fireEvent.keyDown(el, { key: " " });
+    act(() => vi.advanceTimersByTime(HOLD_TOTAL_MS));
+    fireEvent.keyUp(el, { key: " " });
+  } finally {
+    vi.useRealTimers();
+  }
+}
 
 const n = level.size;
 const solution = level.solution.map((c, r) => r * n + c);
@@ -82,19 +97,36 @@ describe("playing the board", () => {
     expect(hearts()).toBe(3);
   });
 
-  test("double-click places a face, or a wrong mark and one fewer heart", async () => {
+  test("holding places a face, or a wrong mark and one fewer heart", () => {
     const { cell, label, hearts } = setup();
-    await userEvent.dblClick(cell(solution[0]));
+    hold(cell(solution[0]));
     expect(label(solution[0])).toBe("face");
-    await userEvent.dblClick(cell(wrongCell));
+    hold(cell(wrongCell));
     expect(label(wrongCell)).toBe("wrong");
     expect(hearts()).toBe(2);
   });
 
-  test("double-click on an already marked cell places a face", async () => {
+  test("a hold released early places nothing and costs nothing", () => {
+    const { cell, label, hearts, placeFace } = setup();
+    hold(cell(wrongCell), HOLD_TOTAL_MS - 50);
+    expect(label(wrongCell)).toBe("empty");
+    expect(placeFace).not.toHaveBeenCalled();
+    expect(hearts()).toBe(3);
+  });
+
+  test("double-click toggles twice, placing nothing and costing nothing", async () => {
+    const { cell, label, hearts, placeFace } = setup();
+    await userEvent.dblClick(cell(wrongCell));
+    expect(label(wrongCell)).toBe("empty");
+    expect(placeFace).not.toHaveBeenCalled();
+    expect(hearts()).toBe(3);
+  });
+
+  test("holding a player's own mark places a face", async () => {
     const { cell, label } = setup();
     await userEvent.click(cell(solution[1]));
-    await userEvent.dblClick(cell(solution[1]));
+    expect(label(solution[1])).toBe("marked");
+    hold(cell(solution[1]));
     expect(label(solution[1])).toBe("face");
   });
 
@@ -108,10 +140,10 @@ describe("playing the board", () => {
     expect(label(solution[2])).toBe("marked");
     await userEvent.keyboard("x");
     expect(label(solution[2])).toBe("empty");
-    await userEvent.keyboard(" ");
+    expect(label(solution[2])).toBe("empty");
+    holdSpace(cell(solution[2]));
     expect(label(solution[2])).toBe("face");
-    cell(wrongCell).focus();
-    await userEvent.keyboard(" ");
+    holdSpace(cell(wrongCell));
     expect(label(wrongCell)).toBe("wrong");
     expect(hearts()).toBe(2);
     expect(clicks).not.toHaveBeenCalled();
@@ -120,12 +152,12 @@ describe("playing the board", () => {
 
   test("faces and wrong marks are inert; the player's own mark is not", async () => {
     const { cell, label, hearts } = setup();
-    await userEvent.dblClick(cell(solution[0]));
-    await userEvent.dblClick(cell(wrongCell));
+    hold(cell(solution[0]));
+    hold(cell(wrongCell));
     for (const i of [solution[0], wrongCell]) {
       expect(cell(i)).toBeDisabled();
       await userEvent.click(cell(i));
-      await userEvent.dblClick(cell(i));
+      hold(cell(i));
     }
     expect(label(solution[0])).toBe("face");
     expect(label(wrongCell)).toBe("wrong");
@@ -138,13 +170,14 @@ describe("playing the board", () => {
 
   test("a won board is inert", async () => {
     const { cell, store } = setup();
-    for (const i of solution) await userEvent.dblClick(cell(i));
+    for (const i of solution) hold(cell(i));
     expect(store.getState().status).toBe("won");
     const free = Array.from({ length: n * n }, (_, i) => i).filter(
       (i) => !solution.includes(i),
     );
     for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
     await userEvent.click(cell(free[0]));
+    hold(cell(free[0]));
     expect(screen.getAllByRole("button", { name: /empty$/ })).toHaveLength(
       free.length,
     );
@@ -155,10 +188,11 @@ describe("playing the board", () => {
     const wrongs = Array.from({ length: n * n }, (_, i) => i)
       .filter((i) => !solution.includes(i))
       .slice(0, 4);
-    for (const i of wrongs.slice(0, 3)) await userEvent.dblClick(cell(i));
+    for (const i of wrongs.slice(0, 3)) hold(cell(i));
     expect(store.getState().status).toBe("lost");
     for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
     await userEvent.click(cell(wrongs[3]));
+    hold(cell(wrongs[3]));
     expect(cell(wrongs[3]).getAttribute("aria-label")).toMatch(/empty$/);
   });
 
