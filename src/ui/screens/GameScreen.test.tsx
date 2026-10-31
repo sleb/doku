@@ -1,9 +1,12 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode } from "react";
+import { StrictMode, useLayoutEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
-import { idleState } from "../../store/game";
+import {
+  uniqueLevel7 as level,
+  uniqueLevel11,
+} from "../../engine/__fixtures__/levels";
+import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { GameScreen } from "./GameScreen";
 
@@ -22,6 +25,14 @@ const label = (i: number) =>
 
 beforeEach(() => gameStore.setState(idleState, false));
 afterEach(() => vi.restoreAllMocks());
+
+/** Records the dialog present at first commit, before passive effects run. */
+function Probe({ seen }: { seen: (Element | null)[] }) {
+  useLayoutEffect(() => {
+    seen.push(document.querySelector("[role=dialog]"));
+  }, [seen]);
+  return null;
+}
 
 async function dbl(cells: number[]) {
   const user = userEvent.setup();
@@ -62,8 +73,37 @@ describe("GameScreen", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toHaveFocus();
     expect(screen.getByRole("grid").closest("[inert]")).not.toBeNull();
+    for (const i of nonSolution.slice(0, 3)) {
+      expect(cell(i)).toBeDisabled();
+      expect(label(i)).toBe("empty");
+    }
     await userEvent.click(cell(nonSolution[0]));
-    expect(gameStore.getState().status).toBe("won");
+    await userEvent.dblClick(cell(nonSolution[0]));
+    expect(label(nonSolution[0])).toBe("empty");
+    expect(gameStore.getState().hearts).toBe(3);
+  });
+
+  test("does not render a stale result from a previous mount on first paint", () => {
+    gameStore.setState({ ...startLevel(level), status: "won" }, false);
+    const seen: (Element | null)[] = [];
+    render(
+      <>
+        <GameScreen level={level} />
+        <Probe seen={seen} />
+      </>,
+    );
+    expect(seen).toEqual([null]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(gameStore.getState().status).toBe("playing");
+    for (let i = 0; i < n * n; i++) expect(label(i)).toBe("empty");
+  });
+
+  test("does not throw or mismatch when the store holds a different-size level", () => {
+    gameStore.setState(startLevel(uniqueLevel11), false);
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => render(<GameScreen level={level} />)).not.toThrow();
+    expect(error).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("button")).toHaveLength(n * n);
   });
 
   test("three wrong taps show 'Out of hearts' with wrong marks", async () => {

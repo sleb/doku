@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Level } from "../../engine";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
@@ -7,14 +7,18 @@ import { TopBar } from "../hud/TopBar";
 import { ResultModal } from "./ResultModal";
 
 export function GameScreen({ level }: { level: Level }) {
+  const storeLevel = useGameStore((s) => s.level);
   const status = useGameStore((s) => s.status);
   const board = useGameStore((s) => s.board);
   const hearts = useGameStore((s) => s.hearts);
   const wrong = useGameStore((s) => ("wrong" in s ? s.wrong : undefined));
   const { startLevel, restart, toggleMark, placeFace } = gameStore.getState();
 
+  const [startedFor, setStartedFor] = useState<Level | null>(null);
+
   useEffect(() => {
     startLevel(level);
+    setStartedFor(level);
   }, [startLevel, level]);
 
   const conflicts = useMemo(
@@ -22,7 +26,17 @@ export function GameScreen({ level }: { level: Level }) {
     [board, level],
   );
 
-  if (status === "idle" || !board || !wrong) return null;
+  // Until this mount's start effect runs, the singleton may hold a previous
+  // mount's level/board/result; render idle rather than from that stale state.
+  if (
+    startedFor !== level ||
+    storeLevel !== level ||
+    status === "idle" ||
+    !board ||
+    !wrong
+  ) {
+    return null;
+  }
 
   const finished = status !== "playing";
   return (
