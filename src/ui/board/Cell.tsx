@@ -32,6 +32,12 @@ function onKeyDown(
   onPlaceFace: (index: number) => void,
 ) {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Native click repeats on auto-repeat Enter; swallow repeats so a held key
+  // does not flicker the mark. The first press still clicks natively.
+  if (e.key === "Enter" && e.repeat) {
+    e.preventDefault();
+    return;
+  }
   const isX = e.key === "x" || e.key === "X";
   if (!isX && e.key !== " ") return;
   // Always swallow, so Space never scrolls or synthesizes a click.
@@ -43,6 +49,7 @@ function onKeyDown(
 
 // Space click-on-release differs between engines; suppress it.
 function onKeyUp(e: KeyboardEvent<HTMLButtonElement>) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === " ") e.preventDefault();
 }
 

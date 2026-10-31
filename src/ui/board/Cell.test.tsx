@@ -153,6 +153,21 @@ describe("CellView", () => {
     expect(b.onPlaceFace).not.toHaveBeenCalled();
   });
 
+  test("a held Enter does not toggle on auto-repeat", () => {
+    const b = renderCell();
+    expect(fireEvent.keyDown(b, { key: "Enter", repeat: true })).toBe(false);
+    expect(fireEvent.keyDown(b, { key: "Enter" })).toBe(true);
+  });
+
+  test("modifier combos are not default-prevented", () => {
+    const b = renderCell();
+    for (const mod of ["ctrlKey", "metaKey", "altKey"]) {
+      expect(fireEvent.keyDown(b, { key: "x", [mod]: true })).toBe(true);
+      expect(fireEvent.keyDown(b, { key: " ", [mod]: true })).toBe(true);
+      expect(fireEvent.keyUp(b, { key: " ", [mod]: true })).toBe(true);
+    }
+  });
+
   test("handled keys are default-prevented, including Space on keyup", () => {
     const b = renderCell();
     expect(fireEvent.keyDown(b, { key: "x" })).toBe(false);

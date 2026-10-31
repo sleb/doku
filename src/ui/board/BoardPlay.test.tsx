@@ -53,6 +53,8 @@ function Harness({ store }: { store: StoreApi<GameStore> }) {
 function setup() {
   const store = createGameStore();
   store.getState().startLevel(level);
+  // Spy before render: Harness captures the action from the store on render.
+  const placeFace = vi.spyOn(store.getState(), "placeFace");
   render(<Harness store={store} />);
   const cell = (i: number) =>
     screen.getByRole("button", {
@@ -60,18 +62,23 @@ function setup() {
     });
   const label = (i: number) =>
     cell(i).getAttribute("aria-label")?.split(", ").pop();
-  return { store, cell, label, hearts: () => store.getState().hearts };
+  return {
+    store,
+    placeFace,
+    cell,
+    label,
+    hearts: () => store.getState().hearts,
+  };
 }
 
 describe("playing the board", () => {
   test("single clicks toggle a mark on and off and never place a face", async () => {
-    const { cell, label, hearts, store } = setup();
-    const place = vi.spyOn(store.getState(), "placeFace");
+    const { cell, label, hearts, placeFace } = setup();
     await userEvent.click(cell(solution[0]));
     expect(label(solution[0])).toBe("marked");
     await userEvent.click(cell(solution[0]));
     expect(label(solution[0])).toBe("empty");
-    expect(place).not.toHaveBeenCalled();
+    expect(placeFace).not.toHaveBeenCalled();
     expect(hearts()).toBe(3);
   });
 
