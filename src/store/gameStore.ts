@@ -1,3 +1,4 @@
+import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { Level } from "../engine";
 import {
@@ -25,3 +26,12 @@ export function createGameStore(): StoreApi<GameStore> {
     placeFace: (cell) => set((s) => placeFace(s, cell)),
   }));
 }
+
+/** The app singleton; exported so non-React code and tests can reset it. */
+export const gameStore = createGameStore();
+
+export function useGameStore<T>(selector: (s: GameStore) => T): T {
+  return useStore(gameStore, selector);
+}
+
+useGameStore.getState = gameStore.getState;
