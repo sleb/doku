@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, test, vi } from "vitest";
 import { Cell } from "../../engine";
 import { CellView } from "./Cell";
 import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
@@ -7,6 +8,8 @@ import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
 type Props = Parameters<typeof CellView>[0];
 
 function renderCell(over: Partial<Props> = {}) {
+  const onToggleMark = vi.fn();
+  const onPlaceFace = vi.fn();
   const props: Props = {
     index: 17,
     row: 1,
@@ -17,10 +20,16 @@ function renderCell(over: Partial<Props> = {}) {
     state: Cell.Empty,
     isWrong: false,
     isConflict: false,
+    disabled: false,
+    onToggleMark,
+    onPlaceFace,
     ...over,
   };
   render(<CellView {...props} />);
-  return screen.getByRole("button");
+  return Object.assign(screen.getByRole("button"), {
+    onToggleMark: props.onToggleMark as ReturnType<typeof vi.fn>,
+    onPlaceFace: props.onPlaceFace as ReturnType<typeof vi.fn>,
+  });
 }
 
 const REGION = 5;
@@ -87,5 +96,12 @@ describe("CellView", () => {
     expect(b.className).not.toContain("border-b-4");
     expect(b.className).toContain("border-r");
     expect(b.className).toContain("border-b");
+  });
+
+  test("a single click toggles the mark and never places a face", async () => {
+    const b = renderCell();
+    await userEvent.click(b);
+    expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
   });
 });

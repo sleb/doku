@@ -13,6 +13,9 @@ export interface CellProps {
   state: Cell;
   isWrong: boolean;
   isConflict: boolean;
+  disabled: boolean;
+  onToggleMark: (index: number) => void;
+  onPlaceFace: (index: number) => void;
 }
 
 function stateLabel(state: Cell, isWrong: boolean): string {
@@ -24,6 +27,7 @@ function stateLabel(state: Cell, isWrong: boolean): string {
 
 // Tailwind only emits literal class names, so keep these as full strings.
 export const CellView = memo(function CellView({
+  index,
   row,
   col,
   region,
@@ -32,6 +36,9 @@ export const CellView = memo(function CellView({
   state,
   isWrong,
   isConflict,
+  disabled,
+  onToggleMark,
+  onPlaceFace,
 }: CellProps) {
   const label = stateLabel(state, isWrong);
   const className = [
@@ -49,6 +56,8 @@ export const CellView = memo(function CellView({
       aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}`}
       data-conflict={isConflict ? "true" : undefined}
       className={className}
+      disabled={disabled}
+      onClick={() => onToggleMark(index)}
     >
       {label === "wrong" ? (
         <WrongIcon />
