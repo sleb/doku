@@ -1,6 +1,6 @@
 import { type Board, Cell, type Coord, type Level } from "./types";
 
-export type ConflictReason = "row" | "col";
+export type ConflictReason = "row" | "col" | "region";
 
 export interface Conflict {
   reason: ConflictReason;
@@ -11,16 +11,19 @@ export function findConflicts(board: Board, level: Level): Conflict[] {
   const n = level.size;
   const rows: Coord[][] = Array.from({ length: n }, () => []);
   const cols: Coord[][] = Array.from({ length: n }, () => []);
+  const regions: Coord[][] = Array.from({ length: n }, () => []);
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
       if (board[r * n + c] !== Cell.Face) continue;
       rows[r].push({ r, c });
       cols[c].push({ r, c });
+      regions[level.regions[r][c]].push({ r, c });
     }
   }
   const groups: [ConflictReason, Coord[][]][] = [
     ["row", rows],
     ["col", cols],
+    ["region", regions],
   ];
   return groups.flatMap(([reason, lines]) =>
     lines
