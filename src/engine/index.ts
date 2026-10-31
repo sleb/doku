@@ -1,6 +1,6 @@
 export { emptyBoard } from "./board";
-export type { Conflict, ConflictReason } from "./rules";
-export { findConflicts, isSolved } from "./rules";
+export type { Conflict, ConflictReason, TapJudgement } from "./rules";
+export { findConflicts, isSolved, judgeTap } from "./rules";
 export { countSolutions, solve } from "./solver";
 export type { Board, Coord, Level, Tier } from "./types";
 export { Cell } from "./types";

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { multiSolutionLevel7 } from "./__fixtures__/levels";
+import {
+  multiSolutionLevel7,
+  uniqueLevel7,
+  uniqueLevel11,
+} from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
-import { findConflicts, isSolved } from "./rules";
+import { findConflicts, isSolved, judgeTap } from "./rules";
 import { type Board, Cell, type Coord, type Level } from "./types";
 
 function boardWithFaces(level: Level, faces: Coord[]): Board {
@@ -420,4 +424,46 @@ describe("isSolved", () => {
       false,
     );
   });
+});
+
+describe.each([
+  ["uniqueLevel7", uniqueLevel7],
+  ["uniqueLevel11", uniqueLevel11],
+])("judgeTap: %s", (_name, level) => {
+  const n = level.size;
+
+  it("is correct for exactly the solution cells and wrong elsewhere", () => {
+    let correct = 0;
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const expected = c === level.solution[r] ? "correct" : "wrong";
+        expect(judgeTap(level, r * n + c)).toBe(expected);
+        if (expected === "correct") correct++;
+      }
+    }
+    expect(correct).toBe(n);
+  });
+
+  it("is wrong for cells sharing a row, column, region or touching a solution cell", () => {
+    level.solution.forEach((sc, sr) => {
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          if (r === sr && c === sc) continue;
+          const related =
+            r === sr ||
+            c === sc ||
+            level.regions[r][c] === level.regions[sr][sc] ||
+            (Math.abs(r - sr) <= 1 && Math.abs(c - sc) <= 1);
+          if (related) expect(judgeTap(level, r * n + c)).toBe("wrong");
+        }
+      }
+    });
+  });
+
+  it.each([-1, n * n, 1.5, Number.NaN])(
+    "throws RangeError for cell %s",
+    (cell) => {
+      expect(() => judgeTap(level, cell)).toThrow(RangeError);
+    },
+  );
 });

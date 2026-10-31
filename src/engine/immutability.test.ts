@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Fixture, fixtures } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
-import { findConflicts, isSolved } from "./rules";
+import { findConflicts, isSolved, judgeTap } from "./rules";
 import { countSolutions, solve } from "./solver";
 import { type Board, Cell, type Level } from "./types";
 import { LevelError, loadLevel, validateLevel } from "./validate";
@@ -114,6 +114,9 @@ describe.each(fixtures)(
           expect(() => loadLevel(level)).toThrow(LevelError);
         },
         emptyBoard: () => emptyBoard(level),
+        judgeTap: () => {
+          for (let i = 0; i < level.size * level.size; i++) judgeTap(level, i);
+        },
       };
 
       it.each(Object.keys(calls))("%s", (callName) => {
