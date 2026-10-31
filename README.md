@@ -21,6 +21,7 @@ bun run build       # tsc && vite build
 
 ```sh
 bun run test        # Vitest (node environment)
+bun run test:engine # engine tests only, plus the engine import-boundary test
 ```
 
 ## Quality gates

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
+    "test:engine": "vitest run src/engine",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "check": "bun run lint && bun run typecheck && bun run test && bun run build"
