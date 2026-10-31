@@ -101,7 +101,7 @@ idle → playing ⇄ paused → won | lost
 
 State: `level`, `board`, `hearts`, `history[]` (for undo/redo), `elapsedMs`, `hintsUsed`, `conflicts` (derived), `status`.
 
-Actions: `startLevel`, `tapCell` (cycles empty → mark → face, or per input mode), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
+Actions: `startLevel`, `tapCell` (milestone 2: one commit per empty cell, correct → face, wrong → locked red ✕ and a lost heart; cycling and free marks arrive with milestone 3), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
 
 Secondary stores: `progressStore` (completed levels, best times, stars), `settingsStore` (theme, sound, haptics, color-blind palette, input mode), `dailyStore` (*proposed*).
 
