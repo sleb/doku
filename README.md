@@ -21,7 +21,7 @@ bun run build       # tsc && vite build
 ```
 
 ```sh
-bun run test        # Vitest: `node` project (engine, store, geometry) and `dom` project (jsdom, React Testing Library)
+bun run test        # Vitest: `node` project (`src/**/*.test.ts`) and `dom` project (`src/**/*.test.tsx`, jsdom, React Testing Library)
 bun run test:engine # engine tests only, plus the engine import-boundary test
 bun run test:e2e    # Playwright (Chromium) against the Vite dev server on port 1420
 ```

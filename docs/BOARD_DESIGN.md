@@ -252,8 +252,8 @@ Hex values are chosen during implementation under two requirements: the 11 color
 
 Vitest keeps the engine fast and Tauri-free by splitting into two projects:
 
-- `node`: `src/engine/**`, `src/store/**`, `src/ui/**/geometry.test.ts`: no DOM.
-- `dom` (jsdom, jest-dom setup file): `src/ui/**/*.test.tsx`, `src/App.test.tsx`.
+- `node`: `src/**/*.test.ts`: no DOM.
+- `dom` (jsdom, jest-dom setup file): `src/**/*.test.tsx`.
 
 `bun run test` runs both. Playwright runs via a separate `bun run test:e2e` against the Vite dev server on port 1420 (`webServer` in `playwright.config.ts`, `reuseExistingServer`). It is **not** part of `bun run check`, since it needs browser binaries; CI gets its own job.
 
