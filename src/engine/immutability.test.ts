@@ -4,7 +4,7 @@ import { emptyBoard } from "./board";
 import { findConflicts, isSolved } from "./rules";
 import { countSolutions, solve } from "./solver";
 import { type Board, Cell, type Level } from "./types";
-import { loadLevel, validateLevel } from "./validate";
+import { LevelError, loadLevel, validateLevel } from "./validate";
 
 // Object.freeze throws on a non-empty typed array, so a read-only board is a
 // Proxy that rejects every write.
@@ -85,9 +85,43 @@ function boards(level: Level): Record<string, Uint8Array> {
   return { empty, populated, conflicting };
 }
 
+const levelArrays = (level: Level): unknown[] => [
+  level.regions,
+  ...level.regions,
+  level.solution,
+];
+
+// loadLevel is excluded from the aliasing test: it returns its input by design.
+// Only noSolutionLevel7 is expected to be rejected; any other LevelError fails.
+const EXPECTED_REJECTED = "noSolutionLevel7";
+
 describe.each(fixtures)(
   "inputs are never mutated: $name",
-  ({ level: source }: Fixture) => {
+  (fixture: Fixture) => {
+    const { name, level: source } = fixture;
+
+    describe("level-only calls", () => {
+      const level = deepFreeze(cloneLevel(source));
+      const levelBefore = cloneLevel(source);
+
+      const calls: Record<string, () => unknown> = {
+        solve: () => solve(level),
+        countSolutions: () => countSolutions(level),
+        "countSolutions(limit 10)": () => countSolutions(level, 10),
+        validateLevel: () => validateLevel(level),
+        loadLevel: () => {
+          if (name !== EXPECTED_REJECTED) return loadLevel(level);
+          expect(() => loadLevel(level)).toThrow(LevelError);
+        },
+        emptyBoard: () => emptyBoard(level),
+      };
+
+      it.each(Object.keys(calls))("%s", (callName) => {
+        expect(() => calls[callName]()).not.toThrow();
+        expect(level).toEqual(levelBefore);
+      });
+    });
+
     for (const [boardName, cells] of Object.entries(boards(source))) {
       describe(`${boardName} board`, () => {
         const level = deepFreeze(cloneLevel(source));
@@ -98,24 +132,10 @@ describe.each(fixtures)(
         const calls: Record<string, () => unknown> = {
           findConflicts: () => findConflicts(board, level),
           isSolved: () => isSolved(board, level),
-          solve: () => solve(level),
-          countSolutions: () => countSolutions(level),
-          "countSolutions(limit 10)": () => countSolutions(level, 10),
-          validateLevel: () => validateLevel(level),
-          loadLevel: () => {
-            try {
-              return loadLevel(level);
-            } catch (error) {
-              // An invalid fixture may be rejected; rejecting is not mutating.
-              if (error instanceof Error && error.name === "LevelError") return;
-              throw error;
-            }
-          },
-          emptyBoard: () => emptyBoard(level),
         };
 
-        it.each(Object.keys(calls))("%s", (name) => {
-          expect(() => calls[name]()).not.toThrow();
+        it.each(Object.keys(calls))("%s", (callName) => {
+          expect(() => calls[callName]()).not.toThrow();
           expect(level).toEqual(levelBefore);
           expect(Uint8Array.from(board)).toEqual(boardBefore);
         });
@@ -124,11 +144,24 @@ describe.each(fixtures)(
 
     it("returned values do not alias inputs", () => {
       const level = deepFreeze(cloneLevel(source));
+      const arrays = levelArrays(level);
+
       const found = solve(level);
-      if (found) expect(found).not.toBe(level.solution);
-      const board = emptyBoard(level);
-      expect(board).not.toBe(level.regions);
-      expect(emptyBoard(level)).not.toBe(board);
+      expect(found).not.toBe(level.solution);
+      if (found) expect(arrays).not.toContain(found);
+
+      for (const [, cells] of Object.entries(boards(source))) {
+        for (const conflict of findConflicts(readOnlyBoard(cells), level)) {
+          expect(arrays).not.toContain(conflict.cells);
+        }
+      }
+
+      const issues = validateLevel(level);
+      expect(arrays).not.toContain(issues);
+      for (const found of issues) expect(arrays).not.toContain(found.cells);
+
+      const empty = emptyBoard(level);
+      expect(emptyBoard(level)).not.toBe(empty);
     });
   },
 );
