@@ -158,3 +158,120 @@ describe("findConflicts: regions", () => {
     expect(findConflicts(board, level)).toEqual([]);
   });
 });
+
+describe("findConflicts: adjacency", () => {
+  const pair = (a: Coord, b: Coord) => ({
+    reason: "adjacent" as const,
+    cells: [a, b],
+  });
+
+  it("reports a diagonal pair", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 3, c: 3 },
+      { r: 4, c: 4 },
+    ]);
+    expect(findConflicts(board, latinLevel)).toEqual([
+      pair({ r: 3, c: 3 }, { r: 4, c: 4 }),
+    ]);
+  });
+
+  it("reports an anti-diagonal pair with cells ascending", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 4, c: 3 },
+      { r: 3, c: 4 },
+    ]);
+    // (3,4) and (4,3) both sit in region 0 of latinLevel.
+    const cells = [
+      { r: 3, c: 4 },
+      { r: 4, c: 3 },
+    ];
+    expect(findConflicts(board, latinLevel)).toEqual([
+      { reason: "region", cells },
+      pair(cells[0], cells[1]),
+    ]);
+  });
+
+  it("does not wrap from the left edge to the end of the next row", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 3, c: 0 },
+      { r: 3, c: 6 },
+    ]);
+    expect(
+      findConflicts(board, latinLevel).filter((x) => x.reason === "adjacent"),
+    ).toEqual([]);
+  });
+
+  it("reports a vertical pair as column and adjacent", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 3, c: 3 },
+      { r: 4, c: 3 },
+    ]);
+    expect(findConflicts(board, latinLevel)).toEqual([
+      {
+        reason: "col",
+        cells: [
+          { r: 3, c: 3 },
+          { r: 4, c: 3 },
+        ],
+      },
+      pair({ r: 3, c: 3 }, { r: 4, c: 3 }),
+    ]);
+  });
+
+  it("does not flag a knight's move", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 3, c: 3 },
+      { r: 5, c: 4 },
+    ]);
+    expect(findConflicts(board, latinLevel)).toEqual([]);
+  });
+
+  it("reports row, region and adjacent for a horizontal pair in one region", () => {
+    const level = levelWithSharedRegion([
+      { r: 3, c: 3 },
+      { r: 3, c: 4 },
+    ]);
+    const cells = [
+      { r: 3, c: 3 },
+      { r: 3, c: 4 },
+    ];
+    const board = boardWithFaces(level, cells);
+    expect(findConflicts(board, level)).toEqual([
+      { reason: "row", cells },
+      { reason: "region", cells },
+      { reason: "adjacent", cells },
+    ]);
+  });
+
+  it("reports each touching pair in a diagonal chain", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 2, c: 2 },
+      { r: 3, c: 3 },
+      { r: 4, c: 4 },
+    ]);
+    expect(findConflicts(board, latinLevel)).toEqual([
+      pair({ r: 2, c: 2 }, { r: 3, c: 3 }),
+      pair({ r: 3, c: 3 }, { r: 4, c: 4 }),
+    ]);
+  });
+
+  it("ignores marks beside a face", () => {
+    const board = boardWithFaces(latinLevel, [{ r: 3, c: 3 }]) as Uint8Array;
+    board[3 * latinLevel.size + 4] = Cell.Mark;
+    board[4 * latinLevel.size + 4] = Cell.Mark;
+    expect(findConflicts(board, latinLevel)).toEqual([]);
+  });
+
+  it("handles faces in the corners without leaving the board", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 0, c: 0 },
+      { r: 1, c: 1 },
+      { r: 6, c: 6 },
+      { r: 5, c: 5 },
+    ]);
+    expect(findConflicts(board, latinLevel)).toEqual([
+      pair({ r: 0, c: 0 }, { r: 1, c: 1 }),
+      pair({ r: 5, c: 5 }, { r: 6, c: 6 }),
+    ]);
+  });
+});
