@@ -63,6 +63,11 @@ describe("countSolutions", () => {
     expect(countSolutions(uniqueLevel7, 2)).toBe(1);
   });
 
+  it("defaults the limit to 2", () => {
+    expect(countSolutions(level7)).toBe(2);
+    expect(countSolutions(uniqueLevel7)).toBe(1);
+  });
+
   it("stops at the limit for an ambiguous level", () => {
     expect(countSolutions(level7, 2)).toBe(2);
     expect(countSolutions(level7, 1)).toBe(1);
