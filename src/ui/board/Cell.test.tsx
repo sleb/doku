@@ -161,4 +161,19 @@ describe("CellView", () => {
     expect(fireEvent.keyDown(b, { key: "a" })).toBe(true);
     expect(fireEvent.keyUp(b, { key: "a" })).toBe(true);
   });
+
+  test("disabled is reflected on the button", () => {
+    expect(renderCell({ disabled: true })).toBeDisabled();
+    cleanup();
+    expect(renderCell({ disabled: false })).toBeEnabled();
+  });
+
+  test("a disabled cell ignores clicks and keys", async () => {
+    const b = renderCell({ disabled: true });
+    await userEvent.dblClick(b);
+    b.focus();
+    await userEvent.keyboard("x ");
+    expect(b.onToggleMark).not.toHaveBeenCalled();
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
+  });
 });
