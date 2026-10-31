@@ -256,7 +256,7 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coor
 | Validation | `validateLevel` rejects disconnected regions, wrong region counts, invalid solutions, out-of-range sizes. |
 | Performance | Benchmarks in CI as soft thresholds: `rate` N=11 < 10 ms, `countSolutions` < 5 ms, `nextHint` < 10 ms. |
 
-Tests need no Tauri or DOM; Vitest only.
+Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/engine`). `src/engine/isolation.test.ts` scans every file under `src/engine` and fails if any imports from `src/ui`, `src/store`, `src/platform` or `@tauri-apps/*`, and asserts `window` and `document` are undefined.
 
 ## 12. Build order within milestone 1
 
