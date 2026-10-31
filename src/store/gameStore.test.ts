@@ -59,9 +59,28 @@ describe("createGameStore", () => {
 
   it("keeps action identities stable", () => {
     const store = createGameStore();
-    const { startLevel, restart } = store.getState();
+    const { startLevel, restart, toggleMark } = store.getState();
     startLevel(uniqueLevel7);
+    toggleMark(0);
     expect(store.getState().startLevel).toBe(startLevel);
     expect(store.getState().restart).toBe(restart);
+    expect(store.getState().toggleMark).toBe(toggleMark);
+  });
+
+  it("toggleMark updates the board and skips no-ops", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().toggleMark(4);
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[4]).toBe(Cell.Mark);
+
+    store.setState({ wrong: new Set([4]) });
+    let calls = 0;
+    store.subscribe(() => {
+      calls++;
+    });
+    store.getState().toggleMark(4);
+    expect(calls).toBe(0);
   });
 });
