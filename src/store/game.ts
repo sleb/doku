@@ -1,4 +1,11 @@
-import { type Board, Cell, emptyBoard, type Level } from "../engine";
+import {
+  type Board,
+  Cell,
+  emptyBoard,
+  isSolved,
+  judgeTap,
+  type Level,
+} from "../engine";
 
 export const MAX_HEARTS = 3;
 
@@ -35,14 +42,46 @@ export function restart(state: GameState): GameState {
   return state.status === "idle" ? state : startLevel(state.level);
 }
 
-export function toggleMark(state: GameState, cell: number): GameState {
-  if (state.status !== "playing") return state;
+type Started = Exclude<GameState, { status: "idle" }>;
+
+/** The shared tap prelude: the playing state if `cell` is editable, else null. */
+function editable(state: GameState, cell: number): Started | null {
+  if (state.status !== "playing") return null;
   const { size } = state.level;
   if (!Number.isInteger(cell) || cell < 0 || cell >= size * size) {
     throw new RangeError(`cell ${cell} is out of range`);
   }
-  if (state.board[cell] === Cell.Face || state.wrong.has(cell)) return state;
-  const board = state.board.slice();
+  if (state.board[cell] === Cell.Face || state.wrong.has(cell)) return null;
+  return state;
+}
+
+export function toggleMark(state: GameState, cell: number): GameState {
+  const s = editable(state, cell);
+  if (!s) return state;
+  const board = s.board.slice();
   board[cell] = board[cell] === Cell.Mark ? Cell.Empty : Cell.Mark;
-  return { ...state, board };
+  return { ...s, board };
+}
+
+export function placeFace(state: GameState, cell: number): GameState {
+  const s = editable(state, cell);
+  if (!s) return state;
+  const board = s.board.slice();
+  if (judgeTap(s.level, cell) === "correct") {
+    board[cell] = Cell.Face;
+    return {
+      ...s,
+      board,
+      status: isSolved(board, s.level) ? "won" : "playing",
+    };
+  }
+  board[cell] = Cell.Mark;
+  const hearts = s.hearts - 1;
+  return {
+    ...s,
+    board,
+    wrong: new Set(s.wrong).add(cell),
+    hearts,
+    status: hearts <= 0 ? "lost" : "playing",
+  };
 }

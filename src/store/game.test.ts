@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { Cell } from "../engine";
+import { Cell, isSolved, type Level } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import {
   type GameState,
   idleState,
   MAX_HEARTS,
+  placeFace,
   restart,
   startLevel,
   toggleMark,
@@ -139,5 +140,134 @@ describe("toggleMark", () => {
     if (next.status === "idle") throw new Error("unreachable");
     expect(s.board).toEqual(snapshot);
     expect(next.board).not.toBe(s.board);
+  });
+});
+
+describe("placeFace", () => {
+  type Started = Exclude<GameState, { status: "idle" }>;
+  const solutionCells = (level: Level) =>
+    level.solution.map((c, r) => r * level.size + c);
+  const wrongCellsFor = (level: Level) => {
+    const sol = new Set(solutionCells(level));
+    return Array.from({ length: level.size ** 2 }, (_, i) => i).filter(
+      (i) => !sol.has(i),
+    );
+  };
+  const wrongCellFor = (level: Level) => wrongCellsFor(level)[0];
+  function started(): Started {
+    const s = startLevel(uniqueLevel7);
+    if (s.status === "idle") throw new Error("unreachable");
+    return s;
+  }
+  function live(s: GameState): Started {
+    if (s.status === "idle") throw new Error("unreachable");
+    return s;
+  }
+  const sol = solutionCells(uniqueLevel7);
+  const bad = wrongCellsFor(uniqueLevel7);
+
+  it("places a face on a correct empty cell", () => {
+    const s0 = started();
+    const s1 = live(placeFace(s0, sol[0]));
+    expect(s1.board[sol[0]]).toBe(Cell.Face);
+    expect(s1.hearts).toBe(MAX_HEARTS);
+    expect(s1.wrong.size).toBe(0);
+    expect(s1.status).toBe("playing");
+  });
+
+  it("replaces the player's own mark on a correct cell", () => {
+    const s1 = live(placeFace(toggleMark(started(), sol[0]), sol[0]));
+    expect(s1.board[sol[0]]).toBe(Cell.Face);
+    expect(s1.hearts).toBe(MAX_HEARTS);
+  });
+
+  it("spends a heart and locks a red mark on a wrong empty cell", () => {
+    const c = wrongCellFor(uniqueLevel7);
+    const s1 = live(placeFace(started(), c));
+    expect(s1.board[c]).toBe(Cell.Mark);
+    expect(s1.wrong.has(c)).toBe(true);
+    expect(s1.hearts).toBe(MAX_HEARTS - 1);
+    expect(s1.status).toBe("playing");
+    expect(s1.board.includes(Cell.Face)).toBe(false);
+  });
+
+  it("treats a wrong face over the player's own mark the same way", () => {
+    const c = wrongCellFor(uniqueLevel7);
+    const s1 = live(placeFace(toggleMark(started(), c), c));
+    expect(s1.board[c]).toBe(Cell.Mark);
+    expect(s1.wrong.has(c)).toBe(true);
+    expect(s1.hearts).toBe(MAX_HEARTS - 1);
+  });
+
+  it("returns the same state for locked cells", () => {
+    const c = wrongCellFor(uniqueLevel7);
+    const withWrong = placeFace(started(), c);
+    const withFace = placeFace(started(), sol[0]);
+    for (const s of [withWrong, withFace]) {
+      const locked = s === withWrong ? c : sol[0];
+      expect(placeFace(s, locked)).toBe(s);
+      expect(toggleMark(s, locked)).toBe(s);
+    }
+    const w = live(withWrong);
+    expect(w.hearts).toBe(MAX_HEARTS - 1);
+    expect(w.board[c]).toBe(Cell.Mark);
+  });
+
+  it("loses at zero hearts and then ignores input", () => {
+    let s: GameState = started();
+    for (const c of bad.slice(0, 3)) s = placeFace(s, c);
+    const l = live(s);
+    expect(l.status).toBe("lost");
+    expect(l.hearts).toBe(0);
+    expect(l.wrong.size).toBe(3);
+    expect(placeFace(l, sol[0])).toBe(l);
+    expect(toggleMark(l, sol[0])).toBe(l);
+  });
+
+  it("wins when every solution cell has a face", () => {
+    let s: GameState = started();
+    sol.forEach((c, i) => {
+      s = placeFace(s, c);
+      expect(live(s).status).toBe(i === sol.length - 1 ? "won" : "playing");
+    });
+    const w = live(s);
+    expect(isSolved(w.board, w.level)).toBe(true);
+    expect(w.hearts).toBe(MAX_HEARTS);
+  });
+
+  it("wins with one heart left", () => {
+    let s: GameState = started();
+    for (const c of bad.slice(0, 2)) s = placeFace(s, c);
+    for (const c of sol) s = placeFace(s, c);
+    const w = live(s);
+    expect(w.status).toBe("won");
+    expect(w.hearts).toBe(1);
+  });
+
+  it("checks status before the index", () => {
+    const won = { ...started(), status: "won" as const };
+    expect(placeFace(won, 999)).toBe(won);
+    expect(placeFace(idleState, 0)).toBe(idleState);
+  });
+
+  for (const badIndex of [-1, 49, 1.5, Number.NaN]) {
+    it(`throws RangeError for cell ${badIndex} while playing`, () => {
+      expect(() => placeFace(started(), badIndex)).toThrow(RangeError);
+    });
+  }
+
+  it("does not mutate the previous state", () => {
+    const s0 = started();
+    const boardSnap = s0.board.slice();
+    const wrongSnap = new Set(s0.wrong);
+    Object.freeze(s0);
+    Object.freeze(s0.wrong);
+    const a = live(placeFace(s0, sol[0]));
+    const b = live(placeFace(s0, bad[0]));
+    expect(s0.board).toEqual(boardSnap);
+    expect(s0.wrong).toEqual(wrongSnap);
+    expect(a.board).not.toBe(s0.board);
+    expect(b.board).not.toBe(s0.board);
+    expect(b.wrong).not.toBe(s0.wrong);
   });
 });
