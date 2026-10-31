@@ -275,3 +275,65 @@ describe("findConflicts: adjacency", () => {
     ]);
   });
 });
+
+describe("findConflicts: marks and clean boards", () => {
+  function markAll(level: Level, cells: Coord[], board?: Board): Board {
+    const b = (board ?? emptyBoard(level)) as Uint8Array;
+    for (const { r, c } of cells) b[r * level.size + c] = Cell.Mark;
+    return b;
+  }
+  const range = (level: Level) =>
+    Array.from({ length: level.size }, (_, i) => i);
+  const everyCell = (level: Level) =>
+    range(level).flatMap((r) => range(level).map((c) => ({ r, c })));
+
+  it("ignores marks filling a row, a column and a region", () => {
+    // latinLevel regions are diagonals, so region 5 is neither a row nor a column.
+    const level = latinLevel;
+    const row = range(level).map((c) => ({ r: 2, c }));
+    const col = range(level).map((r) => ({ r, c: 4 }));
+    const region = everyCell(level).filter(
+      ({ r, c }) => level.regions[r][c] === 5,
+    );
+    const extras = [
+      { r: 0, c: 0 },
+      { r: 0, c: 1 },
+      { r: 6, c: 6 },
+    ];
+    const board = markAll(level, [...row, ...col, ...region, ...extras]);
+    expect(findConflicts(board, level)).toEqual([]);
+  });
+
+  it("returns no conflicts when every cell is a mark", () => {
+    expect(findConflicts(markAll(level7, everyCell(level7)), level7)).toEqual(
+      [],
+    );
+  });
+
+  it("returns no conflicts for an empty board", () => {
+    expect(findConflicts(emptyBoard(level7), level7)).toEqual([]);
+  });
+
+  it("returns no conflicts for the full solution with marks elsewhere", () => {
+    const faces = level7.solution.map((c, r) => ({ r, c }));
+    const board = boardWithFaces(level7, faces);
+    const others = everyCell(level7).filter(
+      ({ r, c }) => level7.solution[r] !== c,
+    );
+    expect(findConflicts(markAll(level7, others, board), level7)).toEqual([]);
+  });
+
+  it("neither masks nor adds conflicts when marks surround conflicting faces", () => {
+    const faces = [
+      { r: 3, c: 0 },
+      { r: 3, c: 3 },
+    ];
+    const board = boardWithFaces(latinLevel, faces);
+    const others = everyCell(latinLevel).filter(
+      ({ r, c }) => !(r === 3 && (c === 0 || c === 3)),
+    );
+    expect(
+      findConflicts(markAll(latinLevel, others, board), latinLevel),
+    ).toEqual([{ reason: "row", cells: faces }]);
+  });
+});
