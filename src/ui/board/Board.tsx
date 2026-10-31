@@ -23,12 +23,17 @@ export function Board({ level, board, wrong, conflicts }: BoardProps) {
   const rows = Array.from({ length: size }, (_, r) =>
     geometry.slice(r * size, (r + 1) * size),
   );
-  return (
+  // An ARIA grid on a CSS grid; native <table> does not fit, and the focusable
+  // element is the inner button (BOARD_DESIGN 4.2).
+  const gridAria = {
+    role: "grid",
+    "aria-label": "Puzzle board",
+    "aria-rowcount": size,
+    "aria-colcount": size,
+  } as const;
+  const grid = (
     <div
-      role="grid"
-      aria-label="Puzzle board"
-      aria-rowcount={size}
-      aria-colcount={size}
+      {...gridAria}
       className="grid w-max border-4 border-neutral-800"
       style={style}
     >
@@ -55,4 +60,5 @@ export function Board({ level, board, wrong, conflicts }: BoardProps) {
       ))}
     </div>
   );
+  return grid;
 }

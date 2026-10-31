@@ -150,7 +150,7 @@ Flattens `findConflicts(board, level)` into a set of cell indices. Computed in `
 
 ## 4. Board UI (`src/ui/board`)
 
-**Landed in M2-07 (#46):** `geometry.ts`, `selectors.ts` (`conflictCells`), `icons.tsx`, `Cell.tsx`, `Board.tsx`. `Board` takes only `{ level, board, wrong, conflicts }` and `CellView` takes only the primitive display props; `disabled`, `onToggleMark`, `onPlaceFace` and the gesture mapping below land with the input issue. Conflicts show as a ring class plus `data-conflict="true"` and are not part of the label (the label vocabulary is `empty|marked|face|wrong`). `WRONG_COLOR` (`#7f1d1d`, in `palette.ts`) is the wrong-tap red, chosen by computing 3:1 against all 11 region colors (a brighter red fails on indigo). The row/gridcell roles carry `biome-ignore` comments for the a11y lints, since native table elements do not fit a CSS grid.
+**Landed in M2-07 (#46):** `geometry.ts`, `selectors.ts` (`conflictCells`), `icons.tsx`, `Cell.tsx`, `Board.tsx`. `Board` takes only `{ level, board, wrong, conflicts }` and `CellView` takes only the primitive display props; `disabled`, `onToggleMark`, `onPlaceFace` and the gesture mapping below land with the input issue. Conflicts show as a ring class plus `data-conflict="true"` and are not part of the label (the label vocabulary is `empty|marked|face|wrong`). `WRONG_COLOR` (`#7f1d1d`, in `palette.ts`) is the wrong-tap red, chosen by computing 3:1 against all 11 region colors (a brighter red fails on indigo). The grid role and ARIA props are spread from an object, and row/gridcell carry `biome-ignore` comments, to satisfy the a11y lints (native table elements do not fit a CSS grid).
 
 ### 4.1 Geometry (`geometry.ts`, pure)
 
