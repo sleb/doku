@@ -179,16 +179,16 @@ Loop: `cand = fromBoard(p, board ?? empty)`; repeatedly try techniques in ladder
 
 ```ts
 function solve(level: Level): number[] | null;   // result[r] = column in row r; no board seed yet (add when hints/generation need it)
-function countSolutions(p: Puzzle, limit = 2, board?: Board): number;
+function countSolutions(level: Level, limit = 2): number;   // stops once `limit` placements are found; limit <= 0 gives 0
 ```
 
-`solve` takes a `Level` directly (no `compile`/`Puzzle` yet) and never reads `level.solution`. It returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. For now `solve` is a private backtracker over a `Level`, and `countSolutions` does not exist yet. M1-09 will generalize it into one shared routine over a `Puzzle` (with `limit`); `solve` will then be the `limit = 1` case and return the first solution.
+`solve` takes a `Level` directly (no `compile`/`Puzzle` yet) and never reads `level.solution`. It returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. Both are thin wrappers over one private `search(level, limit, onSolution)` backtracker: `countSolutions` counts solutions and stops at `limit` (default 2, enough to tell unique from ambiguous), and `solve` is the `limit = 1` case that captures the placement. Neither takes a `Puzzle` or board seed yet; add those when hints and generation need them.
 
 Plain backtracking, independent of the ladder, optimized for speed:
 - Place one face per row, top to bottom.
-- State: `usedCols` and `usedRegions` as 16-bit masks (N ≤ 11 fits), plus the previous row's column for the adjacency rule (`|c − prevC| ≥ 2`).
+- State: `usedCols` and `usedRegions` as plain number bitmasks (bit `1 << c` for a column, `1 << region` for a region), plus the previous row's column for the adjacency rule (`|c − prevC| ≥ 2`).
 - A face in row r is allowed in column c iff the column and region are unused and `|c − prevC| ≥ 2`.
-- Prefilled faces from `board` seed the masks and fix their rows.
+- No prefilled faces: the search always starts from an empty grid (a `board` seed is added when hints/generation need it).
 - Returns as soon as `limit` solutions are found, so uniqueness checking (`limit = 2`) is cheap on both the unique and non-unique cases.
 
 Why two solvers: the backtracker proves uniqueness and finds the solution; the technique solver measures how a human would solve it. A puzzle can be unique yet unrated (needs more than the ladder), which is a legitimate reason to reject it.
