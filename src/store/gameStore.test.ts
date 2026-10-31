@@ -20,10 +20,17 @@ describe("createGameStore", () => {
     store.getState().restart();
     expect(store.getState().status).toBe("idle");
     store.getState().startLevel(uniqueLevel7);
-    store.setState({ status: "lost", hearts: 0 });
+    const lost = store.getState();
+    if (lost.status === "idle") throw new Error("unreachable");
+    (lost.board as Uint8Array)[3] = Cell.Mark;
+    store.setState({ status: "lost", hearts: 0, wrong: new Set([3, 5]) });
     store.getState().restart();
-    expect(store.getState().status).toBe("playing");
-    expect(store.getState().hearts).toBe(MAX_HEARTS);
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.status).toBe("playing");
+    expect(s.hearts).toBe(MAX_HEARTS);
+    expect(s.wrong.size).toBe(0);
+    expect(s.board.every((c) => c === Cell.Empty)).toBe(true);
   });
 
   it("keeps stores independent", () => {
@@ -39,11 +46,15 @@ describe("createGameStore", () => {
     const prev = store.getState();
     if (prev.status === "idle") throw new Error("unreachable");
     (prev.board as Uint8Array)[3] = Cell.Mark;
-    Object.freeze(prev);
     const snapshot = prev.board.slice();
+    const prevFields = { ...prev };
     store.getState().startLevel(uniqueLevel7);
     expect(prev.board).toEqual(snapshot);
-    expect(store.getState().board).not.toBe(prev.board);
+    expect(prev).toEqual(prevFields);
+    const next = store.getState();
+    if (next.status === "idle") throw new Error("unreachable");
+    expect(next.board).not.toBe(prev.board);
+    expect(next.board.every((c) => c === Cell.Empty)).toBe(true);
   });
 
   it("keeps action identities stable", () => {
