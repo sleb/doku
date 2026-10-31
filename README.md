@@ -21,8 +21,9 @@ bun run build       # tsc && vite build
 ```
 
 ```sh
-bun run test        # Vitest (node environment)
+bun run test        # Vitest: `node` project (`src/**/*.test.ts`) and `dom` project (`src/**/*.test.tsx`, jsdom, React Testing Library)
 bun run test:engine # engine tests only, plus the engine import-boundary test
+bun run test:e2e    # Playwright (Chromium) against the Vite dev server on port 1420
 ```
 
 ## Quality gates
@@ -34,11 +35,12 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `main`. All o
 | Biome lint, format and import order | `bun run lint` (`bunx biome check --write .` fixes) |
 | TypeScript typecheck (strict, no unused locals/params) | `bun run typecheck` |
 | Unit tests | `bun run test` |
+| Playwright e2e (own CI job) | `bun run test:e2e` (first run: `bunx playwright install chromium`) |
 | Production build | `bun run build` |
 | Rust formatting | `cargo fmt --check` (in `src-tauri/`) |
 | Rust lints, warnings denied | `cargo clippy --all-targets -- -D warnings` (in `src-tauri/`) |
 | Rust tests | `cargo test` (in `src-tauri/`) |
 
-`bun run check` runs the web gates locally. Biome covers `src/` and root TS/JSON config. Not yet gated: coverage thresholds, and Playwright (add each when introducing it).
+`bun run check` runs the web gates locally. Biome covers `src/` and root TS/JSON config. `bun run check` does not run Playwright (it needs browser binaries); CI runs `test:e2e` as a separate job. Not yet gated: coverage thresholds.
 
 Recommended IDE setup: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
