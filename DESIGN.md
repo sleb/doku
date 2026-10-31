@@ -133,7 +133,7 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
 
 ### Component notes
 
-- **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell` with `aria-label` ("Row 3, column 5, green region, face").
+- **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
 - **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
 - **`<InputModeToggle>`**: double-tap is awkward on touch, so offer an explicit "place face / place mark" tool in place of single-tap = ✕, double-tap = face. Needed on mobile where right-click/drag are unavailable.
