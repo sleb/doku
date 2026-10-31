@@ -244,6 +244,23 @@ describe("placeFace", () => {
     expect(w.hearts).toBe(1);
   });
 
+  it("won by play is inert", () => {
+    let s: GameState = started();
+    for (const c of sol) s = placeFace(s, c);
+    const w = live(s);
+    expect(w.status).toBe("won");
+    // Cells still empty at win time: a non-solution cell, never tapped.
+    const probes = Array.from(
+      { length: uniqueLevel7.size ** 2 },
+      (_, i) => i,
+    ).filter((i) => w.board[i] === Cell.Empty && !w.wrong.has(i));
+    expect(probes).toContain(bad[0]);
+    for (const c of probes) {
+      expect(placeFace(w, c)).toBe(w);
+      expect(toggleMark(w, c)).toBe(w);
+    }
+  });
+
   it("checks status before the index", () => {
     const won = { ...started(), status: "won" as const };
     expect(placeFace(won, 999)).toBe(won);

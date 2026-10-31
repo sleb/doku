@@ -185,6 +185,40 @@ describe("createGameStore", () => {
     expect(s.hearts).toBe(0);
   });
 
+  it("finished stores ignore placeFace and toggleMark silently", () => {
+    const { size, solution } = uniqueLevel7;
+    const winCells = solution.map((c, r) => r * size + c);
+    const wrong = Array.from({ length: size }, (_, c) => c)
+      .filter((c) => c !== solution[0])
+      .slice(0, MAX_HEARTS);
+    for (const [status, cells] of [
+      ["won", winCells],
+      ["lost", wrong],
+    ] as const) {
+      const store = createGameStore();
+      store.getState().startLevel(uniqueLevel7);
+      for (const c of cells) store.getState().placeFace(c);
+      expect(store.getState().status).toBe(status);
+      const before = store.getState();
+      if (before.status === "idle") throw new Error("unreachable");
+      // Cells that would be editable if the game were still playing.
+      const probes = Array.from({ length: size * size }, (_, i) => i).filter(
+        (i) => before.board[i] !== Cell.Face && !before.wrong.has(i),
+      );
+      expect(probes.length).toBeGreaterThan(0);
+      let calls = 0;
+      store.subscribe(() => {
+        calls++;
+      });
+      for (const c of probes) {
+        store.getState().placeFace(c);
+        store.getState().toggleMark(c);
+      }
+      expect(calls).toBe(0);
+      expect(store.getState()).toBe(before);
+    }
+  });
+
   it("placeFace throws RangeError for an out-of-range cell while playing", () => {
     const store = createGameStore();
     store.getState().startLevel(uniqueLevel7);
