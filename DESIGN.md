@@ -165,6 +165,7 @@ Intentionally small for v1: plugins (store, fs), window config, capabilities fil
 ## 11. Testing
 
 - **Engine**: unit and property tests (generated levels have exactly one solution; hint always leads to a legal move; solver agrees with `rules`).
+- **Engine immutability**: engine functions never mutate their inputs (tested with frozen inputs), so undo/redo can use plain board snapshots.
 - **Store**: state-machine transition tests.
 - **UI**: component tests for Cell/Board, Playwright for a full level playthrough.
 - Mobile: manual device pass per milestone.
