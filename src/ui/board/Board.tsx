@@ -38,7 +38,7 @@ export function Board({
     geometry.slice(r * size, (r + 1) * size),
   );
   return (
-    // biome-ignore lint/a11y/useSemanticElements lint/a11y/useFocusableInteractive: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
+    // biome-ignore lint/a11y/useSemanticElements: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
     <div
       role="grid"
       aria-label="Puzzle board"
