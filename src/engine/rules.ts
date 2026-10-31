@@ -58,3 +58,11 @@ export function findConflicts(board: Board, level: Level): Conflict[] {
   }
   return conflicts;
 }
+
+export function isSolved(board: Board, level: Level): boolean {
+  const n = level.size;
+  let faces = 0;
+  for (let i = 0; i < n * n; i++) if (board[i] === Cell.Face) faces++;
+  if (faces !== n) return false;
+  return level.solution.every((c, r) => board[r * n + c] === Cell.Face);
+}
