@@ -171,7 +171,7 @@ Intentionally small for v1: plugins (store, fs), window config, capabilities fil
 
 ## 12. Milestones
 
-1. **Engine + tests** (rules, solver, a few fixture levels for tests).
+1. **Engine + tests** (rules, solver, a few fixture levels for tests: unique 7x7 and 11x11, multi-solution, no-solution; see `docs/ENGINE_DESIGN.md` §11).
 2. **Playable desktop board** (Board/Cell, store, hearts, win/lose).
 3. **Full desktop app** (level select, persistence, undo/redo, hints, settings, keyboard).
 4. **Generator + level packs + difficulty tiers.**

@@ -65,7 +65,7 @@ describe("countSolutions", () => {
     ).toBeGreaterThan(2);
   });
 
-  it("returns 0 for an noSolutionLevel7 level", () => {
+  it("returns 0 for a level with no solution", () => {
     expect(countSolutions(noSolutionLevel7, 2)).toBe(0);
   });
 
