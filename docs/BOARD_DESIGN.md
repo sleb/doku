@@ -8,7 +8,7 @@ A player opens the desktop app, plays one level from start to finish, loses hear
 
 In scope: Zustand game store, `<Board>`/`<Cell>`, `<Hearts>`/top bar, `<ResultModal>`, click input, Tailwind setup, test harness (RTL + Playwright).
 
-Out of scope (milestone 3+): level select, persistence, undo/redo, hints, timer/stars, settings, keyboard navigation, player-placed marks (right-click/drag), color-blind palette, mobile, wrong-tap animation.
+Out of scope (milestone 3+): level select, persistence, undo/redo, hints, timer/stars, settings, keyboard navigation, right-click and drag-to-paint marks, color-blind palette, mobile, wrong-tap animation.
 
 Constraints carried from the design docs:
 
@@ -66,12 +66,12 @@ export type GameState =
       status: "playing" | "won" | "lost";
       level: Level;
       board: Board;      // never mutated; each change allocates a new array
-      wrong: ReadonlySet<number>; // cells the player got wrong; each holds Cell.Mark in `board`
+      wrong: ReadonlySet<number>; // cells the player got wrong; each holds Cell.Mark in `board`, locked
       hearts: number;    // 0..MAX_HEARTS
     };
 ```
 
-A discriminated union means components can narrow on `level !== null` once, instead of null-checking `board` everywhere. `wrong` records which marks are mistakes, so they can be shown in red and stay locked once M3 adds free player marks (which will be editable). `conflicts` is not stored: it is derived (§3.4). `elapsedMs`, `history`, `hintsUsed` from `DESIGN.md` §5 arrive with their milestone-3 features.
+A discriminated union means components can narrow on `level !== null` once, instead of null-checking `board` everywhere. `board` holds two kinds of `Cell.Mark`: the player's own ✕ notes (free, editable) and wrong-face penalties; `wrong` tells them apart, so the latter render red and stay locked. `conflicts` is not stored: it is derived (§3.4). `elapsedMs`, `history`, `hintsUsed` from `DESIGN.md` §5 arrive with their milestone-3 features.
 
 ### 3.2 Pure transitions (`game.ts`)
 
@@ -80,35 +80,42 @@ All logic is plain functions from state to state, so the state machine is tested
 ```ts
 export const idleState: GameState;
 export function startLevel(level: Level): GameState;   // playing, emptyBoard(level), MAX_HEARTS
-export function tapCell(state: GameState, cell: number): GameState;  // flat row-major index
+export function toggleMark(state: GameState, cell: number): GameState;  // flat row-major index
+export function placeFace(state: GameState, cell: number): GameState;
 ```
 
 `restart(state)` is `startLevel(state.level)` and is a no-op on `idle`.
 
-`tapCell` is a single commit per cell: there is no cycling and no way to take a tap back.
+Two gestures, two actions. A single tap toggles the player's ✕ note; a double-tap places a face (§4.3 maps the gestures). Keeping the ✕ on a single tap means a stray tap on a ✕ simply removes it; only a deliberate double-tap can commit a face.
+
+Both actions start the same way:
 
 1. `status !== "playing"` → return `state` unchanged (same reference).
-2. Validate the index (`Number.isInteger`, `0 ≤ cell < size²`); otherwise throw `RangeError`. `judgeTap` would throw on its own, but only for cells it is asked about, so `tapCell` checks first and a caller bug fails the same way for every cell.
-3. `board[cell] !== Cell.Empty` → return `state` unchanged. Every placed cell, right or wrong, is uneditable.
-4. `judgeTap(level, cell)`:
-   - `correct`: place a face. If `isSolved(board, level)` → `status: "won"`.
-   - `wrong`: `hearts - 1`, place `Cell.Mark` on the cell and add it to `wrong`. If hearts reach 0 → `status: "lost"`.
+2. Validate the index (`Number.isInteger`, `0 ≤ cell < size²`); otherwise throw `RangeError`, so a caller bug fails the same way for every cell state.
+3. The cell is **locked** if it holds a `Face` or is in `wrong` → return `state` unchanged.
 
-Because a wrong cell is locked, no cell can ever cost more than one heart.
+Then:
 
-Wrong tap and win/lose cannot coincide: a win needs a face placed, a loss needs a wrong tap, and one tap is only one of them.
+- **`toggleMark`**: `Empty ↔ Mark`. Free; never judged; never costs a heart. A ✕ on a solution cell is allowed (marks are notes, `DESIGN.md` §13.6).
+- **`placeFace`**: works from `Empty` or from the player's own `Mark`. `judgeTap(level, cell)`:
+  - `correct`: place a face (replacing any ✕). If `isSolved(board, level)` → `status: "won"`.
+  - `wrong`: `hearts - 1`, set `Cell.Mark` and add the cell to `wrong` (it is now a locked red ✕). If hearts reach 0 → `status: "lost"`.
+
+Because a wrong cell is locked, no cell can cost more than one heart. Faces and wrong ✕s are uneditable; only the player's own ✕ can be removed.
+
+A wrong face and a win cannot coincide: a win needs a correct face and a loss needs a wrong one, and one action is only one of them.
 
 Transition table:
 
 | from | event | to |
 |---|---|---|
 | `idle` | `startLevel` | `playing` |
-| `playing` | `tapCell` (correct, solves the puzzle) | `won` |
-| `playing` | `tapCell` (wrong, last heart) | `lost` |
-| `playing` | `tapCell` (any other empty cell) | `playing` |
+| `playing` | `placeFace` (correct, solves the puzzle) | `won` |
+| `playing` | `placeFace` (wrong, last heart) | `lost` |
+| `playing` | `placeFace` (any other unlocked cell), `toggleMark` | `playing` |
 | `won`/`lost` | `restart` / `startLevel` | `playing` |
-| `playing` | `tapCell` on a non-empty cell | unchanged |
-| `won`/`lost` | `tapCell` | unchanged |
+| `playing` | either action on a locked cell | unchanged |
+| `won`/`lost` | `toggleMark`, `placeFace` | unchanged |
 | any | `startLevel(other)` | `playing` on `other` |
 
 ### 3.3 Zustand binding (`gameStore.ts`)
@@ -117,7 +124,8 @@ Transition table:
 export interface GameStore extends ... {
   // state fields from GameState, plus:
   startLevel(level: Level): void;
-  tapCell(cell: number): void;
+  toggleMark(cell: number): void;
+  placeFace(cell: number): void;
   restart(): void;
 }
 export function createGameStore(): StoreApi<GameStore>;   // one per test
@@ -166,8 +174,10 @@ interface BoardProps {
   level: Level;
   board: Board;
   conflicts: ReadonlySet<number>;
+  wrong: ReadonlySet<number>;
   disabled: boolean;                 // status !== "playing"
-  onTap(cell: number): void;         // stable identity
+  onToggleMark(cell: number): void; // stable identity
+  onPlaceFace(cell: number): void;  // stable identity
 }
 ```
 
@@ -188,19 +198,22 @@ interface CellProps {
   thickBottom: boolean;
   state: Cell;                 // engine enum: Empty | Mark | Face
   isWrong: boolean;            // a Mark that was a mistake: red ✕, locked
+  // the player's own Mark (state === Mark && !isWrong) is editable
   isConflict: boolean;
   disabled: boolean;
-  onTap(index: number): void;
+  onToggleMark(index: number): void;
+  onPlaceFace(index: number): void;
 }
 export const CellView = memo(function CellView(props: CellProps) { ... });
 ```
 
 (Named `CellView` in code because `Cell` is the engine enum.)
 
-- Pure presentational; never reads the store. All props are primitives or the stable `onTap`, so `memo` skips every cell except the one whose `state` changed. A tap re-renders `Board` (new `board` array) but only one `CellView`.
-- Background from the region palette; `Face` shows `<FaceIcon/>`; a `Mark` with `isWrong` shows `<WrongIcon/>`, a red ✕ (the red must keep ≥ 3:1 contrast on every region color, same requirement as the glyphs below); `isConflict` adds a ring.
-- Label: `"Row {row+1}, column {col+1}, {regionName} region, {empty|face|wrong}"` (matches `DESIGN.md` §7, which will be updated to say the label is on the button inside the gridcell).
-- `disabled` sets the button's `disabled` attribute. `Board` passes `disabled = status !== "playing" || state !== Cell.Empty`, so placed cells (faces and wrong ✕s) and the whole board behind the result modal are inert.
+- Pure presentational; never reads the store. All props are primitives or the stable callbacks, so `memo` skips every cell except the one whose `state` changed. A change re-renders `Board` (new `board` array) but only one `CellView`.
+- Background from the region palette; `Face` shows `<FaceIcon/>`; a `Mark` shows `<MarkIcon/>` (neutral ✕), or with `isWrong` `<WrongIcon/>`, a red ✕ (the red must keep ≥ 3:1 contrast on every region color, same requirement as the glyphs below); `isConflict` adds a ring.
+- Gesture mapping, in the cell's `onClick`: `e.detail >= 2` → `onPlaceFace(index)`, otherwise `onToggleMark(index)`. A double-tap therefore fires a toggle on the first click (no wait for a double-click timeout, so a single tap responds instantly) and a face attempt on the second; the face attempt works from either the fresh ✕ or the cell it was toggled off from. Keyboard activation has `detail === 0`, so Enter/Space toggles a ✕ only; placing a face by keyboard is part of milestone 3's keyboard work. Touch double-tap on mobile is checked in milestone 5.
+- Label: `"Row {row+1}, column {col+1}, {regionName} region, {empty|marked|face|wrong}"` (matches `DESIGN.md` §7, which will be updated to say the label is on the button inside the gridcell).
+- `disabled` sets the button's `disabled` attribute. `Board` passes `disabled = status !== "playing" || state === Cell.Face || wrong.has(index)`, so faces, wrong ✕s and the whole board behind the result modal are inert. The player's own ✕ stays enabled so it can be removed.
 
 ### 4.4 Palette (`palette.ts`, `app/index.css`)
 
@@ -251,10 +264,12 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 **Store, node (`game.test.ts`)**
 
 - `startLevel`: status `playing`, 3 hearts, empty board of N² cells, level retained.
-- Tap an empty solution cell → face; hearts unchanged; `wrong` unchanged.
-- Tap an empty non-solution cell → `Cell.Mark` on the board, cell added to `wrong`, hearts − 1.
-- Tap a placed cell (face or wrong ✕) → same state reference; no second heart lost.
-- Three wrong taps on distinct cells → `lost`, hearts 0; further taps return the same state reference.
+- `toggleMark`: Empty → Mark → Empty; hearts and `wrong` unchanged; a ✕ on a solution cell is allowed.
+- `placeFace` on an empty solution cell → face; hearts unchanged; `wrong` unchanged.
+- `placeFace` on a player ✕ over a solution cell → face (✕ replaced).
+- `placeFace` on a non-solution cell (empty or player ✕) → `Cell.Mark`, cell added to `wrong`, hearts − 1.
+- Both actions on a face or a wrong ✕ → same state reference; no second heart lost; the wrong ✕ cannot be toggled off.
+- Three wrong faces on distinct cells → `lost`, hearts 0; further actions return the same state reference.
 - All N solution cells placed → `won`; board is exactly `isSolved`.
 - Last correct face placement that wins leaves hearts as they were; a win with 1 heart left is `won`, not `lost`.
 - `restart` after `won` and after `lost` → fresh `playing` state, 3 hearts.
@@ -262,22 +277,22 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 - Input state is never mutated (reuse the engine's frozen-input approach: `Object.freeze` the previous state and board, assert the previous board still equals its snapshot).
 - Store binding (`createGameStore`): actions update state; two stores don't share state.
 
-**Selectors, node:** `conflictCells` flattens a hand-built board with an adjacent pair and a row conflict into the expected index set; empty for any board reachable through `tapCell`.
+**Selectors, node:** `conflictCells` flattens a hand-built board with an adjacent pair and a row conflict into the expected index set; empty for any board reachable through `toggleMark`/`placeFace`.
 
 **Geometry, node:** on `uniqueLevel7`, thick edges appear exactly where regions differ (assert a few known cells plus a property test: `thickRight(i)` ⇔ regions differ from `i+1`, last column never thick on the right).
 
 **Components, jsdom**
 
-- `CellView`: renders empty/face/wrong with the right label (wrong shows the red ✕); `onTap(index)` fires on click; `disabled` blocks it, and a placed cell is disabled; `isConflict` adds the ring; re-render with identical props does not re-render (spy via a render counter in a wrapper).
+- `CellView`: renders empty/face/wrong with the right label (wrong shows the red ✕); single click calls `onToggleMark(index)`, double-click calls `onPlaceFace(index)` (user-event's `dblClick` sets `detail`); `disabled` blocks both, and face and wrong cells are disabled while the player's ✕ is not; `isConflict` adds the ring; re-render with identical props does not re-render (spy via a render counter in a wrapper).
 - `Board`: N rows × N gridcells; labels carry row, column, region name; region-border classes appear where `geometry` says; tapping one cell re-renders only that `CellView`.
 - `Hearts`: `aria-label` for 3/2/0 remaining; correct number of filled icons.
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
-- `GameScreen` (real store): clicking each solution cell once shows the win dialog; three wrong taps show the lose dialog, with a red ✕ on each wrong cell; Retry returns to a fresh board with 3 hearts.
+- `GameScreen` (real store): double-clicking each solution cell shows the win dialog; three wrong double-clicks show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; Retry returns to a fresh board with 3 hearts.
 
 **E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7.json`, locating cells by `aria-label` and reading the solution from the JSON:
 
-1. Win: tap all 7 solution cells → "You solved it" → Retry → fresh board.
-2. Lose: tap three different non-solution cells (one heart each) → "Out of hearts" → Retry.
+1. Win: double-click all 7 solution cells → "You solved it" → Retry → fresh board.
+2. Lose: double-click three different non-solution cells (one heart each) → "Out of hearts" → Retry.
 
 ## 8. Decisions
 
@@ -291,5 +306,5 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 ## 9. Open questions
 
 1. **Conflict highlighting is dormant.** Since wrong faces are never placed, `findConflicts` can't fire in M2. Keep the wiring (cheap, issue asks for it), or drop `isConflict` until a feature can produce conflicts? Default: keep, as described in §3.4.
-2. **Resolved (PR review):** wrong taps are tracked and shown as locked red ✕s; every placed cell is uneditable, and there is no tap cycling.
+2. **Resolved (PR review):** wrong taps are tracked and shown as locked red ✕s; faces and wrong ✕s are uneditable. Input is then revised (follow-up): single tap toggles the player's own ✕, double-tap places a face, so a stray tap on a ✕ removes it instead of committing anything.
 3. **Should e2e run in CI on every push?** Resolved (PR review): yes, as a separate job from `check`.
