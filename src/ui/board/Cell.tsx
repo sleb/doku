@@ -57,7 +57,9 @@ export const CellView = memo(function CellView({
       data-conflict={isConflict ? "true" : undefined}
       className={className}
       disabled={disabled}
-      onClick={() => onToggleMark(index)}
+      onClick={(e) =>
+        e.detail >= 2 ? onPlaceFace(index) : onToggleMark(index)
+      }
     >
       {label === "wrong" ? (
         <WrongIcon />

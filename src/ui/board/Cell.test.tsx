@@ -104,4 +104,18 @@ describe("CellView", () => {
     expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
     expect(b.onPlaceFace).not.toHaveBeenCalled();
   });
+
+  test("a double-click toggles on the first click and places on the second", async () => {
+    const b = renderCell();
+    await userEvent.dblClick(b);
+    expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+    expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+  });
+
+  test("a third click (detail >= 2) still places", async () => {
+    const b = renderCell();
+    await userEvent.tripleClick(b);
+    expect(b.onToggleMark).toHaveBeenCalledTimes(1);
+    expect(b.onPlaceFace).toHaveBeenCalledTimes(2);
+  });
 });
