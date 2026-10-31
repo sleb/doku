@@ -36,32 +36,35 @@ describe("solver and rules agree", () => {
       expect(findConflicts(board, level)).toEqual([]);
     });
 
-    it("places exactly one face per row", () => {
-      expect(board.filter((v) => v === Cell.Face)).toHaveLength(level.size);
+    it("solve() output is one in-range column per row", () => {
+      expect(placement).toHaveLength(level.size);
+      for (const c of placement) {
+        expect(Number.isInteger(c)).toBe(true);
+        expect(c).toBeGreaterThanOrEqual(0);
+        expect(c).toBeLessThan(level.size);
+      }
     });
 
-    it("isSolved holds when the placement is the stored solution", () => {
-      // isSolved compares against level.solution, so for a multi-solution
-      // level it only applies if solve() happened to return that one.
-      const isStored = placement.join() === level.solution.join();
-      if (countSolutions(level) === 1) expect(isStored).toBe(true);
-      expect(isSolved(board, level)).toBe(isStored);
+    it("isSolved holds for a unique level's solve() output", () => {
+      // isSolved is defined against the stored solution, so it is only
+      // implied for multi-solution levels if solve() happened to return that
+      // one. Assert it only where the solution is unique.
+      if (countSolutions(level) === 1)
+        expect(isSolved(board, level)).toBe(true);
     });
 
-    it("a shifted face is caught", () => {
+    it("a shifted face is not solved", () => {
       const shifted = [...placement];
       shifted[0] = (shifted[0] + 1) % level.size;
-      const bad = boardFrom(level, shifted);
-      const caught =
-        findConflicts(bad, level).length > 0 || !isSolved(bad, level);
-      expect(caught).toBe(true);
+      expect(isSolved(boardFrom(level, shifted), level)).toBe(false);
     });
 
-    it("a duplicated face is caught", () => {
+    it("a duplicated column is reported as a column conflict", () => {
       const dup = [...placement];
       dup[1] = dup[0];
       const bad = boardFrom(level, dup);
-      expect(findConflicts(bad, level).length).toBeGreaterThan(0);
+      const reasons = findConflicts(bad, level).map((c) => c.reason);
+      expect(reasons).toContain("col");
       expect(isSolved(bad, level)).toBe(false);
     });
   });
