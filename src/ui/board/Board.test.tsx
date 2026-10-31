@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { Board } from "./Board";
@@ -8,6 +9,7 @@ import { REGION_NAMES } from "./palette";
 
 const n = level.size;
 const none: ReadonlySet<number> = new Set();
+const handlers = () => ({ onToggleMark: vi.fn(), onPlaceFace: vi.fn() });
 
 describe("Board", () => {
   test("is an accessible grid of rows and gridcells with one button each", () => {
@@ -17,6 +19,8 @@ describe("Board", () => {
         board={emptyBoard(level)}
         wrong={none}
         conflicts={none}
+        disabled={false}
+        {...handlers()}
       />,
     );
     const grid = screen.getByRole("grid", { name: "Puzzle board" });
@@ -36,6 +40,8 @@ describe("Board", () => {
         board={emptyBoard(level)}
         wrong={none}
         conflicts={none}
+        disabled={false}
+        {...handlers()}
       />,
     );
     for (const [r, c] of [
@@ -60,6 +66,8 @@ describe("Board", () => {
         board={board}
         wrong={new Set([3])}
         conflicts={new Set([2])}
+        disabled={false}
+        {...handlers()}
       />,
     );
     const get = (c: number) =>
@@ -83,6 +91,8 @@ describe("Board", () => {
         board={emptyBoard(level)}
         wrong={none}
         conflicts={none}
+        disabled={false}
+        {...handlers()}
       />,
     );
     const cell = screen.getByRole("grid").style.getPropertyValue("--cell");
@@ -98,6 +108,8 @@ describe("Board", () => {
         board={emptyBoard(level)}
         wrong={none}
         conflicts={none}
+        disabled={false}
+        {...handlers()}
       />,
     );
     for (const g of cellGeometry(level)) {
@@ -107,5 +119,57 @@ describe("Board", () => {
       expect(cls.includes("border-r-4")).toBe(g.thickRight);
       expect(cls.includes("border-b-4")).toBe(g.thickBottom);
     }
+  });
+
+  describe("input", () => {
+    const at = (i: number) => {
+      const [r, c] = [Math.floor(i / n), i % n];
+      return screen.getByRole("button", {
+        name: new RegExp(`^Row ${r + 1}, column ${c + 1},`),
+      });
+    };
+    const mixedBoard = () => {
+      const board = emptyBoard(level) as Uint8Array;
+      board[1] = Cell.Mark; // player's own mark
+      board[2] = Cell.Face;
+      board[3] = Cell.Mark; // wrong
+      return board;
+    };
+    const renderMixed = (disabled: boolean) => {
+      const h = handlers();
+      render(
+        <Board
+          level={level}
+          board={mixedBoard()}
+          wrong={new Set([3])}
+          conflicts={none}
+          disabled={disabled}
+          {...h}
+        />,
+      );
+      return h;
+    };
+
+    test("empty and own-mark cells are enabled; face and wrong cells disabled", () => {
+      renderMixed(false);
+      expect(at(0)).toBeEnabled();
+      expect(at(1)).toBeEnabled();
+      expect(at(2)).toBeDisabled();
+      expect(at(3)).toBeDisabled();
+    });
+
+    test("a disabled board disables every cell", () => {
+      renderMixed(true);
+      for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
+    });
+
+    test("click and double-click pass the flat index to the callbacks", async () => {
+      const h = renderMixed(false);
+      await userEvent.click(at(10));
+      expect(h.onToggleMark).toHaveBeenCalledExactlyOnceWith(10);
+      expect(h.onPlaceFace).not.toHaveBeenCalled();
+      await userEvent.dblClick(at(11));
+      expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(11);
+    });
   });
 });

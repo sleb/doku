@@ -1,5 +1,5 @@
 import { type CSSProperties, useMemo } from "react";
-import type { Board as BoardData, Level } from "../../engine";
+import { type Board as BoardData, Cell, type Level } from "../../engine";
 import { CellView } from "./Cell";
 import { cellGeometry } from "./geometry";
 
@@ -8,9 +8,21 @@ export interface BoardProps {
   board: BoardData;
   wrong: ReadonlySet<number>;
   conflicts: ReadonlySet<number>;
+  /** True when the game is not `playing`; locks the whole board. */
+  disabled: boolean;
+  onToggleMark: (index: number) => void;
+  onPlaceFace: (index: number) => void;
 }
 
-export function Board({ level, board, wrong, conflicts }: BoardProps) {
+export function Board({
+  level,
+  board,
+  wrong,
+  conflicts,
+  disabled,
+  onToggleMark,
+  onPlaceFace,
+}: BoardProps) {
   const { size } = level;
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
@@ -54,6 +66,11 @@ export function Board({ level, board, wrong, conflicts }: BoardProps) {
                 state={board[g.index]}
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
+                disabled={
+                  disabled || board[g.index] === Cell.Face || wrong.has(g.index)
+                }
+                onToggleMark={onToggleMark}
+                onPlaceFace={onPlaceFace}
               />
             </div>
           ))}
