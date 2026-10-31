@@ -244,6 +244,17 @@ describe("placeFace", () => {
     expect(w.hearts).toBe(1);
   });
 
+  it("won by play is inert", () => {
+    let s: GameState = started();
+    for (const c of sol) s = placeFace(s, c);
+    const w = live(s);
+    expect(w.status).toBe("won");
+    for (const c of [bad[0], sol[0]]) {
+      expect(placeFace(w, c)).toBe(w);
+      expect(toggleMark(w, c)).toBe(w);
+    }
+  });
+
   it("checks status before the index", () => {
     const won = { ...started(), status: "won" as const };
     expect(placeFace(won, 999)).toBe(won);

@@ -185,6 +185,32 @@ describe("createGameStore", () => {
     expect(s.hearts).toBe(0);
   });
 
+  it("finished stores ignore placeFace and toggleMark silently", () => {
+    const { size, solution } = uniqueLevel7;
+    const winCells = solution.map((c, r) => r * size + c);
+    const wrong = Array.from({ length: size }, (_, c) => c)
+      .filter((c) => c !== solution[0])
+      .slice(0, MAX_HEARTS);
+    for (const [status, cells] of [
+      ["won", winCells],
+      ["lost", wrong],
+    ] as const) {
+      const store = createGameStore();
+      store.getState().startLevel(uniqueLevel7);
+      for (const c of cells) store.getState().placeFace(c);
+      expect(store.getState().status).toBe(status);
+      const before = store.getState();
+      let calls = 0;
+      store.subscribe(() => {
+        calls++;
+      });
+      store.getState().placeFace(winCells[1]);
+      store.getState().toggleMark(winCells[1]);
+      expect(calls).toBe(0);
+      expect(store.getState()).toBe(before);
+    }
+  });
+
   it("placeFace throws RangeError for an out-of-range cell while playing", () => {
     const store = createGameStore();
     store.getState().startLevel(uniqueLevel7);
