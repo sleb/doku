@@ -83,4 +83,54 @@ describe("createGameStore", () => {
     store.getState().toggleMark(4);
     expect(calls).toBe(0);
   });
+
+  describe("toggleMark no-ops fire no subscriber", () => {
+    function expectSilent(
+      setup: (store: ReturnType<typeof createGameStore>) => void,
+    ) {
+      const store = createGameStore();
+      setup(store);
+      let calls = 0;
+      store.subscribe(() => {
+        calls++;
+      });
+      store.getState().toggleMark(4);
+      expect(calls).toBe(0);
+    }
+
+    it("on an idle store", () => {
+      expectSilent(() => {});
+    });
+
+    it("on a won store", () => {
+      expectSilent((store) => {
+        store.getState().startLevel(uniqueLevel7);
+        store.setState({ status: "won" });
+      });
+    });
+
+    it("on a lost store", () => {
+      expectSilent((store) => {
+        store.getState().startLevel(uniqueLevel7);
+        store.setState({ status: "lost", hearts: 0, wrong: new Set([3]) });
+      });
+    });
+
+    it("on a Face cell", () => {
+      expectSilent((store) => {
+        store.getState().startLevel(uniqueLevel7);
+        const s = store.getState();
+        if (s.status === "idle") throw new Error("unreachable");
+        const board = s.board.slice();
+        board[4] = Cell.Face;
+        store.setState({ board });
+      });
+    });
+  });
+
+  it("toggleMark throws RangeError for an out-of-range cell while playing", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    expect(() => store.getState().toggleMark(999)).toThrow(RangeError);
+  });
 });
