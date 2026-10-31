@@ -101,7 +101,7 @@ idle → playing ⇄ paused → won | lost
 
 State: `level`, `board`, `hearts`, `history[]` (for undo/redo), `elapsedMs`, `hintsUsed`, `conflicts` (derived), `status`.
 
-Actions: `startLevel`, `toggleMark` (single tap: add or remove a ✕ note, free), `placeFace` (double-tap: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
+Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (double-tap or `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
 
 Secondary stores: `progressStore` (completed levels, best times, stars), `settingsStore` (theme, sound, haptics, color-blind palette, input mode), `dailyStore` (*proposed*).
 
@@ -148,7 +148,7 @@ Hides differences so UI code stays platform-agnostic:
 | Adapter | Desktop | Mobile (phase 2) |
 |---|---|---|
 | `storage` | tauri-plugin-store | same |
-| `input` | click = toggle ✕, double-click = place face; right-click = mark; click-drag to paint marks; keyboard (arrows + space/x/z) | tap = toggle ✕, double-tap = face (or per toggle); long-press = mark |
+| `input` | click = toggle ✕, double-click = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 3) | tap = toggle ✕, double-tap = face (or per toggle); long-press = mark |
 | `haptics` | no-op | vibrate on place/conflict/win |
 | `audio` | WebAudio | same (respect silent switch) |
 | `window` | min size, remembered size | safe-area insets, orientation lock to portrait |
