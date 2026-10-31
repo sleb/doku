@@ -59,12 +59,14 @@ describe("createGameStore", () => {
 
   it("keeps action identities stable", () => {
     const store = createGameStore();
-    const { startLevel, restart, toggleMark } = store.getState();
+    const { startLevel, restart, toggleMark, placeFace } = store.getState();
     startLevel(uniqueLevel7);
     toggleMark(0);
     expect(store.getState().startLevel).toBe(startLevel);
     expect(store.getState().restart).toBe(restart);
     expect(store.getState().toggleMark).toBe(toggleMark);
+    placeFace(uniqueLevel7.solution[0]);
+    expect(store.getState().placeFace).toBe(placeFace);
   });
 
   it("toggleMark updates the board and skips no-ops", () => {
@@ -132,5 +134,62 @@ describe("createGameStore", () => {
     const store = createGameStore();
     store.getState().startLevel(uniqueLevel7);
     expect(() => store.getState().toggleMark(999)).toThrow(RangeError);
+  });
+
+  it("placeFace updates state and skips locked no-ops", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    const sol = uniqueLevel7.solution[0];
+    store.getState().placeFace(sol);
+    let s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[sol]).toBe(Cell.Face);
+    expect(s.hearts).toBe(MAX_HEARTS);
+
+    const wrongCell = sol === 0 ? 1 : 0;
+    store.getState().placeFace(wrongCell);
+    s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.hearts).toBe(MAX_HEARTS - 1);
+    expect(s.wrong.has(wrongCell)).toBe(true);
+
+    let calls = 0;
+    store.subscribe(() => {
+      calls++;
+    });
+    store.getState().placeFace(wrongCell);
+    store.getState().placeFace(sol);
+    expect(calls).toBe(0);
+  });
+
+  it("placeFace through the store reaches won", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    const { size, solution } = uniqueLevel7;
+    for (let r = 0; r < size; r++) {
+      store.getState().placeFace(r * size + solution[r]);
+    }
+    expect(store.getState().status).toBe("won");
+  });
+
+  it("placeFace through the store reaches lost", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    const { size, solution } = uniqueLevel7;
+    const wrong = Array.from({ length: size }, (_, c) => c)
+      .filter((c) => c !== solution[0])
+      .slice(0, MAX_HEARTS);
+    for (const c of wrong) store.getState().placeFace(c);
+    const s = store.getState();
+    expect(s.status).toBe("lost");
+    expect(s.hearts).toBe(0);
+  });
+
+  it("placeFace throws RangeError for an out-of-range cell while playing", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    expect(() => store.getState().placeFace(uniqueLevel7.size ** 2)).toThrow(
+      RangeError,
+    );
   });
 });

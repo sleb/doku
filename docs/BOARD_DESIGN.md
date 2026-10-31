@@ -132,7 +132,7 @@ export function createGameStore(): StoreApi<GameStore>;   // one per test
 export const useGameStore: UseBoundStore<StoreApi<GameStore>>;  // app singleton
 ```
 
-`createGameStore` uses `createStore` from `zustand/vanilla`. M2-03 ships `startLevel` and `restart`, and M2-04 adds `toggleMark`; `placeFace` and the `useGameStore` singleton are still pending and land with the first issues that need them. An idle state has `hearts: MAX_HEARTS`.
+`createGameStore` uses `createStore` from `zustand/vanilla`. M2-03 ships `startLevel` and `restart`, M2-04 adds `toggleMark` and M2-05 adds `placeFace`; only the `useGameStore` singleton is still pending and lands with the first issue that needs it. An idle state has `hearts: MAX_HEARTS`.
 
 Each action is `set((s) => transition(s, ...))`. Action functions are created once, so their identity is stable and can be passed as props to memoized cells. The factory exists so each test gets a fresh store; the singleton is `createGameStore()` wrapped with `useStore`.
 
