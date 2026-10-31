@@ -180,10 +180,25 @@ describe("findConflicts: adjacency", () => {
       { r: 4, c: 3 },
       { r: 3, c: 4 },
     ]);
-    const adjacent = findConflicts(board, latinLevel).filter(
-      (x) => x.reason === "adjacent",
-    );
-    expect(adjacent).toEqual([pair({ r: 3, c: 4 }, { r: 4, c: 3 })]);
+    // (3,4) and (4,3) both sit in region 0 of latinLevel.
+    const cells = [
+      { r: 3, c: 4 },
+      { r: 4, c: 3 },
+    ];
+    expect(findConflicts(board, latinLevel)).toEqual([
+      { reason: "region", cells },
+      pair(cells[0], cells[1]),
+    ]);
+  });
+
+  it("does not wrap from the left edge to the end of the next row", () => {
+    const board = boardWithFaces(latinLevel, [
+      { r: 3, c: 0 },
+      { r: 3, c: 6 },
+    ]);
+    expect(
+      findConflicts(board, latinLevel).filter((x) => x.reason === "adjacent"),
+    ).toEqual([]);
   });
 
   it("reports a vertical pair as column and adjacent", () => {

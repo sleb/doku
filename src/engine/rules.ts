@@ -4,7 +4,7 @@ export type ConflictReason = "row" | "col" | "region" | "adjacent";
 
 export interface Conflict {
   reason: ConflictReason;
-  cells: Coord[]; // ascending order
+  cells: Coord[]; // ascending row-major order
 }
 
 export function findConflicts(board: Board, level: Level): Conflict[] {
