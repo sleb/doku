@@ -18,7 +18,7 @@ describe("startLevel", () => {
     expect(state.status).toBe("playing");
     expect(state.hearts).toBe(MAX_HEARTS);
     expect(MAX_HEARTS).toBe(3);
-    expect(state.board).toHaveLength(49);
+    expect(state.board).toHaveLength(uniqueLevel7.size ** 2);
     expect(state.board.every((c) => c === Cell.Empty)).toBe(true);
     expect(state.level).toBe(uniqueLevel7);
     expect(state.wrong.size).toBe(0);
@@ -122,7 +122,7 @@ describe("toggleMark", () => {
 
   it("throws RangeError for a bad index while playing", () => {
     const s = started();
-    for (const bad of [-1, 49, 1.5, Number.NaN]) {
+    for (const bad of [-1, uniqueLevel7.size ** 2, 1.5, Number.NaN]) {
       expect(() => toggleMark(s, bad)).toThrow(RangeError);
     }
   });
@@ -215,11 +215,11 @@ describe("placeFace", () => {
 
   it("loses at zero hearts and then ignores input", () => {
     let s: GameState = started();
-    for (const c of bad.slice(0, 3)) s = placeFace(s, c);
+    for (const c of bad.slice(0, MAX_HEARTS)) s = placeFace(s, c);
     const l = live(s);
     expect(l.status).toBe("lost");
     expect(l.hearts).toBe(0);
-    expect(l.wrong.size).toBe(3);
+    expect(l.wrong.size).toBe(MAX_HEARTS);
     expect(placeFace(l, sol[0])).toBe(l);
     expect(toggleMark(l, sol[0])).toBe(l);
   });
@@ -237,7 +237,7 @@ describe("placeFace", () => {
 
   it("wins with one heart left", () => {
     let s: GameState = started();
-    for (const c of bad.slice(0, 2)) s = placeFace(s, c);
+    for (const c of bad.slice(0, MAX_HEARTS - 1)) s = placeFace(s, c);
     for (const c of sol) s = placeFace(s, c);
     const w = live(s);
     expect(w.status).toBe("won");
@@ -250,7 +250,7 @@ describe("placeFace", () => {
     expect(placeFace(idleState, 0)).toBe(idleState);
   });
 
-  for (const badIndex of [-1, 49, 1.5, Number.NaN]) {
+  for (const badIndex of [-1, uniqueLevel7.size ** 2, 1.5, Number.NaN]) {
     it(`throws RangeError for cell ${badIndex} while playing`, () => {
       expect(() => placeFace(started(), badIndex)).toThrow(RangeError);
     });
