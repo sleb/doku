@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  uniqueLevel7,
-  uniqueLevel11,
-} from "../../engine/__fixtures__/levels";
+import { uniqueLevel7, uniqueLevel11 } from "../../engine/__fixtures__/levels";
 import { cellGeometry } from "./geometry";
 
 describe.each([

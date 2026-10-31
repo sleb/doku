@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { GLYPH_COLOR, REGION_BG, REGION_NAMES } from "./palette";
+import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
 
 function tokenHex(i: number): string {
   const m = css.match(
@@ -66,6 +66,15 @@ describe("region palette", () => {
   test("glyph color reaches 3:1 contrast on every region color", () => {
     REGION_BG.forEach((_, i) => {
       expect(contrast(GLYPH_COLOR, tokenHex(i))).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  test("wrong-tap red reaches 3:1 contrast on every region color", () => {
+    REGION_BG.forEach((_, i) => {
+      expect(
+        contrast(WRONG_COLOR, tokenHex(i)),
+        REGION_NAMES[i],
+      ).toBeGreaterThanOrEqual(3);
     });
   });
 });
