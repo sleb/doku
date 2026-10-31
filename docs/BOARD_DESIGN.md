@@ -232,7 +232,9 @@ export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
 export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
 ```
 
-Hex values are chosen during implementation under two requirements: the 11 colors are pairwise distinguishable, and the face/mark glyph (dark stroke) reaches ≥ 3:1 contrast on every one. The color-blind variant and pattern overlay (`DESIGN.md` §7 Theming) are milestone 3/6, but tokens plus a lookup keep that a one-file swap.
+Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. `src/App.tsx` carries a temporary swatch strip so the e2e test can check the token is applied; it goes when `Board` lands. The demo level is `src/levels/demo-7.json` (a copy of `uniqueLevel7`, id `demo-7`) exported as `demoLevel` from `src/levels/demoLevel.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
+
+Hex values were chosen under two requirements: the 11 colors are pairwise distinguishable, and the face/mark glyph (dark stroke) reaches ≥ 3:1 contrast on every one. The color-blind variant and pattern overlay (`DESIGN.md` §7 Theming) are milestone 3/6, but tokens plus a lookup keep that a one-file swap.
 
 ## 5. HUD, result, screen
 
@@ -257,7 +259,7 @@ Vitest keeps the engine fast and Tauri-free by splitting into two projects:
 
 `bun run test` runs both. Playwright runs via a separate `bun run test:e2e` against the Vite dev server on port 1420 (`webServer` in `playwright.config.ts`, `reuseExistingServer`). It is **not** part of `bun run check`, since it needs browser binaries; CI gets its own job.
 
-Implemented in M2-01 with these deviations from the sketch above: the projects live in a separate `vitest.config.ts` that `mergeConfig`s `vite.config.ts` (now a plain object, not a callback, so it can be merged), keeping the Tauri config clean; `reuseExistingServer` is `!process.env.CI`, so CI always starts its own server while a local `bun tauri dev` is reused; Chromium only; e2e specs live in `e2e/`; `@types/node` is a dev dependency for `process` in the config files. `src/test/harness.test.tsx` is a throwaway proof of the dom project and is deleted once real component tests exist (M2-02/M2-07).
+Implemented in M2-01 with these deviations from the sketch above: the projects live in a separate `vitest.config.ts` that `mergeConfig`s `vite.config.ts` (now a plain object, not a callback, so it can be merged), keeping the Tauri config clean; `reuseExistingServer` is `!process.env.CI`, so CI always starts its own server while a local `bun tauri dev` is reused; Chromium only; e2e specs live in `e2e/`; `@types/node` is a dev dependency for `process` in the config files. `src/test/harness.test.tsx` was a throwaway proof of the dom project and was deleted in M2-02, when `src/App.test.tsx` became the first real component test.
 
 ## 7. Test plan (strict TDD: each row is written failing first)
 
