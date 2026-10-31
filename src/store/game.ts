@@ -44,6 +44,15 @@ export function restart(state: GameState): GameState {
 
 type Started = Exclude<GameState, { status: "idle" }>;
 
+/** A face or a wrong mark can no longer be edited; the player's own mark can. */
+export function isLocked(
+  board: Board,
+  wrong: ReadonlySet<number>,
+  cell: number,
+): boolean {
+  return board[cell] === Cell.Face || wrong.has(cell);
+}
+
 /** The shared tap prelude: the playing state if `cell` is editable, else null. */
 function editable(state: GameState, cell: number): Started | null {
   if (state.status !== "playing") return null;
@@ -51,7 +60,7 @@ function editable(state: GameState, cell: number): Started | null {
   if (!Number.isInteger(cell) || cell < 0 || cell >= size * size) {
     throw new RangeError(`cell ${cell} is out of range`);
   }
-  if (state.board[cell] === Cell.Face || state.wrong.has(cell)) return null;
+  if (isLocked(state.board, state.wrong, cell)) return null;
   return state;
 }
 

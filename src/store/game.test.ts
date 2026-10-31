@@ -4,6 +4,7 @@ import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import {
   type GameState,
   idleState,
+  isLocked,
   MAX_HEARTS,
   placeFace,
   restart,
@@ -286,5 +287,16 @@ describe("placeFace", () => {
     expect(a.board).not.toBe(s0.board);
     expect(b.board).not.toBe(s0.board);
     expect(b.wrong).not.toBe(s0.wrong);
+  });
+});
+
+describe("isLocked", () => {
+  const board = Uint8Array.from([Cell.Empty, Cell.Mark, Cell.Face, Cell.Mark]);
+  const wrong = new Set([3]);
+  it("locks faces and wrong marks only", () => {
+    expect(isLocked(board, wrong, 0)).toBe(false);
+    expect(isLocked(board, wrong, 1)).toBe(false);
+    expect(isLocked(board, wrong, 2)).toBe(true);
+    expect(isLocked(board, wrong, 3)).toBe(true);
   });
 });

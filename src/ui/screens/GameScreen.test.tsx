@@ -6,7 +6,7 @@ import {
   uniqueLevel7 as level,
   uniqueLevel11,
 } from "../../engine/__fixtures__/levels";
-import { type GameState, idleState, startLevel } from "../../store/game";
+import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
 import { GameScreen } from "./GameScreen";
@@ -89,11 +89,20 @@ describe("GameScreen", () => {
     expect(gameStore.getState().hearts).toBe(3);
   });
 
-  test("does not render a stale result from a previous mount on first paint", () => {
-    gameStore.setState(
-      { ...startLevel(level), status: "won" } as GameState,
-      false,
-    );
+  test("unmounting resets the store to idle", async () => {
+    const { unmount } = render(<GameScreen level={level} />);
+    await dbl([nonSolution[0]]);
+    expect(gameStore.getState().hearts).toBe(2);
+    unmount();
+    expect(gameStore.getState().status).toBe("idle");
+    expect(gameStore.getState().board).toBeNull();
+    expect(gameStore.getState().hearts).toBe(3);
+  });
+
+  test("a remount after a finished game shows no old dialog on first paint", async () => {
+    const first = render(<GameScreen level={level} />);
+    await dbl(solution);
+    first.unmount();
     const seen: (Element | null)[] = [];
     render(
       <>
@@ -105,6 +114,17 @@ describe("GameScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(gameStore.getState().status).toBe("playing");
     for (let i = 0; i < n * n; i++) expect(label(i)).toBe("empty");
+  });
+
+  test("StrictMode double-mount still leaves the level playing", async () => {
+    render(
+      <StrictMode>
+        <GameScreen level={level} />
+      </StrictMode>,
+    );
+    await dbl([nonSolution[0]]);
+    expect(gameStore.getState().status).toBe("playing");
+    expect(gameStore.getState().hearts).toBe(2);
   });
 
   test("does not throw or mismatch when the store holds a different-size level", () => {

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import type { Level } from "../../engine";
+import { idleState } from "../../store/game";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
 import { Board } from "../board/Board";
@@ -14,32 +15,22 @@ export function GameScreen({ level }: { level: Level }) {
   const wrong = useGameStore((s) => ("wrong" in s ? s.wrong : undefined));
   const { startLevel, restart, toggleMark, placeFace } = gameStore.getState();
 
-  const [startedFor, setStartedFor] = useState<Level | null>(null);
-
+  // The store is a singleton: reset it on unmount so a later mount never sees
+  // this one's board or result.
   useEffect(() => {
     startLevel(level);
-    setStartedFor(level);
+    return () => gameStore.setState(idleState, false);
   }, [startLevel, level]);
 
-  // Only for a board that belongs to this level; the singleton may still hold
-  // another level's board until this mount's start effect has run.
-  const fresh = startedFor === level && storeLevel === level;
+  // Still needed: on the first render of a new `level` prop the store holds the
+  // previous level's board until the effect above has run.
+  const fresh = storeLevel === level;
   const conflicts = useMemo(
     () => (board && fresh ? conflictCells(board, level) : new Set<number>()),
     [board, level, fresh],
   );
 
-  // Until this mount's start effect runs, the singleton may hold a previous
-  // mount's level/board/result; render idle rather than from that stale state.
-  if (
-    startedFor !== level ||
-    storeLevel !== level ||
-    status === "idle" ||
-    !board ||
-    !wrong
-  ) {
-    return null;
-  }
+  if (!fresh || status === "idle" || !board || !wrong) return null;
 
   const finished = status !== "playing";
   return (

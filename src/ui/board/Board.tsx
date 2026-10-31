@@ -1,5 +1,6 @@
 import { type CSSProperties, useMemo } from "react";
-import { type Board as BoardData, Cell, type Level } from "../../engine";
+import type { Board as BoardData, Level } from "../../engine";
+import { isLocked } from "../../store/game";
 import { CellView } from "./Cell";
 import { cellGeometry } from "./geometry";
 
@@ -36,17 +37,13 @@ export function Board({
   const rows = Array.from({ length: size }, (_, r) =>
     geometry.slice(r * size, (r + 1) * size),
   );
-  // An ARIA grid on a CSS grid; native <table> does not fit, and the focusable
-  // element is the inner button (BOARD_DESIGN 4.2).
-  const gridAria = {
-    role: "grid",
-    "aria-label": "Puzzle board",
-    "aria-rowcount": size,
-    "aria-colcount": size,
-  } as const;
-  const grid = (
+  return (
+    // biome-ignore lint/a11y/useSemanticElements lint/a11y/useFocusableInteractive: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
     <div
-      {...gridAria}
+      role="grid"
+      aria-label="Puzzle board"
+      aria-rowcount={size}
+      aria-colcount={size}
       className="grid w-max border-4 border-neutral-800"
       style={style}
     >
@@ -66,9 +63,7 @@ export function Board({
                 state={board[g.index]}
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
-                disabled={
-                  disabled || board[g.index] === Cell.Face || wrong.has(g.index)
-                }
+                disabled={disabled || isLocked(board, wrong, g.index)}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
               />
@@ -78,5 +73,4 @@ export function Board({
       ))}
     </div>
   );
-  return grid;
 }
