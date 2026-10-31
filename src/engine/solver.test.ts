@@ -5,18 +5,19 @@ import { solve } from "./solver";
 import { Cell, type Level } from "./types";
 
 // Regions 0 and 1 are single cells at (0,0) and (1,1), which touch, so no
-// placement can satisfy both.
+// placement can satisfy both. Without the adjacency rule it has 5 placements,
+// so this is the only obstruction.
 const unsolvable: Level = {
   id: "unsolvable-7",
   size: 7,
   regions: [
-    [0, 2, 2, 2, 2, 2, 2],
-    [4, 1, 3, 3, 3, 3, 3],
-    [4, 4, 4, 4, 4, 4, 4],
-    [5, 5, 5, 5, 5, 5, 5],
-    [5, 5, 5, 5, 5, 5, 5],
-    [6, 6, 6, 6, 6, 6, 6],
-    [6, 6, 6, 6, 6, 6, 6],
+    [0, 5, 5, 5, 5, 2, 2],
+    [5, 1, 5, 4, 5, 2, 2],
+    [5, 5, 5, 4, 2, 2, 2],
+    [5, 5, 4, 4, 4, 4, 2],
+    [5, 5, 4, 4, 4, 3, 6],
+    [5, 5, 4, 4, 6, 6, 6],
+    [5, 5, 5, 4, 6, 6, 6],
   ],
   solution: [0, 0, 0, 0, 0, 0, 0],
 };
