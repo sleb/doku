@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { level7 } from "./__fixtures__/levels";
+import { multiSolutionLevel7 } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
 import { findConflicts, isSolved } from "./rules";
 import { type Board, Cell, type Coord, type Level } from "./types";
@@ -14,8 +14,10 @@ function boardWithFaces(level: Level, faces: Coord[]): Board {
 // and row/col conflicts are never accompanied by region conflicts. The regions
 // are disconnected; never pass this to loadLevel.
 const latinLevel: Level = {
-  ...level7,
-  regions: level7.regions.map((row, r) => row.map((_, c) => (r + c) % 7)),
+  ...multiSolutionLevel7,
+  regions: multiSolutionLevel7.regions.map((row, r) =>
+    row.map((_, c) => (r + c) % 7),
+  ),
 };
 
 describe("findConflicts: rows and columns", () => {
@@ -102,12 +104,12 @@ describe("findConflicts: rows and columns", () => {
   });
 });
 
-// Test-only: reassigns cells of level7 to region 0, which leaves region 0
+// Test-only: reassigns cells of multiSolutionLevel7 to region 0, which leaves region 0
 // disconnected. Fine for findConflicts, but never pass it to loadLevel.
 function levelWithSharedRegion(cells: Coord[]): Level {
-  const regions = level7.regions.map((row) => [...row]);
+  const regions = multiSolutionLevel7.regions.map((row) => [...row]);
   for (const { r, c } of cells) regions[r][c] = 0;
-  return { ...level7, regions };
+  return { ...multiSolutionLevel7, regions };
 }
 
 describe("findConflicts: regions", () => {
@@ -305,22 +307,32 @@ describe("findConflicts: marks and clean boards", () => {
   });
 
   it("returns no conflicts when every cell is a mark", () => {
-    expect(findConflicts(markAll(level7, everyCell(level7)), level7)).toEqual(
-      [],
-    );
+    expect(
+      findConflicts(
+        markAll(multiSolutionLevel7, everyCell(multiSolutionLevel7)),
+        multiSolutionLevel7,
+      ),
+    ).toEqual([]);
   });
 
   it("returns no conflicts for an empty board", () => {
-    expect(findConflicts(emptyBoard(level7), level7)).toEqual([]);
+    expect(
+      findConflicts(emptyBoard(multiSolutionLevel7), multiSolutionLevel7),
+    ).toEqual([]);
   });
 
   it("returns no conflicts for the full solution with marks elsewhere", () => {
-    const faces = level7.solution.map((c, r) => ({ r, c }));
-    const board = boardWithFaces(level7, faces);
-    const others = everyCell(level7).filter(
-      ({ r, c }) => level7.solution[r] !== c,
+    const faces = multiSolutionLevel7.solution.map((c, r) => ({ r, c }));
+    const board = boardWithFaces(multiSolutionLevel7, faces);
+    const others = everyCell(multiSolutionLevel7).filter(
+      ({ r, c }) => multiSolutionLevel7.solution[r] !== c,
     );
-    expect(findConflicts(markAll(level7, others, board), level7)).toEqual([]);
+    expect(
+      findConflicts(
+        markAll(multiSolutionLevel7, others, board),
+        multiSolutionLevel7,
+      ),
+    ).toEqual([]);
   });
 
   it("neither masks nor adds conflicts when marks surround conflicting faces", () => {
@@ -339,48 +351,73 @@ describe("findConflicts: marks and clean boards", () => {
 });
 
 describe("isSolved", () => {
-  const solution: Coord[] = level7.solution.map((c, r) => ({ r, c }));
+  const solution: Coord[] = multiSolutionLevel7.solution.map((c, r) => ({
+    r,
+    c,
+  }));
 
   it("is true for exactly the solution", () => {
-    expect(isSolved(boardWithFaces(level7, solution), level7)).toBe(true);
+    expect(
+      isSolved(
+        boardWithFaces(multiSolutionLevel7, solution),
+        multiSolutionLevel7,
+      ),
+    ).toBe(true);
   });
 
   it("is false one face short", () => {
-    expect(isSolved(boardWithFaces(level7, solution.slice(1)), level7)).toBe(
-      false,
-    );
+    expect(
+      isSolved(
+        boardWithFaces(multiSolutionLevel7, solution.slice(1)),
+        multiSolutionLevel7,
+      ),
+    ).toBe(false);
   });
 
   it("is false with N faces where two share a row", () => {
-    const board = boardWithFaces(level7, [
+    const board = boardWithFaces(multiSolutionLevel7, [
       ...solution.slice(0, 6),
-      { r: 5, c: (level7.solution[5] + 2) % 7 },
+      { r: 5, c: (multiSolutionLevel7.solution[5] + 2) % 7 },
     ]);
-    expect(isSolved(board, level7)).toBe(false);
+    expect(isSolved(board, multiSolutionLevel7)).toBe(false);
   });
 
   it("is false with N faces in N distinct rows but off the solution", () => {
-    const shifted = level7.solution.map((c, r) => ({ r, c: (c + 1) % 7 }));
-    expect(isSolved(boardWithFaces(level7, shifted), level7)).toBe(false);
+    const shifted = multiSolutionLevel7.solution.map((c, r) => ({
+      r,
+      c: (c + 1) % 7,
+    }));
+    expect(
+      isSolved(
+        boardWithFaces(multiSolutionLevel7, shifted),
+        multiSolutionLevel7,
+      ),
+    ).toBe(false);
   });
 
   it("ignores marks", () => {
-    const board = boardWithFaces(level7, solution);
-    const spare = [0, 1, 2, 3, 4, 5, 6].find((c) => c !== level7.solution[0]);
+    const board = boardWithFaces(multiSolutionLevel7, solution);
+    const spare = [0, 1, 2, 3, 4, 5, 6].find(
+      (c) => c !== multiSolutionLevel7.solution[0],
+    );
     (board as Uint8Array)[spare as number] = Cell.Mark;
-    expect(isSolved(board, level7)).toBe(true);
+    expect(isSolved(board, multiSolutionLevel7)).toBe(true);
   });
 
   it("is false with an extra face", () => {
-    const spare = [0, 1, 2, 3, 4, 5, 6].find((c) => c !== level7.solution[0]);
-    const board = boardWithFaces(level7, [
+    const spare = [0, 1, 2, 3, 4, 5, 6].find(
+      (c) => c !== multiSolutionLevel7.solution[0],
+    );
+    const board = boardWithFaces(multiSolutionLevel7, [
       ...solution,
       { r: 0, c: spare as number },
     ]);
-    expect(isSolved(board, level7)).toBe(false);
+    expect(isSolved(board, multiSolutionLevel7)).toBe(false);
   });
 
   it("is false for an empty board", () => {
-    expect(isSolved(emptyBoard(level7), level7)).toBe(false);
+    expect(isSolved(emptyBoard(multiSolutionLevel7), multiSolutionLevel7)).toBe(
+      false,
+    );
   });
 });
