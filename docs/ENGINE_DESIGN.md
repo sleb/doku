@@ -248,6 +248,7 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coor
 | Soundness (property) | For many generated puzzles, run `solveByTechniques` and assert no `Deduction` eliminates a solution cell and every `place` is a solution cell. This is the most important test. |
 | Uniqueness | `countSolutions(p, 2) === 1` for every generated level and the unique fixtures (the multi-solution and no-solution fixtures are deliberate exceptions); the backtracker's solution equals `level.solution`. |
 | Solver agreement | When `solveByTechniques` solves, its placements equal `level.solution`. `solve(p)` equals `level.solution` for every unique level, and returns `null` for a fixture with no valid placement. |
+| Rules agreement | `src/engine/agreement.test.ts`: for every solvable fixture, `solve(level)` placed on an empty board has no `findConflicts`, and `isSolved` agrees (true for unique levels), with shifted and duplicated faces as negative controls. |
 | Determinism | `generate(o)` called twice (and across runs) returns deep-equal levels. |
 | Fixture set | `src/engine/__fixtures__/levels.ts` exports `uniqueLevel7`, `uniqueLevel11`, `multiSolutionLevel7`, `noSolutionLevel7` and a `fixtures` list with each one's purpose. `fixtures.test.ts` proves the properties each claims. `noSolutionLevel7` has a dummy solution and deliberately fails `validateLevel`. |
 | Golden fixtures | A handful of hand-written levels per tier with expected `rate()` and expected first-hint technique. Locks the ladder's behavior against regressions. |
