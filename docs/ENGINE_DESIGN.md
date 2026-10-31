@@ -178,11 +178,11 @@ Loop: `cand = fromBoard(p, board ?? empty)`; repeatedly try techniques in ladder
 ### 7.2 `solve` and `countSolutions` — the backtracking solver
 
 ```ts
-function solve(p: Puzzle, board?: Board): number[] | null;   // solution[r] = column in row r
+function solve(level: Level): number[] | null;   // result[r] = column in row r; no board seed yet (add when hints/generation need it)
 function countSolutions(p: Puzzle, limit = 2, board?: Board): number;
 ```
 
-`solve` returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. `countSolutions` and `solve` share one backtracking routine; `solve` stops at the first solution (`limit = 1`) and returns it.
+`solve` takes a `Level` directly (no `compile`/`Puzzle` yet) and never reads `level.solution`. It returns the first complete placement found, in the same column-per-row shape as `Level.solution`, or `null` if none exists (an expected outcome, not an error, so it never throws). It is the independent check that a level's stored `solution` is reachable from the rules alone, and it is what `validateLevel`-style tooling and the solver/rules agreement tests call. `countSolutions` and `solve` share one backtracking routine; `solve` stops at the first solution (`limit = 1`) and returns it. Until `countSolutions` lands (M1-09), `solve` is a small private backtracker.
 
 Plain backtracking, independent of the ladder, optimized for speed:
 - Place one face per row, top to bottom.
