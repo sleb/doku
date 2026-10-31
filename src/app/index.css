@@ -14,7 +14,7 @@
   --color-region-10: #d6d3d1;
 }
 
-/* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS. */
+/* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS, starting HOLD_DELAY_MS after press. */
 .hold-glow rect {
   fill: none;
   stroke: #171717;

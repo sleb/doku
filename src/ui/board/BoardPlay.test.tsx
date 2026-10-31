@@ -8,7 +8,7 @@ import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { createGameStore, type GameStore } from "../../store/gameStore";
 import { holdCell as hold } from "../../test/hold";
 import { Board } from "./Board";
-import { HOLD_MS } from "./hold";
+import { HOLD_TOTAL_MS } from "./hold";
 
 // Count the CellView renders that get past memo, per cell index.
 const renders = vi.hoisted(() => ({ byIndex: new Map<number, number>() }));
@@ -27,13 +27,13 @@ vi.mock("./Cell", async (importOriginal) => {
   return { ...orig, CellView };
 });
 
-// Hold Space on the focused cell for HOLD_MS.
+// Hold Space on the focused cell for HOLD_TOTAL_MS.
 function holdSpace(el: HTMLElement) {
   el.focus();
   vi.useFakeTimers();
   try {
     fireEvent.keyDown(el, { key: " " });
-    act(() => vi.advanceTimersByTime(HOLD_MS));
+    act(() => vi.advanceTimersByTime(HOLD_TOTAL_MS));
     fireEvent.keyUp(el, { key: " " });
   } finally {
     vi.useRealTimers();
@@ -108,7 +108,7 @@ describe("playing the board", () => {
 
   test("a hold released early places nothing and costs nothing", () => {
     const { cell, label, hearts, placeFace } = setup();
-    hold(cell(wrongCell), HOLD_MS - 50);
+    hold(cell(wrongCell), HOLD_TOTAL_MS - 50);
     expect(label(wrongCell)).toBe("empty");
     expect(placeFace).not.toHaveBeenCalled();
     expect(hearts()).toBe(3);

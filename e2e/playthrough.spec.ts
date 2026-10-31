@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { HOLD_MS } from "../src/ui/board/hold";
+import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "../src/ui/board/hold";
 
 type Demo = { size: number; solution: number[] };
 
@@ -10,7 +10,7 @@ const demo = JSON.parse(
 const { size, solution } = demo;
 
 // Margin for "nothing happened" waits, past the hold threshold.
-const SETTLE_MS = HOLD_MS + 300;
+const SETTLE_MS = HOLD_TOTAL_MS + 300;
 
 const cell = (page: Page, r: number, c: number): Locator =>
   page.getByRole("button", {
@@ -151,7 +151,7 @@ test("releasing before the hold completes places nothing", async ({ page }) => {
   const target = cell(page, 0, (solution[0] + 1) % size);
   await target.hover();
   await page.mouse.down();
-  await page.waitForTimeout(HOLD_MS / 3);
+  await page.waitForTimeout(HOLD_TOTAL_MS / 3);
   await page.mouse.up();
   await page.waitForTimeout(SETTLE_MS);
   await expect(target).not.toHaveAccessibleName(/, (face|wrong)$/);
@@ -191,6 +191,11 @@ test("the glow traces a visible border mid-hold", async ({ page }) => {
   const target = cell(page, 0, (solution[0] + 1) % size);
   await target.hover();
   await page.mouse.down();
+  // Nothing shows during the delay, so a normal click never animates.
+  await page.waitForTimeout(100);
+  await expect(target).not.toHaveAttribute("data-holding", "true");
+  await expect(target.locator("[data-hold-glow]")).toHaveCount(0);
+  await page.waitForTimeout(HOLD_DELAY_MS - 100);
   const rect = target.locator("[data-hold-glow] rect");
   const read = () =>
     rect.evaluate((el) => {

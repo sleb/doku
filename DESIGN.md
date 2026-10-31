@@ -148,7 +148,7 @@ Hides differences so UI code stays platform-agnostic:
 | Adapter | Desktop | Mobile (phase 2) |
 |---|---|---|
 | `storage` | tauri-plugin-store | same |
-| `input` | click = toggle ✕, hold (500 ms) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 3) | tap = toggle ✕, hold = face (or per toggle); long-press = mark |
+| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 3) | tap = toggle ✕, hold = face (or per toggle); long-press = mark |
 | `haptics` | no-op | vibrate on place/conflict/win |
 | `audio` | WebAudio | same (respect silent switch) |
 | `window` | min size, remembered size | safe-area insets, orientation lock to portrait |

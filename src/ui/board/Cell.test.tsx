@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { Cell } from "../../engine";
 import { CellView } from "./Cell";
-import { HOLD_MS } from "./hold";
+import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
 import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
 
 type Props = Parameters<typeof CellView>[0];
@@ -184,10 +184,10 @@ describe("CellView", () => {
     const tick = (ms: number) => act(() => vi.advanceTimersByTime(ms));
     const holding = (b: HTMLElement) => b.dataset.holding;
 
-    test("holding the pointer for HOLD_MS places a face once", () => {
+    test("holding the pointer for HOLD_TOTAL_MS places a face once", () => {
       const b = renderCell();
       down(b);
-      tick(HOLD_MS - 1);
+      tick(HOLD_TOTAL_MS - 1);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
       tick(1);
       expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
@@ -196,11 +196,11 @@ describe("CellView", () => {
     });
 
     test.each(["pointerUp", "pointerLeave", "pointerCancel"] as const)(
-      "%s before HOLD_MS cancels and the timer stays dead",
+      "%s before HOLD_TOTAL_MS cancels and the timer stays dead",
       (ev) => {
         const b = renderCell();
         down(b);
-        tick(HOLD_MS - 100);
+        tick(HOLD_TOTAL_MS - 100);
         fireEvent[ev](b, { pointerId: 1 });
         tick(5000);
         expect(b.onPlaceFace).not.toHaveBeenCalled();
@@ -221,7 +221,7 @@ describe("CellView", () => {
     test("a completed hold swallows its trailing click", () => {
       const b = renderCell();
       down(b);
-      tick(HOLD_MS);
+      tick(HOLD_TOTAL_MS);
       fireEvent.pointerUp(b);
       fireEvent.click(b, { detail: 1 });
       expect(b.onToggleMark).not.toHaveBeenCalled();
@@ -233,7 +233,7 @@ describe("CellView", () => {
     test("a stale swallow flag is reset by the next pointerdown", () => {
       const b = renderCell();
       down(b);
-      tick(HOLD_MS);
+      tick(HOLD_TOTAL_MS);
       fireEvent.pointerLeave(b); // released elsewhere: no click arrives
       down(b);
       fireEvent.pointerUp(b);
@@ -246,7 +246,7 @@ describe("CellView", () => {
       down(b);
       tick(100);
       fireEvent.keyDown(b, { key: " " }); // ignored: a hold is running
-      tick(HOLD_MS);
+      tick(HOLD_TOTAL_MS);
       expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
       fireEvent.pointerUp(b);
       fireEvent.click(b, { detail: 1 });
@@ -256,7 +256,7 @@ describe("CellView", () => {
     test("a pointer hold then pointerleave does not swallow a later Enter click", () => {
       const b = renderCell();
       down(b);
-      tick(HOLD_MS);
+      tick(HOLD_TOTAL_MS);
       fireEvent.pointerLeave(b); // dragged off: the trailing click never comes
       fireEvent.keyDown(b, { key: "Enter" });
       fireEvent.click(b, { detail: 0 });
@@ -266,7 +266,7 @@ describe("CellView", () => {
     test("a pointer hold then a key press does not swallow the Enter click", () => {
       const b = renderCell();
       down(b);
-      tick(HOLD_MS);
+      tick(HOLD_TOTAL_MS);
       fireEvent.keyDown(b, { key: "Enter" });
       fireEvent.click(b, { detail: 0 });
       expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
@@ -282,7 +282,7 @@ describe("CellView", () => {
     test("non-primary buttons do not start a hold", () => {
       const b = renderCell();
       down(b, { button: 2 });
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
       expect(holding(b)).toBeUndefined();
     });
@@ -292,6 +292,8 @@ describe("CellView", () => {
       expect(holding(b)).toBeUndefined();
       expect(b.querySelector("[data-hold-glow]")).toBeNull();
       down(b);
+      expect(holding(b)).toBeUndefined();
+      tick(HOLD_DELAY_MS);
       expect(holding(b)).toBe("true");
       const glow = b.querySelector("[data-hold-glow]") as SVGElement;
       expect(glow.getAttribute("class")).toContain("pointer-events-none");
@@ -301,6 +303,39 @@ describe("CellView", () => {
       tick(HOLD_MS);
       expect(holding(b)).toBeUndefined();
       expect(b.querySelector("[data-hold-glow]")).toBeNull();
+    });
+
+    test("no glow before the delay; a short click never shows it", () => {
+      const b = renderCell();
+      down(b);
+      tick(HOLD_DELAY_MS - 1);
+      expect(holding(b)).toBeUndefined();
+      expect(b.querySelector("[data-hold-glow]")).toBeNull();
+      fireEvent.pointerUp(b);
+      fireEvent.click(b, { detail: 1 });
+      expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+      tick(5000);
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("the face is not placed after HOLD_MS, only after the delay too", () => {
+      const b = renderCell();
+      down(b);
+      tick(HOLD_MS);
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+      tick(HOLD_DELAY_MS);
+      expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
+    });
+
+    test("releasing during the glow cancels it", () => {
+      const b = renderCell();
+      down(b);
+      tick(HOLD_DELAY_MS + 100);
+      expect(holding(b)).toBe("true");
+      fireEvent.pointerUp(b);
+      expect(holding(b)).toBeUndefined();
+      tick(5000);
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
     });
 
     test("releasing pointer capture lets touch pointers fire leave", () => {
@@ -315,13 +350,14 @@ describe("CellView", () => {
     test("a missing pointer-capture API does not break pointerdown", () => {
       const b = renderCell();
       expect(() => down(b)).not.toThrow();
+      tick(HOLD_DELAY_MS);
       expect(holding(b)).toBe("true");
     });
 
     test("a disabled cell never holds", () => {
       const b = renderCell({ disabled: true });
       down(b);
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
       expect(holding(b)).toBeUndefined();
     });
@@ -343,9 +379,11 @@ describe("CellView", () => {
       const { rerender } = render(<CellView {...props} />);
       const b = screen.getByRole("button");
       down(b);
+      tick(HOLD_DELAY_MS + 10);
+      expect(holding(b)).toBe("true");
       rerender(<CellView {...props} disabled />);
       expect(holding(b)).toBeUndefined();
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(onPlaceFace).not.toHaveBeenCalled();
     });
 
@@ -353,7 +391,7 @@ describe("CellView", () => {
       const b = renderCell();
       down(b);
       cleanup();
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
     });
 
@@ -361,9 +399,11 @@ describe("CellView", () => {
       expect(fireEvent.contextMenu(renderCell())).toBe(false);
     });
 
-    test("holding Space for HOLD_MS places a face once, no toggle", () => {
+    test("holding Space for HOLD_TOTAL_MS places a face once, no toggle", () => {
       const b = renderCell();
       fireEvent.keyDown(b, { key: " " });
+      expect(holding(b)).toBeUndefined();
+      tick(HOLD_DELAY_MS);
       expect(holding(b)).toBe("true");
       tick(HOLD_MS - 1);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
@@ -377,7 +417,7 @@ describe("CellView", () => {
     test("releasing Space early does nothing", () => {
       const b = renderCell();
       fireEvent.keyDown(b, { key: " " });
-      tick(HOLD_MS - 100);
+      tick(HOLD_TOTAL_MS - 100);
       fireEvent.keyUp(b, { key: " " });
       tick(5000);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
@@ -395,12 +435,12 @@ describe("CellView", () => {
     test("Space repeats neither restart nor retrigger, and do not re-fire without keyup", () => {
       const b = renderCell();
       fireEvent.keyDown(b, { key: " " });
-      tick(HOLD_MS - 100);
+      tick(HOLD_TOTAL_MS - 100);
       expect(fireEvent.keyDown(b, { key: " ", repeat: true })).toBe(false);
       tick(100);
       expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
       fireEvent.keyDown(b, { key: " ", repeat: true });
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
     });
 
@@ -408,7 +448,7 @@ describe("CellView", () => {
       const b = renderCell();
       for (const mod of ["ctrlKey", "metaKey", "altKey"])
         fireEvent.keyDown(b, { key: " ", [mod]: true });
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
       expect(holding(b)).toBeUndefined();
     });
@@ -419,7 +459,7 @@ describe("CellView", () => {
       expect(b.onToggleMark).toHaveBeenCalledTimes(1);
       fireEvent.keyDown(b, { key: "Enter" });
       expect(holding(b)).toBeUndefined();
-      tick(HOLD_MS * 2);
+      tick(HOLD_TOTAL_MS * 2);
       expect(b.onPlaceFace).not.toHaveBeenCalled();
     });
   });
