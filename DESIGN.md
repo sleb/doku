@@ -91,6 +91,8 @@ Rules of the system:
 
 ## 5. State management (`src/store`)
 
+Milestone 2 low-level design (store, board UI, HUD, tests): `docs/BOARD_DESIGN.md`.
+
 A single game store modelled as an explicit state machine:
 
 ```
