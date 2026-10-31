@@ -1,27 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { level7 } from "./__fixtures__/levels";
+import { multiSolutionLevel7 } from "./__fixtures__/levels";
 import type { Level } from "./types";
 import { LevelError, loadLevel, validateLevel } from "./validate";
 
 const withRegions = (edit: (regions: number[][]) => void): Level => {
-  const regions = level7.regions.map((row) => [...row]);
+  const regions = multiSolutionLevel7.regions.map((row) => [...row]);
   edit(regions);
-  return { ...level7, regions };
+  return { ...multiSolutionLevel7, regions };
 };
 
 const rules = (level: Level) => validateLevel(level).map((i) => i.rule);
 
 describe("validateLevel", () => {
   it("accepts a well-formed level", () => {
-    expect(validateLevel(level7)).toEqual([]);
+    expect(validateLevel(multiSolutionLevel7)).toEqual([]);
   });
 
   it.each([6, 12])("rejects size %i", (size) => {
-    expect(rules({ ...level7, size })).toEqual(["size"]);
+    expect(rules({ ...multiSolutionLevel7, size })).toEqual(["size"]);
   });
 
   it("rejects regions with the wrong number of rows", () => {
-    const level = { ...level7, regions: level7.regions.slice(0, 6) };
+    const level = {
+      ...multiSolutionLevel7,
+      regions: multiSolutionLevel7.regions.slice(0, 6),
+    };
     expect(rules(level)).toEqual(["regions-shape"]);
   });
 
@@ -56,20 +59,20 @@ describe("validateLevel", () => {
   });
 
   it("rejects a solution of the wrong length", () => {
-    expect(rules({ ...level7, solution: [1, 3, 5, 0, 2, 4] })).toEqual([
-      "solution-shape",
-    ]);
+    expect(
+      rules({ ...multiSolutionLevel7, solution: [1, 3, 5, 0, 2, 4] }),
+    ).toEqual(["solution-shape"]);
   });
 
   it("rejects a solution entry out of range", () => {
-    expect(rules({ ...level7, solution: [1, 3, 5, 0, 2, 4, 9] })).toEqual([
-      "solution-shape",
-    ]);
+    expect(
+      rules({ ...multiSolutionLevel7, solution: [1, 3, 5, 0, 2, 4, 9] }),
+    ).toEqual(["solution-shape"]);
   });
 
   it("rejects two faces in the same column", () => {
     const issues = validateLevel({
-      ...level7,
+      ...multiSolutionLevel7,
       solution: [1, 4, 6, 1, 3, 5, 0],
     }).filter((i) => i.rule === "col");
     expect(issues).toHaveLength(1);
@@ -91,7 +94,7 @@ describe("validateLevel", () => {
 
   it("rejects faces that touch diagonally, naming the cells", () => {
     const issues = validateLevel({
-      ...level7,
+      ...multiSolutionLevel7,
       solution: [0, 1, 3, 5, 2, 4, 6],
     });
     expect(issues).toEqual([
@@ -120,7 +123,7 @@ describe("validateLevel", () => {
   });
 
   it("skips solution checks when the structure is invalid", () => {
-    const level = { ...level7, size: 12, solution: [0, 0, 0] };
+    const level = { ...multiSolutionLevel7, size: 12, solution: [0, 0, 0] };
     expect(rules(level)).toEqual(["size"]);
   });
 });
@@ -129,22 +132,25 @@ describe("loadLevel", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it("returns a valid level unchanged", () => {
-    expect(loadLevel(level7)).toBe(level7);
+    expect(loadLevel(multiSolutionLevel7)).toBe(multiSolutionLevel7);
   });
 
   it("throws naming the rule and offending cells", () => {
-    const bad = { ...level7, solution: [0, 1, 3, 5, 2, 4, 6] };
+    const bad = { ...multiSolutionLevel7, solution: [0, 1, 3, 5, 2, 4, 6] };
     expect(() => loadLevel(bad)).toThrow(LevelError);
     expect(() => loadLevel(bad)).toThrow(/adjacent.*\(0,0\).*\(1,1\)/);
   });
 
   it("throws describing the failed structural check", () => {
-    const bad = { ...level7, regions: level7.regions.slice(0, 6) };
+    const bad = {
+      ...multiSolutionLevel7,
+      regions: multiSolutionLevel7.regions.slice(0, 6),
+    };
     expect(() => loadLevel(bad)).toThrow(/regions-shape/);
   });
 
   it("carries the issues on the error", () => {
-    const bad = { ...level7, size: 12 };
+    const bad = { ...multiSolutionLevel7, size: 12 };
     try {
       loadLevel(bad);
       expect.unreachable();
@@ -155,7 +161,7 @@ describe("loadLevel", () => {
 
   it("skips validation outside dev builds", () => {
     vi.stubEnv("DEV", false);
-    const bad = { ...level7, solution: [0, 1, 3, 5, 2, 4, 6] };
+    const bad = { ...multiSolutionLevel7, solution: [0, 1, 3, 5, 2, 4, 6] };
     expect(loadLevel(bad)).toBe(bad);
   });
 });

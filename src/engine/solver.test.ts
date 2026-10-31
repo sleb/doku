@@ -1,27 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { level7, uniqueLevel7 } from "./__fixtures__/levels";
+import {
+  multiSolutionLevel7,
+  noSolutionLevel7,
+  uniqueLevel7,
+} from "./__fixtures__/levels";
 import * as engine from "./index";
 import { findConflicts, isSolved } from "./rules";
 import { countSolutions, solve } from "./solver";
 import { Cell, type Level } from "./types";
-
-// Regions 0 and 1 are single cells at (0,0) and (1,1), which touch, so no
-// placement can satisfy both. Without the adjacency rule it has 5 placements,
-// so this is the only obstruction.
-const unsolvable: Level = {
-  id: "unsolvable-7",
-  size: 7,
-  regions: [
-    [0, 5, 5, 5, 5, 2, 2],
-    [5, 1, 5, 4, 5, 2, 2],
-    [5, 5, 5, 4, 2, 2, 2],
-    [5, 5, 4, 4, 4, 4, 2],
-    [5, 5, 4, 4, 4, 3, 6],
-    [5, 5, 4, 4, 6, 6, 6],
-    [5, 5, 5, 4, 6, 6, 6],
-  ],
-  solution: [0, 0, 0, 0, 0, 0, 0],
-};
 
 const toBoard = (level: Level, placement: number[]) => {
   const board = new Uint8Array(level.size * level.size);
@@ -37,7 +23,7 @@ describe("solve", () => {
   });
 
   it("returns null when no placement exists", () => {
-    expect(solve(unsolvable)).toBeNull();
+    expect(solve(noSolutionLevel7)).toBeNull();
   });
 
   it("ignores level.solution", () => {
@@ -46,10 +32,10 @@ describe("solve", () => {
   });
 
   it("returns a conflict-free placement for a multi-solution level", () => {
-    const placement = solve(level7);
-    expect(placement).toHaveLength(level7.size);
-    const board = toBoard(level7, placement as number[]);
-    expect(findConflicts(board, level7)).toEqual([]);
+    const placement = solve(multiSolutionLevel7);
+    expect(placement).toHaveLength(multiSolutionLevel7.size);
+    const board = toBoard(multiSolutionLevel7, placement as number[]);
+    expect(findConflicts(board, multiSolutionLevel7)).toEqual([]);
   });
 
   it("agrees with isSolved on the unique level", () => {
@@ -64,21 +50,23 @@ describe("countSolutions", () => {
   });
 
   it("defaults the limit to 2", () => {
-    expect(countSolutions(level7)).toBe(2);
+    expect(countSolutions(multiSolutionLevel7)).toBe(2);
     expect(countSolutions(uniqueLevel7)).toBe(1);
   });
 
   it("stops at the limit for an ambiguous level", () => {
-    expect(countSolutions(level7, 2)).toBe(2);
-    expect(countSolutions(level7, 1)).toBe(1);
+    expect(countSolutions(multiSolutionLevel7, 2)).toBe(2);
+    expect(countSolutions(multiSolutionLevel7, 1)).toBe(1);
   });
 
   it("counts every solution when unbounded, proving the early stop", () => {
-    expect(countSolutions(level7, Number.POSITIVE_INFINITY)).toBeGreaterThan(2);
+    expect(
+      countSolutions(multiSolutionLevel7, Number.POSITIVE_INFINITY),
+    ).toBeGreaterThan(2);
   });
 
-  it("returns 0 for an unsolvable level", () => {
-    expect(countSolutions(unsolvable, 2)).toBe(0);
+  it("returns 0 for a level with no solution", () => {
+    expect(countSolutions(noSolutionLevel7, 2)).toBe(0);
   });
 
   it("returns 0 for a non-positive limit", () => {
@@ -120,8 +108,8 @@ describe("countSolutions vs brute force", () => {
   });
 
   it("matches the unbounded count on the ambiguous fixture", () => {
-    expect(countSolutions(level7, Number.POSITIVE_INFINITY)).toBe(
-      bruteForceCount(level7),
+    expect(countSolutions(multiSolutionLevel7, Number.POSITIVE_INFINITY)).toBe(
+      bruteForceCount(multiSolutionLevel7),
     );
   });
 });

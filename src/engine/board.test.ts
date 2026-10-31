@@ -1,12 +1,12 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { level7 } from "./__fixtures__/levels";
+import { multiSolutionLevel7 } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
 import type { Board, Coord, Level, Tier } from "./index";
 import { Cell } from "./types";
 
 describe("emptyBoard", () => {
   it("creates an N×N board with every cell empty", () => {
-    const board = emptyBoard(level7);
+    const board = emptyBoard(multiSolutionLevel7);
     expect(board.length).toBe(49);
     expect(Array.from(board).every((c) => c === Cell.Empty)).toBe(true);
   });
@@ -15,7 +15,7 @@ describe("emptyBoard", () => {
     expectTypeOf(emptyBoard).returns.toEqualTypeOf<Board>();
     expectTypeOf<Board>().toEqualTypeOf<Readonly<Uint8Array>>();
     // @ts-expect-error a Board cannot be indexed for writing
-    (emptyBoard(level7) as Board)[0] = Cell.Face;
+    (emptyBoard(multiSolutionLevel7) as Board)[0] = Cell.Face;
   });
 });
 

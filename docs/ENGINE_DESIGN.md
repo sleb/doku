@@ -246,9 +246,10 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coor
 | Kind | What |
 |---|---|
 | Soundness (property) | For many generated puzzles, run `solveByTechniques` and assert no `Deduction` eliminates a solution cell and every `place` is a solution cell. This is the most important test. |
-| Uniqueness | `countSolutions(p, 2) === 1` for every generated and every fixture level; the backtracker's solution equals `level.solution`. |
+| Uniqueness | `countSolutions(p, 2) === 1` for every generated level and the unique fixtures (the multi-solution and no-solution fixtures are deliberate exceptions); the backtracker's solution equals `level.solution`. |
 | Solver agreement | When `solveByTechniques` solves, its placements equal `level.solution`. `solve(p)` equals `level.solution` for every unique level, and returns `null` for a fixture with no valid placement. |
 | Determinism | `generate(o)` called twice (and across runs) returns deep-equal levels. |
+| Fixture set | `src/engine/__fixtures__/levels.ts` exports `uniqueLevel7`, `uniqueLevel11`, `multiSolutionLevel7`, `noSolutionLevel7` and a `fixtures` list with each one's purpose. `fixtures.test.ts` proves the properties each claims. `noSolutionLevel7` has a dummy solution and deliberately fails `validateLevel`. |
 | Golden fixtures | A handful of hand-written levels per tier with expected `rate()` and expected first-hint technique. Locks the ladder's behavior against regressions. |
 | Technique unit tests | One small crafted board per technique showing exactly the deduction it should make (and that earlier techniques make none). |
 | Rules | `judgeTap`, `findConflicts` on crafted boards covering each conflict kind; `isSolved` on partial, full, and wrong boards. |
