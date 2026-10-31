@@ -62,7 +62,10 @@ describe("Board", () => {
         conflicts={new Set([2])}
       />,
     );
-    const get = (c: number) => screen.getAllByRole("button")[c];
+    const get = (c: number) =>
+      screen.getByRole("button", {
+        name: new RegExp(`^Row 1, column ${c + 1},`),
+      });
     expect(get(0).querySelector("[data-icon]")).toBeNull();
     expect(get(0).getAttribute("aria-label")).toMatch(/empty$/);
     expect(get(1).querySelector("[data-icon=mark]")).not.toBeNull();
@@ -71,6 +74,21 @@ describe("Board", () => {
     expect(get(2).dataset.conflict).toBe("true");
     expect(get(3).querySelector("[data-icon=wrong]")).not.toBeNull();
     expect(get(3).getAttribute("aria-label")).toMatch(/wrong$/);
+  });
+
+  test("cell size budget uses dvh and subtracts the frame border", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+      />,
+    );
+    const cell = screen.getByRole("grid").style.getPropertyValue("--cell");
+    expect(cell).toContain("100dvh");
+    expect(cell).not.toContain("100vh");
+    expect(cell.match(/- 8px/g)).toHaveLength(2);
   });
 
   test("thick borders match cellGeometry for every cell", () => {
@@ -82,9 +100,10 @@ describe("Board", () => {
         conflicts={none}
       />,
     );
-    const buttons = screen.getAllByRole("button");
     for (const g of cellGeometry(level)) {
-      const cls = buttons[g.index].className;
+      const cls = screen.getByRole("button", {
+        name: new RegExp(`^Row ${g.row + 1}, column ${g.col + 1},`),
+      }).className;
       expect(cls.includes("border-r-4")).toBe(g.thickRight);
       expect(cls.includes("border-b-4")).toBe(g.thickBottom);
     }

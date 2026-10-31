@@ -16,7 +16,8 @@ export function Board({ level, board, wrong, conflicts }: BoardProps) {
   const style = {
     "--n": size,
     "--cell":
-      "min(calc((100vw - 2rem) / var(--n)), calc((100vh - 9rem) / var(--n)), 4.5rem)",
+      // Budgets subtract the frame's border-4 (2 x 4px) so large boards fit.
+      "min(calc((100vw - 2rem - 8px) / var(--n)), calc((100dvh - 9rem - 8px) / var(--n)), 4.5rem)",
     gridTemplateColumns: "repeat(var(--n), var(--cell))",
     gridAutoRows: "var(--cell)",
   } as CSSProperties;

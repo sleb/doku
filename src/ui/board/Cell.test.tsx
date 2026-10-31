@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { Cell } from "../../engine";
 import { CellView } from "./Cell";
-import { GLYPH_COLOR, REGION_BG, WRONG_COLOR } from "./palette";
+import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
 
 type Props = Parameters<typeof CellView>[0];
 
@@ -11,7 +11,7 @@ function renderCell(over: Partial<Props> = {}) {
     index: 17,
     row: 1,
     col: 2,
-    region: 5,
+    region: REGION,
     thickRight: false,
     thickBottom: false,
     state: Cell.Empty,
@@ -23,12 +23,15 @@ function renderCell(over: Partial<Props> = {}) {
   return screen.getByRole("button");
 }
 
+const REGION = 5;
+const NAME = REGION_NAMES[REGION];
+
 const icon = (b: HTMLElement) => b.querySelector("[data-icon]");
 
 describe("CellView", () => {
   test("labels each state with row, column, region and state", () => {
     expect(renderCell().getAttribute("aria-label")).toBe(
-      "Row 2, column 3, teal region, empty",
+      `Row 2, column 3, ${NAME} region, empty`,
     );
   });
 
@@ -39,7 +42,7 @@ describe("CellView", () => {
   ] as const)("%j shows %s with the %s icon", (over, label, kind) => {
     const b = renderCell(over);
     expect(b.getAttribute("aria-label")).toBe(
-      `Row 2, column 3, teal region, ${label}`,
+      `Row 2, column 3, ${NAME} region, ${label}`,
     );
     expect(icon(b)?.getAttribute("data-icon")).toBe(kind);
   });
