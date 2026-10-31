@@ -6,9 +6,9 @@ Companion to `DESIGN.md` §5 and §7 for milestone 2 ("Playable desktop board", 
 
 A player opens the desktop app, plays one level from start to finish, loses hearts on wrong taps, and reaches a win or lose result with a retry button.
 
-In scope: Zustand game store, `<Board>`/`<Cell>`, `<Hearts>`/top bar, `<ResultModal>`, click input, Tailwind setup, test harness (RTL + Playwright).
+In scope: Zustand game store, `<Board>`/`<Cell>`, `<Hearts>`/top bar, `<ResultModal>`, click input plus two cell keys (`x`, `Space`), Tailwind setup, test harness (RTL + Playwright).
 
-Out of scope (milestone 3+): level select, persistence, undo/redo, hints, timer/stars, settings, keyboard navigation, right-click and drag-to-paint marks, color-blind palette, mobile, wrong-tap animation.
+Out of scope (milestone 3+): level select, persistence, undo/redo, hints, timer/stars, settings, arrow-key navigation, right-click and drag-to-paint marks, color-blind palette, mobile, wrong-tap animation.
 
 Constraints carried from the design docs:
 
@@ -211,7 +211,7 @@ export const CellView = memo(function CellView(props: CellProps) { ... });
 
 - Pure presentational; never reads the store. All props are primitives or the stable callbacks, so `memo` skips every cell except the one whose `state` changed. A change re-renders `Board` (new `board` array) but only one `CellView`.
 - Background from the region palette; `Face` shows `<FaceIcon/>`; a `Mark` shows `<MarkIcon/>` (neutral ✕), or with `isWrong` `<WrongIcon/>`, a red ✕ (the red must keep ≥ 3:1 contrast on every region color, same requirement as the glyphs below); `isConflict` adds a ring.
-- Gesture mapping, in the cell's `onClick`: `e.detail >= 2` → `onPlaceFace(index)`, otherwise `onToggleMark(index)`. A double-tap therefore fires a toggle on the first click (no wait for a double-click timeout, so a single tap responds instantly) and a face attempt on the second; the face attempt works from either the fresh ✕ or the cell it was toggled off from. Keyboard activation has `detail === 0`, so Enter/Space toggles a ✕ only; placing a face by keyboard is part of milestone 3's keyboard work. Touch double-tap on mobile is checked in milestone 5.
+- Gesture mapping, in the cell's `onClick`: `e.detail >= 2` → `onPlaceFace(index)`, otherwise `onToggleMark(index)`. A double-tap therefore fires a toggle on the first click (no wait for a double-click timeout, so a single tap responds instantly) and a face attempt on the second; the face attempt works from either the fresh ✕ or the cell it was toggled off from. Keyboard input is handled in the cell's `onKeyDown`, acting on the focused cell: `x` calls `onToggleMark(index)` and `Space` calls `onPlaceFace(index)` (both `preventDefault`, so Space does not also fire a click; Enter keeps its native click, which toggles a ✕). Disabled cells ignore the keys. This gives tests and keyboard players a deterministic way to place faces without double-click timing; arrow-key navigation between cells stays in milestone 3. Touch double-tap on mobile is checked in milestone 5.
 - Label: `"Row {row+1}, column {col+1}, {regionName} region, {empty|marked|face|wrong}"` (matches `DESIGN.md` §7, which will be updated to say the label is on the button inside the gridcell).
 - `disabled` sets the button's `disabled` attribute. `Board` passes `disabled = status !== "playing" || state === Cell.Face || wrong.has(index)`, so faces, wrong ✕s and the whole board behind the result modal are inert. The player's own ✕ stays enabled so it can be removed.
 
@@ -287,16 +287,16 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 
 **Components, jsdom**
 
-- `CellView`: renders empty/face/wrong with the right label (wrong shows the red ✕); single click calls `onToggleMark(index)`, double-click calls `onPlaceFace(index)` (user-event's `dblClick` sets `detail`); `disabled` blocks both, and face and wrong cells are disabled while the player's ✕ is not; `isConflict` adds the ring; re-render with identical props does not re-render (spy via a render counter in a wrapper).
+- `CellView`: renders empty/face/wrong with the right label (wrong shows the red ✕); single click calls `onToggleMark(index)`, double-click calls `onPlaceFace(index)` (user-event's `dblClick` sets `detail`); `x` on a focused cell calls `onToggleMark(index)` and `Space` calls `onPlaceFace(index)` without a click; `disabled` blocks both, and face and wrong cells are disabled while the player's ✕ is not; `isConflict` adds the ring; re-render with identical props does not re-render (spy via a render counter in a wrapper).
 - `Board`: N rows × N gridcells; labels carry row, column, region name; region-border classes appear where `geometry` says; tapping one cell re-renders only that `CellView`.
 - `Hearts`: `aria-label` for 3/2/0 remaining; correct number of filled icons.
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
-- `GameScreen` (real store): double-clicking each solution cell shows the win dialog; three wrong double-clicks show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; Retry returns to a fresh board with 3 hearts.
+- `GameScreen` (real store): double-clicking each solution cell shows the win dialog; three wrong double-clicks show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; focusing a solution cell and pressing `Space` places a face, `x` toggles a ✕; Retry returns to a fresh board with 3 hearts.
 
 **E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7.json`, locating cells by `aria-label` and reading the solution from the JSON:
 
-1. Win: double-click all 7 solution cells → "You solved it" → Retry → fresh board.
-2. Lose: double-click three different non-solution cells (one heart each) → "Out of hearts" → Retry.
+1. Win: focus each of the 7 solution cells and press `Space` (plus a double-click on one cell to cover the mouse gesture) → "You solved it" → Retry → fresh board.
+2. Lose: focus three different non-solution cells and press `Space` (one heart each) → "Out of hearts" → Retry.
 
 ## 8. Decisions
 
