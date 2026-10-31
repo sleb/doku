@@ -1,8 +1,9 @@
+import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Cell } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import { MAX_HEARTS } from "./game";
-import { createGameStore } from "./gameStore";
+import { createGameStore, gameStore, useGameStore } from "./gameStore";
 
 describe("createGameStore", () => {
   it("starts idle and starts a level", () => {
@@ -225,5 +226,20 @@ describe("createGameStore", () => {
     expect(() => store.getState().placeFace(uniqueLevel7.size ** 2)).toThrow(
       RangeError,
     );
+  });
+});
+
+describe("useGameStore singleton", () => {
+  it("is a selector hook sharing state with gameStore", () => {
+    const { result } = renderHook(() => useGameStore((s) => s.hearts));
+    expect(result.current).toBe(MAX_HEARTS);
+    const status = renderHook(() => useGameStore((s) => s.status));
+    act(() => useGameStore.getState().startLevel(uniqueLevel7));
+    expect(status.result.current).toBe("playing");
+    expect(gameStore.getState().status).toBe("playing");
+    act(() =>
+      gameStore.getState().placeFace(0 === uniqueLevel7.solution[0] ? 1 : 0),
+    );
+    expect(result.current).toBe(MAX_HEARTS - 1);
   });
 });
