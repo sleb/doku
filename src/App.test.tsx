@@ -1,25 +1,50 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, expect, test } from "vitest";
 import App from "./App";
 import { demoLevel } from "./levels/demoLevel";
-import { REGION_BG, REGION_NAMES } from "./ui/board/palette";
+import { idleState } from "./store/game";
+import { gameStore } from "./store/gameStore";
+import { REGION_BG } from "./ui/board/palette";
 
-test("shows the title and demo level id", () => {
+beforeEach(() => gameStore.setState(idleState, false));
+
+test("renders the demo level board with its id in the top bar", () => {
   render(<App />);
-  expect(screen.getByRole("heading", { name: "Doku" })).toBeInTheDocument();
-  expect(screen.getByText(demoLevel.id)).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: demoLevel.id }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("grid", { name: "Puzzle board" }),
+  ).toBeInTheDocument();
 });
 
-test("has no Tauri scaffold", () => {
+test("cells carry their region background class", () => {
+  render(<App />);
+  const region = demoLevel.regions[0][0];
+  expect(screen.getByRole("button", { name: /^Row 1, column 1,/ })).toHaveClass(
+    REGION_BG[region],
+  );
+});
+
+test("has no scaffold input or palette swatches", () => {
   render(<App />);
   expect(screen.queryByRole("textbox")).toBeNull();
-  expect(screen.queryByRole("button")).toBeNull();
-  expect(screen.queryByRole("img")).toBeNull();
+  expect(screen.queryByTestId("swatch-red")).toBeNull();
 });
 
-test("renders a palette swatch per region with its class", () => {
+test("solving the demo level shows the result dialog", async () => {
   render(<App />);
-  REGION_NAMES.forEach((name, i) => {
-    expect(screen.getByTestId(`swatch-${name}`)).toHaveClass(REGION_BG[i]);
-  });
+  const user = userEvent.setup();
+  const { size, solution } = demoLevel;
+  for (let r = 0; r < size; r++) {
+    await user.dblClick(
+      screen.getByRole("button", {
+        name: new RegExp(`^Row ${r + 1}, column ${solution[r] + 1},`),
+      }),
+    );
+  }
+  expect(
+    screen.getByRole("dialog", { name: "You solved it" }),
+  ).toBeInTheDocument();
 });
