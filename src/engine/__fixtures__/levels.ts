@@ -43,7 +43,7 @@ export const uniqueLevel11: Level = {
 // placement. Regions are row bands, so it is connected. Use as the default
 // well-formed level and wherever a test needs the solver to find several.
 export const multiSolutionLevel7: Level = {
-  id: "fixture-7",
+  id: "fixture-multi-solution-7",
   size: 7,
   regions: [0, 1, 2, 3, 4, 5, 6].map((r) => Array<number>(7).fill(r)),
   solution: [1, 3, 5, 0, 2, 4, 6],

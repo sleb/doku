@@ -19,6 +19,22 @@ const solvedBoard = (level: Level) => {
   return board;
 };
 
+// Test-only brute force: one face per row, column and region, adjacency ignored.
+const countWithoutAdjacency = (level: Level): number => {
+  const n = level.size;
+  const walk = (r: number, cols: Set<number>, regs: Set<number>): number => {
+    if (r === n) return 1;
+    let total = 0;
+    for (let c = 0; c < n; c++) {
+      const reg = level.regions[r][c];
+      if (cols.has(c) || regs.has(reg)) continue;
+      total += walk(r + 1, new Set(cols).add(c), new Set(regs).add(reg));
+    }
+    return total;
+  };
+  return walk(0, new Set(), new Set());
+};
+
 describe.each([
   ["uniqueLevel7", uniqueLevel7, 7],
   ["uniqueLevel11", uniqueLevel11, 11],
@@ -52,6 +68,17 @@ describe("noSolutionLevel7", () => {
   it("has no solution", () => {
     expect(countSolutions(noSolutionLevel7)).toBe(0);
     expect(solve(noSolutionLevel7)).toBeNull();
+  });
+
+  it("has well-formed regions; only its dummy solution is invalid", () => {
+    const issues = validateLevel(noSolutionLevel7);
+    expect(issues.length).toBeGreaterThan(0);
+    const solutionRules = ["col", "region", "adjacent"];
+    expect(issues.filter((i) => !solutionRules.includes(i.rule))).toEqual([]);
+  });
+
+  it("has 5 placements once the adjacency rule is removed", () => {
+    expect(countWithoutAdjacency(noSolutionLevel7)).toBe(5);
   });
 });
 
