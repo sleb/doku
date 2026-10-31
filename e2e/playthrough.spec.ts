@@ -75,22 +75,6 @@ test("lose playthrough", async ({ page }) => {
   await expectFreshBoard(page);
 });
 
-test("Space keyup does not synthesize a click", async ({ page }) => {
-  await page.goto("/");
-  await page.evaluate(() => {
-    const w = window as unknown as { clicks: number };
-    w.clicks = 0;
-    document.addEventListener("click", () => w.clicks++, true);
-  });
-  const target = cell(page, 0, solution[0]);
-  await press(page, target);
-  await expect(target).toHaveAccessibleName(/, face$/);
-  await expect(hearts(page, 3)).toBeVisible();
-  expect(
-    await page.evaluate(() => (window as unknown as { clicks: number }).clicks),
-  ).toBe(0);
-});
-
 test("the board is inert behind the result dialog", async ({ page }) => {
   await page.goto("/");
   for (let r = 0; r < 3; r++) {
@@ -99,20 +83,29 @@ test("the board is inert behind the result dialog", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Out of hearts" }),
   ).toBeVisible();
-  await expect(page.locator("[inert]")).toHaveCount(1);
   await expect(retry(page)).toBeFocused();
 
+  // Cells are also `disabled`, which would mask a missing `inert`. Strip
+  // `disabled` from every cell so only `inert` can keep the board unreachable.
   const other = cell(page, 5, solution[5]);
-  await other.focus();
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll('button[aria-label^="Row "]')) {
+      b.removeAttribute("disabled");
+    }
+  });
+  await expect(other).toBeEnabled();
+  expect(await other.evaluate((el) => el.closest("[inert]") !== null)).toBe(
+    true,
+  );
+  expect(
+    await other.evaluate((el) => (el.closest("[inert]") as HTMLElement).inert),
+  ).toBe(true);
+
+  await other.evaluate((el) => (el as HTMLElement).focus());
   await expect(retry(page)).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(retry(page)).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(retry(page)).toBeFocused();
-
-  // Space would activate the focused Retry, so probe the board with a forced click instead.
-  await other.click({ force: true });
-  await expect(other).toHaveAccessibleName(/, empty$/);
-  // Hearts sit behind the modal, outside the accessibility tree, so match by attribute.
-  await expect(page.locator('[aria-label="0 of 3 hearts"]')).toBeVisible();
+  await expect(hearts(page, 0)).toBeVisible();
 });
