@@ -85,7 +85,7 @@ describe("Board", () => {
     expect(get(3).getAttribute("aria-label")).toMatch(/wrong$/);
   });
 
-  test("cell size budget uses dvh and subtracts the frame border", () => {
+  test("cell size budget uses container units and subtracts the frame border", () => {
     render(
       <Board
         level={level}
@@ -97,8 +97,11 @@ describe("Board", () => {
       />,
     );
     const cell = screen.getByRole("grid").style.getPropertyValue("--cell");
-    expect(cell).toContain("100dvh");
-    expect(cell).not.toContain("100vh");
+    expect(cell).toContain("100cqw");
+    expect(cell).toContain("100cqh");
+    expect(cell).toContain("4.5rem");
+    expect(cell).not.toContain("vw");
+    expect(cell).not.toContain("dvh");
     expect(cell.match(/- 8px/g)).toHaveLength(2);
   });
 

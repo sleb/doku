@@ -5,6 +5,7 @@ import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
+import { GameLayout } from "./GameLayout";
 import { ResultModal } from "./ResultModal";
 
 export function GameScreen({ level }: { level: Level }) {
@@ -35,18 +36,22 @@ export function GameScreen({ level }: { level: Level }) {
   const finished = status !== "playing";
   return (
     <>
-      <TopBar level={level} hearts={hearts} />
-      <div inert={finished}>
-        <Board
-          level={level}
-          board={board}
-          wrong={wrong}
-          conflicts={conflicts}
-          disabled={finished}
-          onToggleMark={toggleMark}
-          onPlaceFace={placeFace}
-        />
-      </div>
+      <GameLayout
+        header={<TopBar level={level} hearts={hearts} />}
+        board={
+          <div inert={finished}>
+            <Board
+              level={level}
+              board={board}
+              wrong={wrong}
+              conflicts={conflicts}
+              disabled={finished}
+              onToggleMark={toggleMark}
+              onPlaceFace={placeFace}
+            />
+          </div>
+        }
+      />
       <ResultModal status={status} onRetry={restart} />
     </>
   );

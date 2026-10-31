@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, test } from "vitest";
 import App from "./App";
-import { demoLevel } from "./levels/demoLevel";
+import { demoLevel, demoLevel11 } from "./levels/demoLevel";
 import { idleState } from "./store/game";
 import { gameStore } from "./store/gameStore";
 import { holdCell } from "./test/hold";
@@ -46,4 +46,25 @@ test("solving the demo level shows the result dialog", async () => {
   expect(
     screen.getByRole("dialog", { name: "You solved it" }),
   ).toBeInTheDocument();
+});
+
+test("main fills the viewport height and is not shrink-wrapped", () => {
+  render(<App />);
+  const main = screen.getByRole("main");
+  expect(main).toHaveClass("h-dvh");
+  expect(main).not.toHaveClass("w-fit");
+  expect(main).not.toHaveClass("px-4");
+});
+
+test("?level=demo-11 selects the 11x11 demo level", () => {
+  window.history.pushState({}, "", "/?level=demo-11");
+  try {
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: demoLevel11.id }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(121);
+  } finally {
+    window.history.pushState({}, "", "/");
+  }
 });
