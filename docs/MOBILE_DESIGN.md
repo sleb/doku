@@ -1,10 +1,10 @@
 # Doku: Milestone 3 low-level design (mobile)
 
-Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the Android and iOS builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
+Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
 ## 1. Goals and non-goals
 
-**Goal:** the existing single-level game is installable and comfortably playable on a phone: Android first, then iOS (roadmap order; see §10 question 1). "Playable" means an 11×11 board fits any phone viewport with no scrolling, the existing hold-to-place gesture (250 ms delay, 500 ms glow) works unchanged under a finger, and a win or a wrong tap is felt as well as seen.
+**Goal:** the existing single-level game is installable and comfortably playable on a phone: iOS first, then Android (decision 6). "Playable" means an 11×11 board fits any phone viewport with no scrolling, the existing hold-to-place gesture (250 ms delay, 500 ms glow) works unchanged under a finger, and a win or a wrong tap is felt as well as seen.
 
 **Non-goals (still later milestones):** level select, persistence and resume-after-kill (M4: backgrounding keeps the WebView alive and a dead app loses one level, which is acceptable until saves exist), undo/redo, hints, timer, settings screen, sound, store release (signing, TestFlight, Play Console), color-blind palette. Wrong-tap animation stays M6.
 
@@ -132,7 +132,7 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 - **iOS:** development team through `TAURI_APPLE_DEVELOPMENT_TEAM` or `bundle.iOS.developmentTeam`; no secrets committed. A free Apple ID builds to a personal device and the simulator.
 - **Dev loop:** `vite.config.ts` already honors `TAURI_DEV_HOST`, which is what `tauri android dev` and `tauri ios dev` set so the device can reach the dev server on port 1420. The `strictPort` and HMR ports (1420/1421) must be free and the device on the same network.
 
-**This machine today:** Xcode is installed, but only the `aarch64-apple-darwin` Rust target is present (no `aarch64-apple-ios`, `aarch64-apple-ios-sim`, or the Android triples), and `ANDROID_HOME` and `JAVA_HOME` are unset. Setup is a prerequisite step in the first native issue (§9): Android Studio SDK, NDK, JDK 17, then `rustup target add` for the triples the init output asks for. See §10 question 1.
+**This machine today:** Xcode is installed, but only the `aarch64-apple-darwin` Rust target is present (no `aarch64-apple-ios`, `aarch64-apple-ios-sim`, or the Android triples), and `ANDROID_HOME` and `JAVA_HOME` are unset. iOS is first, so M3-05 needs only `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` (plus `x86_64-apple-ios` for an Intel simulator) and a configured Xcode. The Android SDK, NDK, JDK 17 and the Android triples are set up in M3-06.
 
 ## 8. Testing (strict TDD, written failing first)
 
@@ -160,13 +160,13 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 2. **M3-02 Web-view hardening and safe areas:** §5.
 3. **M3-03 Mobile Playwright projects and specs:** §8 E2E. Lands with or just after 01/02 so the layout is tested as built.
 4. **M3-04 Haptics seam:** §6, with the plugin stubbed (no native project needed: the adapter is a no-op off Tauri-mobile).
-5. **M3-05 Native shell + Android build:** §7, environment setup, `android init`, plugin and capability wiring, runs on a device or emulator, passes the manual checklist, tunes anything it finds (cell floor, hold slop, §10 question 2).
-6. **M3-06 iOS build:** same on a simulator and, if available, a device.
+5. **M3-05 Native shell + iOS build:** §7, `ios init`, the shared plugin and capability wiring, runs on the simulator and, if available, a device, passes the manual checklist, tunes anything it finds (cell floor, hold slop, §10 question 2). Also confirms `env()` insets and the WKWebView glow rendering.
+6. **M3-06 Android build:** `android init`, SDK/NDK/JDK setup, `VIBRATE` in the merged manifest, runs on an emulator or device, repeats the checklist, and checks the Android inset caveat (§5).
 7. **M3-07 Docs sync:** §11.
 
 ## 10. Open questions
 
-1. **Platform order.** The roadmap says Android then iOS, but this machine has Xcode and no Android SDK. Default: follow the roadmap (06 stays after 05) unless a device is only available for iOS; the two native issues are independent so they can swap.
+1. **Resolved:** platform order is iOS first, then Android (decision 6).
 2. **Hold tolerance on touch.** `useHold` cancels on `pointerleave` with no slack (`BOARD_DESIGN.md` §8.8), which on a 26–30 px cell may cancel a normal, slightly jittery press. Default: leave it and decide from the device pass (M3-05/06); if needed, add a small movement slop for `pointerType === "touch"` (cancel only after more than ~10 px travel) rather than widening the cell.
 3. **Zoom or magnifier for dense boards.** If 26 px cells prove too small on the smallest phones, options are a tap-and-hold magnifier or pinch-zoom of the board. Deferred; free ✕ taps and the deliberate hold are the mitigation for now.
 4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirm when `ios init` shows the generated target.
@@ -185,3 +185,4 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 3. **`src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so feedback is testable without a device and the store stays side-effect free.
 4. **Haptics only for outcomes** (place, wrong, win, lose), never for the free ✕.
 5. **Commit `src-tauri/gen`**, ignoring build outputs.
+6. **iOS first, then Android.** This machine already has Xcode and no Android SDK, and iOS is the stricter WebView (WKWebView) for the glow and insets. This reverses the `DESIGN.md` §12 order; the two native issues are independent.
