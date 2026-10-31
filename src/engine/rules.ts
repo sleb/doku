@@ -74,6 +74,10 @@ export type TapJudgement = "correct" | "wrong";
  * row-major index (`r * size + c`), not a row or column. Throws RangeError for
  * anything that is not an integer in `[0, size * size)`: a bad index is a
  * caller bug and must not cost the player a heart.
+ *
+ * Trusts `level.solution` as ground truth and assumes the level has already
+ * passed `validateLevel`/`loadLevel` (a unique, well-formed solution); it does
+ * not check this itself.
  */
 export function judgeTap(level: Level, cell: number): TapJudgement {
   const n = level.size;
