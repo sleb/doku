@@ -99,3 +99,21 @@ test("360x300 stays stacked: board fits and cells are not smaller than stacked g
   // The wide layout would give ~16px cells here; stacked gives ~20px.
   expect(await firstCellWidth(page)).toBeGreaterThanOrEqual(19);
 });
+
+test("stacked layout keeps >= 8px between header and board", async ({
+  page,
+}) => {
+  await open(page, 400, 800);
+  const header = await box(page, "[data-area=header]");
+  const board = await box(page, "[data-area=board]");
+  expect(board.y - (header.y + header.height)).toBeGreaterThanOrEqual(8);
+});
+
+test("wide layout keeps >= 8px between board and side column", async ({
+  page,
+}) => {
+  await open(page, 1280, 800);
+  const header = await box(page, "[data-area=header]");
+  const board = await box(page, "[data-area=board]");
+  expect(header.x - (board.x + board.width)).toBeGreaterThanOrEqual(8);
+});

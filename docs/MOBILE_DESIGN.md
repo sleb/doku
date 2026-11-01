@@ -39,7 +39,7 @@ One mechanism, container queries, serves phones in both orientations and the des
 ### 4.1 Structure
 
 ```
-<main class="h-dvh [container-type:size]">      app root, fills the viewport
+<main class="h-dvh safe-padding [container-type:size]">  app root, fills the viewport, pads by the insets
   <GameLayout>                                    CSS grid, two templates (below)
     header   → <TopBar>  (level id, hearts)
     board    → <Board>   (centered in its cell, sized to fit)
@@ -62,7 +62,7 @@ Replace the viewport math in `Board.tsx` with the area's own size:
 );
 ```
 
-The `8px` is the frame's `border-4` (2 × 4px), as today. The area carries the safe-area and gutter padding (§5), so the board needs no knowledge of insets or of the other bars. `4.5rem` stays the desktop cap. `cqw`/`cqh` are supported in WKWebView 16+ and Android System WebView 105+, which is within Tauri 2's mobile minimums (iOS 13 target is the one to check: see §10 question 4).
+The `8px` is the frame's `border-4` (2 × 4px), as today. `main` carries the safe-area and gutter padding (§5) and `.game-layout` a `0.5rem` gap between areas, so the board needs no knowledge of insets or of the other bars. `4.5rem` stays the desktop cap. `cqw`/`cqh` are supported in WKWebView 16+ and Android System WebView 105+, which is within Tauri 2's mobile minimums (iOS 13 target is the one to check: see §10 question 4).
 
 **Smallest case to design for:** 11×11 at 320×568 (iPhone SE). With 8 px gutters the board is 304 − 8 = 296 px, giving 26 px cells. Tall layouts leave the height for it (header ≈ 48). That is small but legible; the fallback if the device pass finds it unplayable is a pinch/zoom mode, which is explicitly deferred (§10 question 3).
 
@@ -75,7 +75,7 @@ The header uses `rem`, so system text scaling grows it; the board's glyphs scale
 All in `index.html` and `app/index.css`; no JS.
 
 - **Viewport:** `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`. `viewport-fit=cover` is what makes `env(safe-area-inset-*)` non-zero on iOS. Zoom is not locked with `user-scalable=no`: the board always fits, and keeping zoom available costs nothing in accessibility.
-- **Insets:** `main` has `padding: max(env(safe-area-inset-top), 0.5rem) max(env(safe-area-inset-right), 0.5rem) max(env(safe-area-inset-bottom), 0.5rem) max(env(safe-area-inset-left), 0.5rem)`. The page background is set on `html` and `body` so the status-bar and home-indicator regions are not white.
+- **Insets:** `:root` defines `--safe-top/right/bottom/left: max(env(safe-area-inset-X), 0.5rem)` in `app/index.css`. the `.safe-padding` class pads with all four tokens (`main` is border-box, so `h-dvh` is still the full viewport) and the board area has no padding of its own (`.game-layout` supplies a `0.5rem` gap between the board and the header/controls or side column), so the board measures only the space inside the insets. The result modal's overlay is `fixed inset-0` and also uses `.safe-padding`, so the dim covers the inset regions while the dialog clears them. `container-type: size` on `main` is deliberate: it is the layout's size container and makes `main` the overlay's containing block; its padding box is the full viewport, so the overlay still reaches the screen edges. The page background is set on `html` and `body` so the status-bar and home-indicator regions are not white.
 - **Android caveat:** Android WebViews report `env()` insets as 0 unless the host window is edge-to-edge and Tauri forwards insets. §7 makes confirming this the first thing done on a device; if insets are 0 the app simply runs below the system bars (the Tauri default), which is acceptable and needs no change.
 - **No bounce, refresh, or zoom gestures:** `html, body { overscroll-behavior: none; overflow: hidden; }`, `body { touch-action: manipulation; }` (kills double-tap zoom without blocking pinch). Cells already carry `touch-none select-none` and the callout/tap-highlight rules from #55.
 - **Orientation:** not locked. This reverses `DESIGN.md` §8 ("orientation lock to portrait"): §4's layout handles landscape, so a lock would only add per-platform manifest edits and break tablets. Revisit only if the device pass finds landscape unplayable.
@@ -156,7 +156,7 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 
 Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance criteria as in M1/M2. Order is mostly sequential because later work needs the earlier layout; web-only work (01–03) needs no device.
 
-1. **M3-01 Responsive layout:** §4. `GameLayout`, container-query sizing, side panel on wide, removes the viewport-math `--cell` and the `main` padding.
+1. **M3-01 Responsive layout:** §4. `GameLayout`, container-query sizing, side panel on wide, removes the viewport-math `--cell`; `main` keeps the safe-area padding (M3-02).
 2. **M3-02 Web-view hardening and safe areas:** §5.
 3. **M3-03 Mobile Playwright projects and specs:** §8 E2E. Lands with or just after 01/02 so the layout is tested as built.
 4. **M3-04 Haptics seam:** §6, with the plugin stubbed (no native project needed: the adapter is a no-op off Tauri-mobile).

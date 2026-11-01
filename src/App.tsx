@@ -11,9 +11,11 @@ const level =
 
 function App() {
   return (
-    // container-type: size makes main the containing block for position:fixed
-    // descendants (ResultModal); revisit in M3-02 safe-area work.
-    <main className="h-dvh [container-type:size]">
+    // container-type: size is deliberate: it makes main the size container for
+    // the layout and the containing block for position:fixed descendants
+    // (ResultModal). main's padding box is the full viewport, so the overlay
+    // still dims the inset regions; main's padding keeps content inside them.
+    <main className="h-dvh safe-padding [container-type:size]">
       <GameScreen level={level} />
     </main>
   );
