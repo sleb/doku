@@ -192,7 +192,7 @@ interface BoardProps {
 
 - `const geometry = useMemo(() => cellGeometry(level), [level])`.
 - Renders `role="grid"` with `aria-label="Puzzle board"`, `aria-rowcount`/`aria-colcount`, and N `role="row"` wrappers using `display: contents` so the CSS grid sees the cells directly. Each `role="gridcell"` contains one `<button>` (the focusable, labelled element).
-- Sizing: the page `main` is `w-fit max-w-full px-4` (no fixed max width) so it grows to the board and the TopBar spans exactly the board's width; the 2rem horizontal budget below equals that padding. Container sets `--n: {size}` and `--cell: min((100vw - 2rem) / var(--n), (100vh - 9rem) / var(--n), 4.5rem)`; `grid-template-columns: repeat(var(--n), var(--cell))`. At the default 800×600 window an 11×11 board is ≈ 40 px per cell, which stays tappable with a pointer.
+- Sizing: the board sizes from its own container, not the viewport. `GameLayout` (`src/ui/screens/GameLayout.tsx`) puts the board in a `container-type: size` area (`.game-board-area`, padding `.5rem` set in `src/app/index.css`) inside a full-height `main` (`h-dvh`, also a size container). Container sets `--n: {size}` and `--cell: min((100cqw - 8px) / var(--n), (100cqh - 8px) / var(--n), 4.5rem)` (8px = the frame `border-4` in `Board.tsx`; keep them in sync); `grid-template-columns: repeat(var(--n), var(--cell))`. Tall layouts stack header, board, controls; at container aspect >= 1.2 and width >= 36rem the header and controls move to a side column. An 11x11 board fits without scrolling at 320x568 (cells ~26 px).
 - Tab order: every button is tabbable in M2 (no roving tabindex). Enter/Space work natively. Real keyboard navigation is milestone 3.
 
 ### 4.3 `<Cell>`

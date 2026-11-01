@@ -29,8 +29,8 @@ export function Board({
   const style = {
     "--n": size,
     "--cell":
-      // Budgets subtract the frame's border-4 (2 x 4px) so large boards fit.
-      "min(calc((100vw - 2rem - 8px) / var(--n)), calc((100dvh - 9rem - 8px) / var(--n)), 4.5rem)",
+      // Sized from the board area's container (GameLayout). Budgets subtract the frame's border-4 (2 x 4px) so large boards fit.
+      "min(calc((100cqw - 8px) / var(--n)), calc((100cqh - 8px) / var(--n)), 4.5rem)",
     gridTemplateColumns: "repeat(var(--n), var(--cell))",
     gridAutoRows: "var(--cell)",
   } as CSSProperties;

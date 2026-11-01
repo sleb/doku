@@ -46,6 +46,18 @@ function hold(cells: number[]) {
 }
 
 describe("GameScreen", () => {
+  test("places the top bar and board in the layout header and board areas", () => {
+    render(<GameScreen level={level} />);
+    expect(screen.getByRole("banner").closest("[data-area]")).toHaveAttribute(
+      "data-area",
+      "header",
+    );
+    expect(screen.getByRole("grid").closest("[data-area]")).toHaveAttribute(
+      "data-area",
+      "board",
+    );
+  });
+
   test("renders the top bar and grid with no dialog while playing", () => {
     render(<GameScreen level={level} />);
     expect(screen.getByRole("heading", { name: level.id })).toBeInTheDocument();
