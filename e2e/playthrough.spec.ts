@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "../src/ui/board/hold";
+import { cell, hearts, press } from "./helpers";
 
 type Demo = { size: number; solution: number[] };
 
@@ -11,22 +12,6 @@ const { size, solution } = demo;
 
 // Margin for "nothing happened" waits, past the hold threshold.
 const SETTLE_MS = HOLD_TOTAL_MS + 300;
-
-const cell = (page: Page, r: number, c: number): Locator =>
-  page.getByRole("button", {
-    name: new RegExp(`^Row ${r + 1}, column ${c + 1},`),
-  });
-
-const hearts = (page: Page, n: number): Locator =>
-  page.getByRole("img", { name: `${n} of 3 hearts` });
-
-/** Hold Space on a focused cell until it commits (state assertion), then release. */
-async function press(page: Page, target: Locator): Promise<void> {
-  await target.focus();
-  await page.keyboard.down("Space");
-  await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
-  await page.keyboard.up("Space");
-}
 
 /** Mouse-hold a cell until it commits (state assertion), then release. */
 async function mouseHold(page: Page, target: Locator): Promise<void> {

@@ -2,6 +2,8 @@
 
 Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
+**Status:** M3-01 to M3-04 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam). M3-05 (iOS) and M3-06 (Android) are pending (#63/#64), so every native item in §7 and the device pass in §8 are still planned. M3-07 (#65) is a partial doc sync; `DESIGN.md` §7 to §9 and §13 and `README.md` are synced, and the native items get recorded after #63/#64.
+
 ## 1. Goals and non-goals
 
 **Goal:** the existing single-level game is installable and comfortably playable on a phone: iOS first, then Android (decision 6). "Playable" means an 11×11 board fits any phone viewport with no scrolling, the existing hold-to-place gesture (250 ms delay, 500 ms glow) works unchanged under a finger, and a win or a wrong tap is felt as well as seen.
@@ -39,11 +41,11 @@ One mechanism, container queries, serves phones in both orientations and the des
 ### 4.1 Structure
 
 ```
-<main class="h-dvh [container-type:size]">      app root, fills the viewport
+<main class="h-dvh safe-padding [container-type:size]">  app root, fills the viewport, pads by the insets
   <GameLayout>                                    CSS grid, two templates (below)
     header   → <TopBar>  (level id, hearts)
     board    → <Board>   (centered in its cell, sized to fit)
-    controls → (empty in M3; undo, redo, hint arrive in M4)
+    controls → (rendered only when provided; absent in M3, undo, redo, hint arrive in M4)
 ```
 
 - **Tall** (default; container aspect ratio below 1.2): one column, rows `auto 1fr auto` = header, board, controls.
@@ -62,7 +64,7 @@ Replace the viewport math in `Board.tsx` with the area's own size:
 );
 ```
 
-The `8px` is the frame's `border-4` (2 × 4px), as today. The area carries the safe-area and gutter padding (§5), so the board needs no knowledge of insets or of the other bars. `4.5rem` stays the desktop cap. `cqw`/`cqh` are supported in WKWebView 16+ and Android System WebView 105+, which is within Tauri 2's mobile minimums (iOS 13 target is the one to check: see §10 question 4).
+The `8px` is the frame's `border-4` (2 × 4px), as today. `main` carries the safe-area and gutter padding (§5) and `.game-layout` a `0.5rem` gap between areas, so the board needs no knowledge of insets or of the other bars. `4.5rem` stays the desktop cap. `cqw`/`cqh` are supported in WKWebView 16+ and Android System WebView 105+, which is within Tauri 2's mobile minimums (iOS 13 target is the one to check: see §10 question 4).
 
 **Smallest case to design for:** 11×11 at 320×568 (iPhone SE). With 8 px gutters the board is 304 − 8 = 296 px, giving 26 px cells. Tall layouts leave the height for it (header ≈ 48). That is small but legible; the fallback if the device pass finds it unplayable is a pinch/zoom mode, which is explicitly deferred (§10 question 3).
 
@@ -75,7 +77,7 @@ The header uses `rem`, so system text scaling grows it; the board's glyphs scale
 All in `index.html` and `app/index.css`; no JS.
 
 - **Viewport:** `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`. `viewport-fit=cover` is what makes `env(safe-area-inset-*)` non-zero on iOS. Zoom is not locked with `user-scalable=no`: the board always fits, and keeping zoom available costs nothing in accessibility.
-- **Insets:** `main` has `padding: max(env(safe-area-inset-top), 0.5rem) max(env(safe-area-inset-right), 0.5rem) max(env(safe-area-inset-bottom), 0.5rem) max(env(safe-area-inset-left), 0.5rem)`. The page background is set on `html` and `body` so the status-bar and home-indicator regions are not white.
+- **Insets:** `:root` defines `--safe-top/right/bottom/left: max(env(safe-area-inset-X), 0.5rem)` in `app/index.css`. the `.safe-padding` class pads with all four tokens (`main` is border-box, so `h-dvh` is still the full viewport) and the board area has no padding of its own (`.game-layout` supplies a `0.5rem` gap between the board and the header/controls or side column), so the board measures only the space inside the insets. The result modal's overlay is `fixed inset-0` and also uses `.safe-padding`, so the dim covers the inset regions while the dialog clears them. `container-type: size` on `main` is deliberate: it is the layout's size container and makes `main` the overlay's containing block; its padding box is the full viewport, so the overlay still reaches the screen edges. The page background is set on `html` and `body` so the status-bar and home-indicator regions are not white.
 - **Android caveat:** Android WebViews report `env()` insets as 0 unless the host window is edge-to-edge and Tauri forwards insets. §7 makes confirming this the first thing done on a device; if insets are 0 the app simply runs below the system bars (the Tauri default), which is acceptable and needs no change.
 - **No bounce, refresh, or zoom gestures:** `html, body { overscroll-behavior: none; overflow: hidden; }`, `body { touch-action: manipulation; }` (kills double-tap zoom without blocking pinch). Cells already carry `touch-none select-none` and the callout/tap-highlight rules from #55.
 - **Orientation:** not locked. This reverses `DESIGN.md` §8 ("orientation lock to portrait"): §4's layout handles landscape, so a lock would only add per-platform manifest edits and break tablets. Revisit only if the device pass finds landscape unplayable.
@@ -90,14 +92,17 @@ This introduces the adapter layer from `DESIGN.md` §8 for the first time. Only 
 // src/platform/haptics.ts
 export type HapticKind = "place" | "wrong" | "win" | "lose";
 export interface Haptics { play(kind: HapticKind): Promise<void> }
-export const haptics: Haptics;   // chosen once at module load
+export function createHaptics(deps?: { isTauri(): boolean; loadPlugin(): Promise<Plugin> }): Haptics;
+export const haptics: Haptics;   // createHaptics() with the real deps
 ```
+
+`createHaptics` takes injectable `isTauri` and `loadPlugin` so the mapping is unit-tested with fakes. The plugin is loaded with `await import("@tauri-apps/plugin-haptics")` inside `play`, so the web build keeps it in a separate, never-fetched chunk. `play` wraps everything in try/catch and always resolves.
 
 Adapters, picked by `isTauri()` (`"__TAURI_INTERNALS__" in window`):
 
 | Where | Implementation |
 |---|---|
-| Tauri on Android/iOS | `@tauri-apps/plugin-haptics`: `place` → `impactFeedback("light")`, `wrong` → `notificationFeedback("warning")`, `win` → `notificationFeedback("success")`, `lose` → `notificationFeedback("error")` |
+| Tauri (plugin registered on mobile only, M3-05) | `@tauri-apps/plugin-haptics`: `place` → `impactFeedback("light")`, `wrong` → `notificationFeedback("warning")`, `win` → `notificationFeedback("success")`, `lose` → `notificationFeedback("error")` |
 | Tauri on desktop, web, tests | no-op (the plugin is registered only for mobile, and calls are wrapped so a rejected invoke is swallowed) |
 
 `navigator.vibrate` is deliberately not used: WKWebView does not implement it and the Android pattern is a poor match for the semantic kinds. Every call is `void`-ed and its rejection caught: a failed buzz must never break gameplay.
@@ -145,9 +150,9 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 - `GameLayout`: renders header and board slots (class-level only; geometry is covered in e2e).
 
 **E2E, Playwright** (`bun run test:e2e`, new projects in `playwright.config.ts`)
-- Add `mobile-chromium` (`devices["Pixel 7"]`, touch enabled) and `mobile-webkit` (`devices["iPhone 14"]`). WebKit is the closest stand-in for WKWebView and finally covers the "WebKit is unverified" gap noted in `BOARD_DESIGN.md` §4.3. Existing desktop specs keep running on `chromium` only; the new `e2e/mobile.spec.ts` runs on the mobile projects.
+- Add `mobile-chromium` (`devices["Pixel 7"]`, touch enabled) and `mobile-webkit` (`devices["iPhone 14"]`). WebKit is the closest stand-in for WKWebView and finally covers the "WebKit is unverified" gap noted in `BOARD_DESIGN.md` §4.3. Existing desktop specs keep running on `chromium` only; the new `e2e/mobile.spec.ts` runs on the mobile projects. Routing is by `testIgnore: /mobile\.spec\.ts/` on `chromium` and `testMatch: /mobile\.spec\.ts/` on both mobile projects; `webview.spec.ts` stays desktop-only. Shared helpers live in `e2e/helpers.ts`. CI installs `chromium webkit`.
 - Layout (touch-agnostic, assert geometry): at 375×667 and 320×568, an 11×11 board lies entirely inside the viewport, the document does not scroll (`scrollHeight <= innerHeight`), and no cell is smaller than a recorded floor (22 px, the 320-wide 11×11 case). At 667×375 the wide template applies (controls to the right of the board).
-- Touch playthrough: tap a cell → ✕; hold each solution cell with dispatched touch pointer events (`pointerType: "touch"`; `page.touchscreen` only taps) → "You solved it"; drag off mid-hold cancels; a tap never shows the glow. Assert state, never fixed timings beyond `HOLD_TOTAL_MS` plus margin, as in `playthrough.spec.ts`.
+- Touch playthrough: tap a cell → ✕; hold each solution cell with dispatched `PointerEvent`s (`pointerType: "touch"`, via `locator.evaluate`, portable across engines; `page.touchscreen` only taps, so plain taps use `locator.tap()`). Synthetic events skip implicit capture and click synthesis, so the helper sends `pointerup` then `click` explicitly to exercise `swallowClick` → "You solved it"; drag off mid-hold cancels; a tap never shows the glow. Assert state, never fixed timings beyond `HOLD_TOTAL_MS` plus margin, as in `playthrough.spec.ts`.
 - Not testable in CI and therefore manual: safe-area insets, haptics, the callout/selection suppression on a real long-press, and Android edge-to-edge.
 
 **Manual device pass** (a checklist in the PR, per `DESIGN.md` §11), run on one Android device or emulator and one iOS simulator/device: 11×11 and 7×7 fit; no scroll, bounce or zoom; insets clear the notch and home indicator; tap and hold both work; a long-press shows no callout or selection; each haptic kind is distinguishable; rotate and the layout switches; kill and relaunch yields a fresh level (expected until M4).
@@ -156,7 +161,7 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 
 Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance criteria as in M1/M2. Order is mostly sequential because later work needs the earlier layout; web-only work (01–03) needs no device.
 
-1. **M3-01 Responsive layout:** §4. `GameLayout`, container-query sizing, side panel on wide, removes the viewport-math `--cell` and the `main` padding.
+1. **M3-01 Responsive layout:** §4. `GameLayout`, container-query sizing, side panel on wide, removes the viewport-math `--cell`; `main` keeps the safe-area padding (M3-02).
 2. **M3-02 Web-view hardening and safe areas:** §5.
 3. **M3-03 Mobile Playwright projects and specs:** §8 E2E. Lands with or just after 01/02 so the layout is tested as built.
 4. **M3-04 Haptics seam:** §6, with the plugin stubbed (no native project needed: the adapter is a no-op off Tauri-mobile).
@@ -174,9 +179,11 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 
 ## 11. Doc sync checklist (M3-07)
 
-- `DESIGN.md` §8: `input` mobile column becomes "same as desktop: tap = ✕, hold = face" (drop "long-press = mark"); drop the orientation lock; `window` row says "safe-area insets via CSS `env()`". §7: layout (including the desktop side panel) moves to M3; `<InputModeToggle>` is not part of M3 (it stays tied to #57). §9: record the haptics plugin and the mobile capability file. §12 unchanged. §13: add the decisions below.
-- `BOARD_DESIGN.md` §4.2: sizing now comes from the board area (§4.2 here).
-- `README.md`: add this document to the docs index, plus the mobile dev commands (`bun tauri android dev`, `bun tauri ios dev`) and the toolchain prerequisites.
+Status: done for everything that landed in M3-01 to M3-04; items marked *pending* wait on #63/#64.
+
+- `DESIGN.md` §8: `input` mobile column becomes "same as desktop: tap = ✕, hold = face" (drop "long-press = mark"); drop the orientation lock; `window` row says "safe-area insets via CSS `env()`". §7: layout (including the desktop side panel) moves to M3; `<InputModeToggle>` is not part of M3 (it stays tied to #57). §9: record the haptics plugin and the mobile capability file (recorded as planned; *pending* the native wiring). §12 unchanged. §13: add the decisions below (done).
+- `BOARD_DESIGN.md` §4.2: sizing now comes from the board area (§4.2 here). Done.
+- `README.md`: add this document to the docs index, plus the mobile dev commands (`bun tauri android dev`, `bun tauri ios dev`) and the toolchain prerequisites. Done, labeled pending since the native projects do not exist yet.
 
 ## 12. Decisions
 

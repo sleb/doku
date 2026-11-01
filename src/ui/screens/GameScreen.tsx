@@ -1,10 +1,13 @@
 import { useEffect, useMemo } from "react";
 import type { Level } from "../../engine";
+import { feedbackFor } from "../../platform/feedback";
+import { haptics } from "../../platform/haptics";
 import { idleState } from "../../store/game";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
+import { GameLayout } from "./GameLayout";
 import { ResultModal } from "./ResultModal";
 
 export function GameScreen({ level }: { level: Level }) {
@@ -22,6 +25,18 @@ export function GameScreen({ level }: { level: Level }) {
     return () => gameStore.setState(idleState, false);
   }, [startLevel, level]);
 
+  // Buzz for the outcome of each store change. Subscribed once per mount. The
+  // unmount reset to idle stays silent even mid-game: idle has full hearts and
+  // no board, so there is no heart drop, no face increase, and status is idle.
+  useEffect(
+    () =>
+      gameStore.subscribe((next, prev) => {
+        const kind = feedbackFor(prev, next);
+        if (kind) void haptics.play(kind);
+      }),
+    [],
+  );
+
   // Still needed: on the first render of a new `level` prop the store holds the
   // previous level's board until the effect above has run.
   const fresh = storeLevel === level;
@@ -35,18 +50,22 @@ export function GameScreen({ level }: { level: Level }) {
   const finished = status !== "playing";
   return (
     <>
-      <TopBar level={level} hearts={hearts} />
-      <div inert={finished}>
-        <Board
-          level={level}
-          board={board}
-          wrong={wrong}
-          conflicts={conflicts}
-          disabled={finished}
-          onToggleMark={toggleMark}
-          onPlaceFace={placeFace}
-        />
-      </div>
+      <GameLayout
+        header={<TopBar level={level} hearts={hearts} />}
+        board={
+          <div inert={finished}>
+            <Board
+              level={level}
+              board={board}
+              wrong={wrong}
+              conflicts={conflicts}
+              disabled={finished}
+              onToggleMark={toggleMark}
+              onPlaceFace={placeFace}
+            />
+          </div>
+        }
+      />
       <ResultModal status={status} onRetry={restart} />
     </>
   );
