@@ -15,7 +15,7 @@ function App() {
     // the layout and the containing block for position:fixed descendants
     // (ResultModal). main's padding box is the full viewport, so the overlay
     // still dims the inset regions; main's padding keeps content inside them.
-    <main className="h-dvh p-[var(--safe-top)_var(--safe-right)_var(--safe-bottom)_var(--safe-left)] [container-type:size]">
+    <main className="h-dvh safe-padding [container-type:size]">
       <GameScreen level={level} />
     </main>
   );

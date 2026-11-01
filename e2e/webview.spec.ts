@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { press } from "./helpers";
 
 const { solution } = JSON.parse(
   readFileSync(new URL("../src/levels/demo-7.json", import.meta.url), "utf8"),
@@ -76,10 +77,7 @@ test("result overlay fills the viewport and the dialog clears insets", async ({
     const target = page.getByRole("button", {
       name: new RegExp(`^Row ${r + 1}, column ${solution[r] + 1},`),
     });
-    await target.focus();
-    await page.keyboard.down("Space");
-    await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
-    await page.keyboard.up("Space");
+    await press(page, target);
   }
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();

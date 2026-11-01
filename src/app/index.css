@@ -21,6 +21,10 @@
   --safe-left: max(env(safe-area-inset-left), 0.5rem);
 }
 
+.safe-padding {
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
 /* No scroll, rubber-band or pull-to-refresh; the background also fills the inset regions. */
 html,
 body {
@@ -76,6 +80,7 @@ body {
 .game-layout {
   display: grid;
   height: 100%;
+  gap: 0.5rem;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
