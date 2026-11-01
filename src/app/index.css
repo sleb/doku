@@ -37,6 +37,17 @@ body {
   touch-action: manipulation;
 }
 
+/* A game, not a document: no selection handles, loupe or copy/paste menu. Set on every element, not
+   just body: WKWebView still starts the text loupe from a touch that lands on an unstyled wrapper
+   (e.g. a disabled cell, which does not receive the touch itself). The prefix is required there. */
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 /* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS, starting HOLD_DELAY_MS after press. */
 .hold-glow rect {
   fill: none;
