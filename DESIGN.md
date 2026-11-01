@@ -124,7 +124,7 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
      │    │    ├─ header   → <TopBar>  <BackButton/> <LevelTitle/> <Timer/> <Hearts/> <MenuButton/>
      │    │    ├─ board    → <Board>
      │    │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | <ConflictHighlight/>
-     │    │    └─ controls → <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/>  (empty until M4)
+     │    │    └─ controls → <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/>  (rendered only when provided; absent until M4)
      │    ├─ <PauseOverlay/>
      │    ├─ <HintToast/>
      │    └─ <ResultModal>  (win: time/stars/next · lose: retry)

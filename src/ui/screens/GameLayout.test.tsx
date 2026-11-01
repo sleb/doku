@@ -32,5 +32,22 @@ test("board area is a size container", () => {
   expect(container.querySelector("[data-area=board]")).toHaveClass(
     "game-board-area",
   );
-  expect(container.querySelector("[data-area=controls]")).toBeEmptyDOMElement();
+});
+
+test("controls area is absent when no controls are provided", () => {
+  const { container } = render(
+    <GameLayout header={<p>h</p>} board={<p>b</p>} />,
+  );
+  expect(container.querySelector("[data-area=controls]")).toBeNull();
+  expect(container.firstElementChild).toHaveClass("game-layout--no-controls");
+});
+
+test("controls area is present when controls are provided", () => {
+  const { container } = render(
+    <GameLayout header={<p>h</p>} board={<p>b</p>} controls={<p>c</p>} />,
+  );
+  expect(container.querySelector("[data-area=controls]")).not.toBeNull();
+  expect(container.firstElementChild).not.toHaveClass(
+    "game-layout--no-controls",
+  );
 });

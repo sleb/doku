@@ -56,9 +56,9 @@ test("main fills the viewport height and is not shrink-wrapped", () => {
   expect(main).not.toHaveClass("px-4");
 });
 
-test("renders a banner landmark for the top bar", () => {
+test("renders the top bar", () => {
   render(<App />);
-  expect(screen.getByRole("banner")).toBeInTheDocument();
+  expect(screen.getByTestId("top-bar")).toBeInTheDocument();
 });
 
 test("?level=demo-11 selects the 11x11 demo level (read once at load)", async () => {

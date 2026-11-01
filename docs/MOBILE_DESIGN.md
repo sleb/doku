@@ -45,7 +45,7 @@ One mechanism, container queries, serves phones in both orientations and the des
   <GameLayout>                                    CSS grid, two templates (below)
     header   → <TopBar>  (level id, hearts)
     board    → <Board>   (centered in its cell, sized to fit)
-    controls → (empty in M3; undo, redo, hint arrive in M4)
+    controls → (rendered only when provided; absent in M3, undo, redo, hint arrive in M4)
 ```
 
 - **Tall** (default; container aspect ratio below 1.2): one column, rows `auto 1fr auto` = header, board, controls.

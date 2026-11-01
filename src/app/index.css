@@ -89,6 +89,14 @@ body {
     "controls";
 }
 
+/* No controls slot: no controls row, so no phantom row or gap below the board. */
+.game-layout--no-controls {
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "header"
+    "board";
+}
+
 .game-header {
   grid-area: header;
   padding: 0.5rem 1rem;
@@ -116,6 +124,13 @@ body {
       "board header"
       "board ."
       "board controls";
+  }
+
+  .game-layout--no-controls {
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "board header"
+      "board .";
   }
 
   .game-header,

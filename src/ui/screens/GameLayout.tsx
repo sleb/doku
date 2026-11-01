@@ -13,16 +13,20 @@ interface GameLayoutProps {
  */
 export function GameLayout({ header, board, controls }: GameLayoutProps) {
   return (
-    <div className="game-layout">
+    <div
+      className={`game-layout${controls ? "" : " game-layout--no-controls"}`}
+    >
       <div data-area="header" className="game-header">
         {header}
       </div>
       <div data-area="board" className="game-board-area">
         {board}
       </div>
-      <div data-area="controls" className="game-controls">
-        {controls}
-      </div>
+      {controls ? (
+        <div data-area="controls" className="game-controls">
+          {controls}
+        </div>
+      ) : null}
     </div>
   );
 }

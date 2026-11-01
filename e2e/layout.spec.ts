@@ -88,3 +88,13 @@ test("wide layout keeps >= 8px between board and side column", async ({
   const board = await box(page, "[data-area=board]");
   expect(header.x - (board.x + board.width)).toBeGreaterThanOrEqual(8);
 });
+
+test("stacked layout reserves no phantom row below the board", async ({
+  page,
+}) => {
+  await open(page, 400, 800);
+  const board = await box(page, "[data-area=board]");
+  const layout = await box(page, ".game-layout");
+  expect(await page.locator("[data-area=controls]").count()).toBe(0);
+  expect(layout.y + layout.height - (board.y + board.height)).toBeLessThan(0.5);
+});
