@@ -6,11 +6,16 @@ import {
   uniqueLevel7 as level,
   uniqueLevel11,
 } from "../../engine/__fixtures__/levels";
+import { haptics } from "../../platform/haptics";
 import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
 import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
+
+vi.mock("../../platform/haptics", () => ({
+  haptics: { play: vi.fn().mockResolvedValue(undefined) },
+}));
 
 vi.mock("../../store/selectors", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../store/selectors")>();
@@ -30,7 +35,10 @@ const cell = (i: number) =>
 const label = (i: number) =>
   cell(i).getAttribute("aria-label")?.split(", ").pop();
 
-beforeEach(() => gameStore.setState(idleState, false));
+beforeEach(() => {
+  gameStore.setState(idleState, false);
+  vi.mocked(haptics.play).mockClear();
+});
 afterEach(() => vi.restoreAllMocks());
 
 /** Records the dialog present at first commit, before passive effects run. */
@@ -201,5 +209,85 @@ describe("GameScreen", () => {
     for (const [board, lvl] of vi.mocked(conflictCells).mock.calls) {
       expect(board).toHaveLength(lvl.size * lvl.size);
     }
+  });
+
+  describe("haptics", () => {
+    const play = () => vi.mocked(haptics.play);
+
+    test("a correct hold plays place once", () => {
+      render(<GameScreen level={level} />);
+      hold([solution[0]]);
+      expect(play().mock.calls).toEqual([["place"]]);
+    });
+
+    test("a wrong hold plays wrong once", () => {
+      render(<GameScreen level={level} />);
+      hold([nonSolution[0]]);
+      expect(play().mock.calls).toEqual([["wrong"]]);
+    });
+
+    test("a cross tap is silent", async () => {
+      render(<GameScreen level={level} />);
+      await userEvent.click(cell(nonSolution[0]));
+      expect(play()).not.toHaveBeenCalled();
+    });
+
+    test("the final correct hold plays only win", () => {
+      render(<GameScreen level={level} />);
+      hold(solution.slice(0, -1));
+      play().mockClear();
+      hold(solution.slice(-1));
+      expect(play().mock.calls).toEqual([["win"]]);
+    });
+
+    test("losing the last heart plays only lose", () => {
+      render(<GameScreen level={level} />);
+      hold(nonSolution.slice(0, 2));
+      play().mockClear();
+      hold(nonSolution.slice(2, 3));
+      expect(play().mock.calls).toEqual([["lose"]]);
+    });
+
+    test("Retry is silent", async () => {
+      render(<GameScreen level={level} />);
+      hold(nonSolution.slice(0, 3));
+      play().mockClear();
+      await userEvent.click(screen.getByRole("button", { name: /retry/i }));
+      expect(play()).not.toHaveBeenCalled();
+    });
+
+    test("after unmount, store changes are silent", () => {
+      const { unmount } = render(<GameScreen level={level} />);
+      unmount();
+      gameStore.setState(startLevel(level), false);
+      gameStore.getState().placeFace(solution[0]);
+      expect(play()).not.toHaveBeenCalled();
+    });
+
+    test("unmounting mid-game plays nothing", () => {
+      const { unmount } = render(<GameScreen level={level} />);
+      hold([solution[0], nonSolution[0]]);
+      play().mockClear();
+      unmount();
+      expect(play()).not.toHaveBeenCalled();
+    });
+
+    test("buzzes once under StrictMode", () => {
+      render(
+        <StrictMode>
+          <GameScreen level={level} />
+        </StrictMode>,
+      );
+      hold([solution[0]]);
+      expect(play().mock.calls).toEqual([["place"]]);
+    });
+
+    test("changing level neither buzzes nor stacks subscriptions", () => {
+      const { rerender } = render(<GameScreen level={level} />);
+      rerender(<GameScreen level={uniqueLevel11} />);
+      expect(play()).not.toHaveBeenCalled();
+      hold([uniqueLevel11.solution[0]]);
+      expect(play().mock.calls).toHaveLength(1);
+    });
   });
 });
