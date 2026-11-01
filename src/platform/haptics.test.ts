@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { createHaptics, haptics } from "./haptics";
 
 function setup(
-  over: { isTauri?: boolean; load?: () => Promise<unknown> } = {},
+  over: {
+    isTauri?: boolean;
+    isMobile?: boolean;
+    load?: () => Promise<unknown>;
+  } = {},
 ) {
   const plugin = {
     impactFeedback: vi.fn().mockResolvedValue(undefined),
@@ -11,6 +15,7 @@ function setup(
   const load = vi.fn(over.load ?? (async () => plugin));
   const h = createHaptics({
     isTauri: () => over.isTauri ?? true,
+    isMobile: () => over.isMobile ?? true,
     log: vi.fn(),
     // biome-ignore lint/suspicious/noExplicitAny: test fake
     loadPlugin: load as any,
@@ -21,6 +26,16 @@ function setup(
 describe("createHaptics", () => {
   it("never touches the plugin outside Tauri", async () => {
     const { plugin, load, h } = setup({ isTauri: false });
+    for (const k of ["place", "wrong", "win", "lose"] as const) {
+      await h.play(k);
+    }
+    expect(load).not.toHaveBeenCalled();
+    expect(plugin.impactFeedback).not.toHaveBeenCalled();
+    expect(plugin.notificationFeedback).not.toHaveBeenCalled();
+  });
+
+  it("never touches the plugin on desktop Tauri", async () => {
+    const { plugin, load, h } = setup({ isMobile: false });
     for (const k of ["place", "wrong", "win", "lose"] as const) {
       await h.play(k);
     }
@@ -79,6 +94,7 @@ describe("createHaptics", () => {
       .mockResolvedValue(plugin);
     const h = createHaptics({
       isTauri: () => true,
+      isMobile: () => true,
       // biome-ignore lint/suspicious/noExplicitAny: test fake
       loadPlugin: load as any,
       log: vi.fn(),
@@ -100,6 +116,7 @@ describe("createHaptics", () => {
     };
     const h = createHaptics({
       isTauri: () => true,
+      isMobile: () => true,
       // biome-ignore lint/suspicious/noExplicitAny: test fake
       loadPlugin: (async () => plugin) as any,
       log,

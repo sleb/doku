@@ -12,17 +12,32 @@ type Plugin = Pick<
 
 export interface HapticsDeps {
   isTauri(): boolean;
+  /** The plugin is registered on mobile only; desktop must not invoke it. */
+  isMobile(): boolean;
   loadPlugin(): Promise<Plugin>;
   /** Receives swallowed failures. */
   log(err: unknown): void;
 }
 
+/** iPhone/iPad/Android UA, or iPadOS reporting as a touch-capable Mac. */
+function detectMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    navigator.maxTouchPoints > 1
+  );
+}
+
 const defaultDeps: HapticsDeps = {
   isTauri: () =>
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window,
+  isMobile: detectMobile,
   loadPlugin: () => import("@tauri-apps/plugin-haptics"),
+  // On mobile the plugin is registered, so a failure is real: keep it visible
+  // even in release builds. Elsewhere stay quiet outside dev.
   log: (err) => {
-    if (import.meta.env.DEV) console.debug("haptics:", err);
+    if (detectMobile()) console.warn("haptics:", err);
+    else if (import.meta.env.DEV) console.debug("haptics:", err);
   },
 };
 
@@ -41,7 +56,7 @@ export function createHaptics(deps: HapticsDeps = defaultDeps): Haptics {
   return {
     async play(kind) {
       try {
-        if (!deps.isTauri()) return;
+        if (!deps.isTauri() || !deps.isMobile()) return;
         const p = await plugin();
         const result =
           kind === "place"
@@ -55,7 +70,7 @@ export function createHaptics(deps: HapticsDeps = defaultDeps): Haptics {
               );
         if (result?.status === "error") deps.log(result.error);
       } catch (err) {
-        // No plugin registered (desktop Tauri) or the call failed: stay silent.
+        // The call failed: never break gameplay.
         deps.log(err);
       }
     },

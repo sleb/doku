@@ -1,6 +1,6 @@
 # Doku
 
-A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley face per colored region, row and column, with no two faces touching. Desktop first; the responsive layout, web-view hardening and a haptics seam for mobile have landed, while the native iOS and Android builds are still pending.
+A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley face per colored region, row and column, with no two faces touching. Desktop first; the responsive layout, web-view hardening and a haptics seam for mobile have landed, and the iOS project builds and runs on the simulator; the Android build is still pending.
 
 ## Docs
 
@@ -44,14 +44,16 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `main`. All o
 
 `bun run check` runs the web gates locally. Biome covers `src/` and root TS/JSON config. `bun run check` does not run Playwright (it needs browser binaries); CI runs `test:e2e` as a separate job. Not yet gated: coverage thresholds.
 
-### Mobile (pending #63/#64, unverified)
+### Mobile (iOS simulator works; Android pending #64)
 
-No native projects exist yet: `src-tauri/gen/` holds only generated schemas, so the commands below will not work until #63 (iOS) and #64 (Android) land. Planned, from `docs/MOBILE_DESIGN.md` §7:
+`src-tauri/gen/apple` is committed. Run on a simulator (name from `xcrun simctl list devices`):
 
 ```sh
-bun tauri ios init && bun tauri ios dev          # iOS first
-bun tauri android init && bun tauri android dev
+bun tauri ios dev "iPhone 18 Pro Max"
+bun tauri android init && bun tauri android dev   # pending #64
 ```
+
+For a physical iOS device, set your signing team with `TAURI_APPLE_DEVELOPMENT_TEAM` (never commit it) and run `bun tauri ios dev --device`. Free the dev-server port 1420 first if a previous run is still alive.
 
 Prerequisites: Xcode and `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` (plus `x86_64-apple-ios` for an Intel simulator) for iOS; Android Studio SDK and NDK, JDK 17, `ANDROID_HOME`/`JAVA_HOME` and the Android Rust targets for Android. `vite.config.ts` honors `TAURI_DEV_HOST` so a device can reach the dev server on port 1420.
 
