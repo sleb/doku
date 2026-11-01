@@ -21,7 +21,7 @@ export function ResultModal({
   if (status !== "won" && status !== "lost") return null;
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50 p-[var(--safe-top)_var(--safe-right)_var(--safe-bottom)_var(--safe-left)]">
       <div
         role="dialog"
         aria-modal="true"

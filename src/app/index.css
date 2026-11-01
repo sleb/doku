@@ -14,6 +14,25 @@
   --color-region-10: #d6d3d1;
 }
 
+:root {
+  --safe-top: max(env(safe-area-inset-top), 0.5rem);
+  --safe-right: max(env(safe-area-inset-right), 0.5rem);
+  --safe-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  --safe-left: max(env(safe-area-inset-left), 0.5rem);
+}
+
+/* No scroll, rubber-band or pull-to-refresh; the background also fills the inset regions. */
+html,
+body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  background: #fff;
+}
+
+body {
+  touch-action: manipulation;
+}
+
 /* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS, starting HOLD_DELAY_MS after press. */
 .hold-glow rect {
   fill: none;
@@ -79,7 +98,6 @@
   container-type: size;
   min-width: 0;
   min-height: 0;
-  padding: 0.5rem;
   display: grid;
   place-items: center;
 }
