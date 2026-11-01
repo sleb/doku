@@ -25,8 +25,9 @@ export function GameScreen({ level }: { level: Level }) {
     return () => gameStore.setState(idleState, false);
   }, [startLevel, level]);
 
-  // Buzz for the outcome of each store change. Subscribed once per mount, so the
-  // unmount reset to idle (prev is not "playing") stays silent.
+  // Buzz for the outcome of each store change. Subscribed once per mount. The
+  // unmount reset to idle stays silent even mid-game: idle has full hearts and
+  // no board, so there is no heart drop, no face increase, and status is idle.
   useEffect(
     () =>
       gameStore.subscribe((next, prev) => {

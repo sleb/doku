@@ -264,6 +264,14 @@ describe("GameScreen", () => {
       expect(play()).not.toHaveBeenCalled();
     });
 
+    test("unmounting mid-game plays nothing", () => {
+      const { unmount } = render(<GameScreen level={level} />);
+      hold([solution[0], nonSolution[0]]);
+      play().mockClear();
+      unmount();
+      expect(play()).not.toHaveBeenCalled();
+    });
+
     test("buzzes once under StrictMode", () => {
       render(
         <StrictMode>
