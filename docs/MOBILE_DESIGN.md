@@ -90,14 +90,17 @@ This introduces the adapter layer from `DESIGN.md` §8 for the first time. Only 
 // src/platform/haptics.ts
 export type HapticKind = "place" | "wrong" | "win" | "lose";
 export interface Haptics { play(kind: HapticKind): Promise<void> }
-export const haptics: Haptics;   // chosen once at module load
+export function createHaptics(deps?: { isTauri(): boolean; loadPlugin(): Promise<Plugin> }): Haptics;
+export const haptics: Haptics;   // createHaptics() with the real deps
 ```
+
+`createHaptics` takes injectable `isTauri` and `loadPlugin` so the mapping is unit-tested with fakes. The plugin is loaded with `await import("@tauri-apps/plugin-haptics")` inside `play`, so the web build keeps it in a separate, never-fetched chunk. `play` wraps everything in try/catch and always resolves.
 
 Adapters, picked by `isTauri()` (`"__TAURI_INTERNALS__" in window`):
 
 | Where | Implementation |
 |---|---|
-| Tauri on Android/iOS | `@tauri-apps/plugin-haptics`: `place` → `impactFeedback("light")`, `wrong` → `notificationFeedback("warning")`, `win` → `notificationFeedback("success")`, `lose` → `notificationFeedback("error")` |
+| Tauri (plugin registered on mobile only, M3-05) | `@tauri-apps/plugin-haptics`: `place` → `impactFeedback("light")`, `wrong` → `notificationFeedback("warning")`, `win` → `notificationFeedback("success")`, `lose` → `notificationFeedback("error")` |
 | Tauri on desktop, web, tests | no-op (the plugin is registered only for mobile, and calls are wrapped so a rejected invoke is swallowed) |
 
 `navigator.vibrate` is deliberately not used: WKWebView does not implement it and the Android pattern is a poor match for the semantic kinds. Every call is `void`-ed and its rejection caught: a failed buzz must never break gameplay.
