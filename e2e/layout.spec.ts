@@ -98,3 +98,17 @@ test("stacked layout reserves no phantom row below the board", async ({
   expect(await page.locator("[data-area=controls]").count()).toBe(0);
   expect(layout.y + layout.height - (board.y + board.height)).toBeLessThan(0.5);
 });
+
+for (const [w, h] of [
+  [667, 375],
+  [932, 430],
+] as const) {
+  test(`title and hearts are not squished together at ${w}x${h}`, async ({
+    page,
+  }) => {
+    await open(page, w, h);
+    const title = await box(page, "header h1");
+    const hearts = await box(page, "header [role=img]");
+    expect(hearts.x - (title.x + title.width)).toBeGreaterThanOrEqual(8);
+  });
+}
