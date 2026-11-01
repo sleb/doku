@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, expect, test } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
 import { demoLevel, demoLevel11 } from "./levels/demoLevel";
 import { idleState } from "./store/game";
@@ -56,10 +56,17 @@ test("main fills the viewport height and is not shrink-wrapped", () => {
   expect(main).not.toHaveClass("px-4");
 });
 
-test("?level=demo-11 selects the 11x11 demo level", () => {
+test("renders a banner landmark for the top bar", () => {
+  render(<App />);
+  expect(screen.getByRole("banner")).toBeInTheDocument();
+});
+
+test("?level=demo-11 selects the 11x11 demo level (read once at load)", async () => {
   window.history.pushState({}, "", "/?level=demo-11");
   try {
-    render(<App />);
+    vi.resetModules();
+    const { default: FreshApp } = await import("./App");
+    render(<FreshApp />);
     expect(
       screen.getByRole("heading", { name: demoLevel11.id }),
     ).toBeInTheDocument();

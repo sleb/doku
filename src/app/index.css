@@ -84,7 +84,8 @@
   place-items: center;
 }
 
-@container (min-aspect-ratio: 1.2) {
+/* Side column only when wide enough that it doesn't shrink the board below what stacking gives (e.g. 360x300). */
+@container (min-aspect-ratio: 1.2) and (min-width: 36rem) {
   .game-layout {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto 1fr auto;

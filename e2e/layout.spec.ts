@@ -86,3 +86,16 @@ test("cells are capped at 4.5rem on a large viewport", async ({ page }) => {
   await open(page, 1280, 800);
   expect(await firstCellWidth(page)).toBeLessThanOrEqual(72.5);
 });
+
+test("360x300 stays stacked: board fits and cells are not smaller than stacked gives", async ({
+  page,
+}) => {
+  await open(page, 360, 300);
+  await expectBoardInViewport(page);
+  const board = await box(page, "[role=grid]");
+  const header = await box(page, "header");
+  // Stacked: header above the board, not in a side column that squeezes it.
+  expect(header.y + header.height).toBeLessThanOrEqual(board.y + 0.5);
+  // The wide layout would give ~16px cells here; stacked gives ~20px.
+  expect(await firstCellWidth(page)).toBeGreaterThanOrEqual(19);
+});
