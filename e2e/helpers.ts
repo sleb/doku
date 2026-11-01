@@ -64,45 +64,50 @@ async function fire(
   related?: Locator,
 ): Promise<void> {
   const rel = related ? await related.elementHandle() : null;
-  await target.evaluate(
-    (el, a) => {
-      const init = {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        pointerId: 7,
-        pointerType: "touch",
-        isPrimary: true,
-        button: 0,
-      };
-      if (a.type === "click") {
-        el.dispatchEvent(new MouseEvent("click", init));
-      } else {
-        el.dispatchEvent(
-          new PointerEvent(a.type, {
-            ...init,
-            button: a.type === "pointerdown" ? 0 : -1,
-            relatedTarget: a.rel as Element | null,
-          }),
-        );
-      }
-    },
-    { type, rel },
-  );
+  try {
+    await target.evaluate(
+      (el, a) => {
+        const init = {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerId: 7,
+          pointerType: "touch",
+          isPrimary: true,
+          button: 0,
+        };
+        if (a.type === "click") {
+          el.dispatchEvent(new MouseEvent("click", init));
+        } else {
+          el.dispatchEvent(
+            new PointerEvent(a.type, {
+              ...init,
+              button: a.type === "pointerout" ? -1 : 0,
+              relatedTarget: a.rel as Element | null,
+            }),
+          );
+        }
+      },
+      { type, rel },
+    );
+  } finally {
+    await rel?.dispose();
+  }
 }
 
 export const touchDown = (t: Locator) => fire(t, "pointerdown");
 export const touchOut = (t: Locator, to: Locator) => fire(t, "pointerout", to);
 
-/** Release, then the click a real touch would synthesize. */
-export async function touchUp(t: Locator): Promise<void> {
-  await fire(t, "pointerup");
-}
+/** Release only (pointerup); a real touch's click is sent by `touchClick`. */
+export const touchUp = (t: Locator) => fire(t, "pointerup");
+
+/** The click a real touch synthesizes after pointerup (not sent after a drag-off). */
+export const touchClick = (t: Locator) => fire(t, "click");
 
 /** Touch-hold until the cell commits (state assertion), then release and click. */
-export async function touchHold(_page: Page, target: Locator): Promise<void> {
+export async function touchHold(target: Locator): Promise<void> {
   await touchDown(target);
   await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
   await touchUp(target);
-  await fire(target, "click");
+  await touchClick(target);
 }

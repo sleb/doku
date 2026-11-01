@@ -7,6 +7,7 @@ import {
   expectBoardInViewport,
   hearts,
   open,
+  touchClick,
   touchDown,
   touchHold,
   touchOut,
@@ -56,7 +57,7 @@ test("a tap toggles a mark and never shows the glow", async ({ page }) => {
   await expect(hearts(page, 3)).toBeVisible();
 });
 
-test("a 100ms touch press never shows the glow and places nothing", async ({
+test("a 100ms touch press shows no glow and its click marks the cell", async ({
   page,
 }) => {
   await page.goto("/");
@@ -66,6 +67,8 @@ test("a 100ms touch press never shows the glow and places nothing", async ({
   await expect(target.locator("[data-hold-glow]")).toHaveCount(0);
   await expect(target).not.toHaveAttribute("data-holding", "true");
   await touchUp(target);
+  await touchClick(target);
+  await expect(target).toHaveAccessibleName(/, marked$/);
   await page.waitForTimeout(SETTLE_MS);
   await expect(target).not.toHaveAccessibleName(/, (face|wrong)$/);
   await expect(hearts(page, 3)).toBeVisible();
@@ -75,7 +78,7 @@ test("touch-holding every solution cell wins", async ({ page }) => {
   await page.goto("/");
   for (let r = 0; r < size; r++) {
     const target = cell(page, r, solution[r]);
-    await touchHold(page, target);
+    await touchHold(target);
     await expect(target).toHaveAccessibleName(/, face$/);
   }
   await expect(
@@ -87,7 +90,7 @@ test("touch-holding every solution cell wins", async ({ page }) => {
 test("a wrong touch hold costs a heart", async ({ page }) => {
   await page.goto("/");
   const target = cell(page, 0, (solution[0] + 1) % size);
-  await touchHold(page, target);
+  await touchHold(target);
   await expect(target).toHaveAccessibleName(/, wrong$/);
   await expect(hearts(page, 2)).toBeVisible();
 });
