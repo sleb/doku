@@ -47,7 +47,7 @@ e2e/
 └─ playthrough.spec.ts
 ```
 
-The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command is left alone; removing it is a shell cleanup, not a board concern.
+The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
 `src/levels/demo-7.json` is a copy of `uniqueLevel7`, loaded with `loadLevel`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright spec reads it with `node:fs` and `JSON.parse` (path from `import.meta.url`); it does not import the JSON module.
 

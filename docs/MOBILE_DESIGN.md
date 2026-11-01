@@ -96,7 +96,7 @@ export function createHaptics(deps?: { isTauri(): boolean; isMobile(): boolean; 
 export const haptics: Haptics;   // createHaptics() with the real deps
 ```
 
-`createHaptics` takes injectable `isTauri`, `isMobile` (iPhone/iPad/Android user agent, or `maxTouchPoints > 1` for iPadOS posing as a Mac), `loadPlugin` and `log`. The gate is `isTauri() && isMobile()`, so desktop Tauri, where the plugin is not registered, makes no doomed IPC call. Failures on mobile go to `console.warn` so they stay visible in release builds so the mapping is unit-tested with fakes. The plugin is loaded with `await import("@tauri-apps/plugin-haptics")` inside `play`, so the web build keeps it in a separate, never-fetched chunk. `play` wraps everything in try/catch and always resolves.
+`createHaptics` takes injectable `isTauri`, `isMobile` (iPhone/iPad/Android user agent, or a Macintosh user agent with `maxTouchPoints > 1` for iPadOS posing as a Mac), `loadPlugin` and `log`. The gate is `isTauri() && isMobile()`, so desktop Tauri, where the plugin is not registered, makes no doomed IPC call. Failures on mobile go to `console.warn` so they stay visible in release builds. Because every dependency is injectable, the kind-to-feedback mapping and the mobile gate are unit-tested with fakes. The plugin is loaded with `await import("@tauri-apps/plugin-haptics")` inside `play`, so the web build keeps it in a separate, never-fetched chunk. `play` wraps everything in try/catch and always resolves.
 
 Adapters, picked by `isTauri()` (`"__TAURI_INTERNALS__" in window`):
 

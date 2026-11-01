@@ -20,25 +20,33 @@ export interface HapticsDeps {
 }
 
 /** iPhone/iPad/Android UA, or iPadOS reporting as a touch-capable Mac. */
-function detectMobile(): boolean {
-  if (typeof navigator === "undefined") return false;
+export function detectMobile(
+  ua: string = typeof navigator === "undefined" ? "" : navigator.userAgent,
+  maxTouchPoints: number = typeof navigator === "undefined"
+    ? 0
+    : navigator.maxTouchPoints,
+): boolean {
   return (
-    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-    navigator.maxTouchPoints > 1
+    /iPhone|iPad|iPod|Android/i.test(ua) ||
+    (/Macintosh/.test(ua) && maxTouchPoints > 1)
   );
+}
+
+/**
+ * On mobile the plugin is registered, so a failure is real: keep it visible
+ * even in release builds. Elsewhere stay quiet outside dev.
+ */
+export function defaultLog(err: unknown, mobile: boolean = detectMobile()) {
+  if (mobile) console.warn("haptics:", err);
+  else if (import.meta.env.DEV) console.debug("haptics:", err);
 }
 
 const defaultDeps: HapticsDeps = {
   isTauri: () =>
     typeof window !== "undefined" && "__TAURI_INTERNALS__" in window,
-  isMobile: detectMobile,
+  isMobile: () => detectMobile(),
   loadPlugin: () => import("@tauri-apps/plugin-haptics"),
-  // On mobile the plugin is registered, so a failure is real: keep it visible
-  // even in release builds. Elsewhere stay quiet outside dev.
-  log: (err) => {
-    if (detectMobile()) console.warn("haptics:", err);
-    else if (import.meta.env.DEV) console.debug("haptics:", err);
-  },
+  log: (err) => defaultLog(err),
 };
 
 export function createHaptics(deps: HapticsDeps = defaultDeps): Haptics {

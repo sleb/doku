@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHaptics, haptics } from "./haptics";
+import { createHaptics, defaultLog, detectMobile, haptics } from "./haptics";
 
 function setup(
   over: {
@@ -128,5 +128,42 @@ describe("createHaptics", () => {
 
   it("default singleton is a safe no-op in node", async () => {
     await expect(haptics.play("place")).resolves.toBeUndefined();
+  });
+});
+
+describe("detectMobile", () => {
+  const IPHONE =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15";
+  const ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36";
+  const MAC =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
+  const WINDOWS =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+  const LINUX = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36";
+
+  it.each([
+    ["iPhone", IPHONE, 5, true],
+    ["Android", ANDROID, 5, true],
+    ["iPadOS posing as a Mac", MAC, 5, true],
+    ["touchscreen Windows", WINDOWS, 10, false],
+    ["touchscreen Linux", LINUX, 10, false],
+    ["plain desktop Mac", MAC, 0, false],
+  ])("%s", (_name, ua, touch, expected) => {
+    expect(detectMobile(ua, touch)).toBe(expected);
+  });
+});
+
+describe("defaultLog", () => {
+  it("warns on mobile and stays at debug elsewhere", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    defaultLog("boom", true);
+    expect(warn).toHaveBeenCalledWith("haptics:", "boom");
+    expect(debug).not.toHaveBeenCalled();
+    defaultLog("quiet", false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(debug).toHaveBeenCalledWith("haptics:", "quiet");
+    warn.mockRestore();
+    debug.mockRestore();
   });
 });
