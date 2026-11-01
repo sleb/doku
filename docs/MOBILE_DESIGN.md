@@ -2,6 +2,8 @@
 
 Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
+**Status:** M3-01 to M3-04 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam). M3-05 (iOS) and M3-06 (Android) are pending (#63/#64), so every native item in §7 and the device pass in §8 are still planned. M3-07 (#65) is a partial doc sync; `DESIGN.md` §7 to §9 and §13 and `README.md` are synced, and the native items get recorded after #63/#64.
+
 ## 1. Goals and non-goals
 
 **Goal:** the existing single-level game is installable and comfortably playable on a phone: iOS first, then Android (decision 6). "Playable" means an 11×11 board fits any phone viewport with no scrolling, the existing hold-to-place gesture (250 ms delay, 500 ms glow) works unchanged under a finger, and a win or a wrong tap is felt as well as seen.
@@ -177,9 +179,11 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 
 ## 11. Doc sync checklist (M3-07)
 
-- `DESIGN.md` §8: `input` mobile column becomes "same as desktop: tap = ✕, hold = face" (drop "long-press = mark"); drop the orientation lock; `window` row says "safe-area insets via CSS `env()`". §7: layout (including the desktop side panel) moves to M3; `<InputModeToggle>` is not part of M3 (it stays tied to #57). §9: record the haptics plugin and the mobile capability file. §12 unchanged. §13: add the decisions below.
-- `BOARD_DESIGN.md` §4.2: sizing now comes from the board area (§4.2 here).
-- `README.md`: add this document to the docs index, plus the mobile dev commands (`bun tauri android dev`, `bun tauri ios dev`) and the toolchain prerequisites.
+Status: done for everything that landed in M3-01 to M3-04; items marked *pending* wait on #63/#64.
+
+- `DESIGN.md` §8: `input` mobile column becomes "same as desktop: tap = ✕, hold = face" (drop "long-press = mark"); drop the orientation lock; `window` row says "safe-area insets via CSS `env()`". §7: layout (including the desktop side panel) moves to M3; `<InputModeToggle>` is not part of M3 (it stays tied to #57). §9: record the haptics plugin and the mobile capability file (recorded as planned; *pending* the native wiring). §12 unchanged. §13: add the decisions below (done).
+- `BOARD_DESIGN.md` §4.2: sizing now comes from the board area (§4.2 here). Done.
+- `README.md`: add this document to the docs index, plus the mobile dev commands (`bun tauri android dev`, `bun tauri ios dev`) and the toolchain prerequisites. Done, labeled pending since the native projects do not exist yet.
 
 ## 12. Decisions
 
