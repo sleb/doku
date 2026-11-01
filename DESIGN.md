@@ -120,10 +120,11 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
      ├─ <LevelSelectScreen>
      │    └─ <LevelGrid> → <LevelTile status stars/>
      ├─ <GameScreen>
-     │    ├─ <TopBar>  <BackButton/> <LevelTitle/> <Timer/> <Hearts/> <MenuButton/>
-     │    ├─ <Board>
-     │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | <ConflictHighlight/>
-     │    ├─ <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/> <InputModeToggle/>
+     │    ├─ <GameLayout>  slots: header / board / controls (M3; container queries, below)
+     │    │    ├─ header   → <TopBar>  <BackButton/> <LevelTitle/> <Timer/> <Hearts/> <MenuButton/>
+     │    │    ├─ board    → <Board>
+     │    │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | <ConflictHighlight/>
+     │    │    └─ controls → <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/>  (empty until M4)
      │    ├─ <PauseOverlay/>
      │    ├─ <HintToast/>
      │    └─ <ResultModal>  (win: time/stars/next · lose: retry)
@@ -133,10 +134,9 @@ Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-s
 
 ### Component notes
 
-- **`<Board>`**: owns layout only. CSS grid sized with `min(vw, vh)`-based `--cell` so it is resizable on desktop and fills width on mobile. Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
+- **`<Board>`**: owns layout only. CSS grid whose `--cell` is derived from the board area's own container size (`cqw`/`cqh`, capped at 4.5rem), not the viewport, so it resizes on desktop and fits phones in both orientations (`docs/BOARD_DESIGN.md` §4.2, `docs/MOBILE_DESIGN.md` §4). Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
 - **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
-- **`<InputModeToggle>`**: double-tap is awkward on touch, so offer an explicit "place face / place mark" tool in place of single-tap = ✕, hold = face. Needed on mobile where right-click/drag are unavailable.
 - **`<HintButton>`**: calls `engine.nextHint`, highlights the cell and region and shows the technique text in `<HintToast>`. Costs a star or time penalty *(proposed)*.
 - **`<ResultModal>`**: purely driven by `status`.
 - **Theming**: region palette is a token set with a color-blind-safe variant, plus a pattern/number overlay option, since regions are distinguished by color alone otherwise.
@@ -148,16 +148,18 @@ Hides differences so UI code stays platform-agnostic:
 | Adapter | Desktop | Mobile (phase 2) |
 |---|---|---|
 | `storage` | tauri-plugin-store | same |
-| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 3) | tap = toggle ✕, hold = face (or per toggle); long-press = mark |
-| `haptics` | no-op | vibrate on place/conflict/win |
+| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 4) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
+| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the native plugin is planned (#63/#64), see §9 |
 | `audio` | WebAudio | same (respect silent switch) |
-| `window` | min size, remembered size | safe-area insets, orientation lock to portrait |
+| `window` | min size, remembered size | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
 
-Responsive plan: a single layout driven by container queries. Desktop shows board plus a side panel (hearts, timer, actions); under ~700px width the panel collapses into top and bottom bars.
+Responsive layout (landed, M3-01): `GameLayout` is a single layout driven by container queries on `main`. Tall (default) stacks header, board, controls; at container aspect ratio >= 1.2 and width >= 36rem the header and controls move to a side column next to the board. Landscape phones and desktop windows share the wide template; there is no separate desktop path.
 
 ## 9. Rust shell (`src-tauri`)
 
-Intentionally small for v1: plugins (store, fs), window config, capabilities file. Mobile: `tauri android init` / `ios init` later, then add haptics and share plugins. Only add custom `#[tauri::command]`s when a native need appears.
+Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers only the opener plugin, plus the scaffold's leftover `greet` command and `capabilities/default.json`. Only add custom `#[tauri::command]`s when a native need appears.
+
+Planned for mobile (#63 iOS, #64 Android; not yet implemented, see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) and registered behind `#[cfg(mobile)]`; a `capabilities/mobile.json` granting `haptics:default` on android/iOS; committed `src-tauri/gen/{apple,android}` from `tauri ios init` / `android init` with build outputs in `.gitignore`; removal of `greet`. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
 
 ## 10. Content pipeline
 
@@ -191,6 +193,11 @@ Decided:
 5. **Accounts, leaderboards, cloud sync:** not for v1.
 6. **Marks (✕):** free notes, never cost a heart, even on a cell that holds a face.
 7. **Wrong tap:** deviation from the unique solution (see §4). Dead-end boards are avoided by not placing wrong faces.
+8. **Mobile input is unchanged:** tap = ✕, hold (250 ms delay, 500 ms glow) = face. No tool toggle (click-only placement is #57).
+9. **One layout via container queries** for phones (both orientations) and desktop; orientation is not locked (landed).
+10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose), never for the free ✕.
+11. **Commit `src-tauri/gen`**, ignoring build outputs (decided, not yet implemented: #63/#64).
+12. **iOS first, then Android** (decided; native builds not yet implemented: #63/#64).
 
 Still open:
 1. **Which size/tier combinations to ship:** decide after seeing what the generator can produce reliably.
