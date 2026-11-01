@@ -50,3 +50,59 @@ export const cell = (page: Page, r: number, c: number): Locator =>
 
 export const hearts = (page: Page, n: number): Locator =>
   page.getByRole("img", { name: `${n} of 3 hearts` });
+
+type TouchEvt = "pointerdown" | "pointerup" | "pointerout" | "click";
+
+/**
+ * Dispatch a touch-typed PointerEvent (page.touchscreen only taps). Portable
+ * across engines; synthetic events skip implicit touch capture, so the
+ * pointerup/click pair is sent explicitly.
+ */
+async function fire(
+  target: Locator,
+  type: TouchEvt,
+  related?: Locator,
+): Promise<void> {
+  const rel = related ? await related.elementHandle() : null;
+  await target.evaluate(
+    (el, a) => {
+      const init = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 7,
+        pointerType: "touch",
+        isPrimary: true,
+        button: 0,
+      };
+      if (a.type === "click") {
+        el.dispatchEvent(new MouseEvent("click", init));
+      } else {
+        el.dispatchEvent(
+          new PointerEvent(a.type, {
+            ...init,
+            button: a.type === "pointerdown" ? 0 : -1,
+            relatedTarget: a.rel as Element | null,
+          }),
+        );
+      }
+    },
+    { type, rel },
+  );
+}
+
+export const touchDown = (t: Locator) => fire(t, "pointerdown");
+export const touchOut = (t: Locator, to: Locator) => fire(t, "pointerout", to);
+
+/** Release, then the click a real touch would synthesize. */
+export async function touchUp(t: Locator): Promise<void> {
+  await fire(t, "pointerup");
+}
+
+/** Touch-hold until the cell commits (state assertion), then release and click. */
+export async function touchHold(_page: Page, target: Locator): Promise<void> {
+  await touchDown(target);
+  await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
+  await touchUp(target);
+  await fire(target, "click");
+}
