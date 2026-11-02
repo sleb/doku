@@ -42,9 +42,9 @@ export function levelIndex(id: string): number;   // -1 if unknown
 
 Level `id`s are unique across packs (tested). The campaign order is the array order; there is no per-level metadata beyond the engine's `Level`.
 
-**Seed pack (`pack-1.json`), 8 levels, sizes ascending as a stand-in for difficulty** (tiers are unrated until milestone 5): 7, 7, 8, 8, 9, 10, 10, 11. `demo-7` and `demo-11` are folded in (their JSON moves into the pack; `demoLevel.ts` and the standalone files are deleted). The other levels come from a throwaway script `tools/seed-pack.ts` (random valid placement, grow regions, keep if `countSolutions == 1`). It is a deliberately naive precursor of `tools/generate-levels.ts` (milestone 5), which replaces it and rewrites the pack. If naive rejection sampling cannot produce a unique 10×10 or 11×11 in reasonable time, ship fewer large levels rather than grow the script (§11 question 4).
+**Seed pack (`pack-1.json`), 8 levels, a mix of sizes in no particular order** (difficulty is not curated or rated until milestone 5), including at least one 7×7 and one 11×11. `demo-7` and `demo-11` are folded in (their JSON moves into the pack; `demoLevel.ts` and the standalone files are deleted). The other levels come from a throwaway script `tools/seed-pack.ts` (random valid placement, grow regions, keep if `countSolutions == 1`). It is a deliberately naive precursor of `tools/generate-levels.ts` (milestone 5), which replaces it and rewrites the pack. If naive rejection sampling cannot produce a unique 10×10 or 11×11 in reasonable time, ship fewer large levels rather than grow the script (§11 question 4).
 
-Tests (node): every level passes `validateLevel`, `countSolutions(level) === 1`, size is in 7–11, ids are unique, sizes are non-decreasing (the intended curve), and the pack is non-empty.
+Tests (node): every level passes `validateLevel`, `countSolutions(level) === 1`, size is in 7–11, ids are unique, and the pack is non-empty.
 
 ### 3.2 Progress
 
@@ -182,13 +182,12 @@ Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to def
 ## 6. Settings
 
 ```ts
-interface Settings { haptics: boolean; showTimer: boolean; seenRules: boolean }
-// defaults: { haptics: true, showTimer: true, seenRules: false }
+interface Settings { haptics: boolean; seenRules: boolean }
+// defaults: { haptics: true, seenRules: false }
 ```
 
 `src/store/settings.ts` (pure `parseSettings`, thin Zustand binding with `set(patch)`), persisted on change. Consumers:
 - The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics` (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
-- `TopBar` shows the timer only if `showTimer`. The clock still runs and the result still shows the time; the setting hides the number during play.
 - `seenRules` triggers the rules dialog on first launch (§7.3) and is set when it is dismissed.
 
 Theme, sound and the color-blind palette are milestone 6 and add fields then. The settings dialog also has "Start over" (§7.3) because it is the one destructive action; it asks for confirmation.
@@ -209,7 +208,7 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
  │   ├─ <PauseDialog>             status === "paused": Resume · Restart level · Rules · Settings
  │   ├─ <ResultModal>             won: time/best/hints → Next level · lost: Retry
  │   ├─ <RulesDialog>             static text; auto-opens once (settings.seenRules)
- │   └─ <SettingsDialog>          haptics, show timer, Start over
+ │   └─ <SettingsDialog>          haptics, Start over
  └─ <Finale>                      all levels done: total of best times · Start over
 ```
 
@@ -227,7 +226,7 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
 
 - **ResultModal (won):** "You solved it", the time, "Best: m:ss" (or "New best"), "Hints: n" if any, and one button: "Next level" (or "Finish" on the last level). Focus lands on that button. (lost): "Out of hearts" and "Retry", as today.
 - **RulesDialog:** the four rules from `DESIGN.md` §1 in plain text, the input cheat sheet (tap = ✕, hold = face; keyboard keys), and a "Got it" button. No interactive board; that is milestone 6.
-- **SettingsDialog:** two switches and "Start over" with a confirm step. Opened from the Pause dialog.
+- **SettingsDialog:** a haptics switch and "Start over" with a confirm step. Opened from the Pause dialog.
 
 ### 7.4 Finale
 
@@ -307,10 +306,10 @@ Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full deskto
 
 ## 11. Open questions
 
-1. **Timer on by default.** Default: shown, hideable. A visible clock can add pressure to a relaxed puzzle; say if it should default off.
+1. **Resolved:** the timer is always shown; there is no setting to hide it.
 2. **Hint cost.** Decided: one heart, disabled on the last heart. Open: whether a hinted win should still set `bestMs`. Default yes. Revisit with milestone 5's technique hints.
 3. **Restoring into `paused`.** Default yes (§5.2). The cost is one extra tap on relaunch.
-4. **Seed pack quality.** Sizes ascend as a difficulty proxy, but a 7×7 can be harder than an 8×8 until milestone 5 rates levels. If the naive script cannot make large unique levels, the pack is shorter than 8 and the finale arrives early; acceptable for this milestone.
+4. **Seed pack quality.** Levels are a mix of sizes and difficulties, in any order, until milestone 5. If the naive script cannot make large unique levels, the pack is shorter than 8 and the finale arrives early; acceptable for this milestone.
 5. **Start over.** Default keeps `bestMs`. A full wipe (including bests) would be a second option in Settings; not planned.
 6. **Stars.** Dropped (`DESIGN.md` §5, §7 mention them as proposed). Reinstate only with a rule that is worth the UI.
 
