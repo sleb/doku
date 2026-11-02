@@ -172,10 +172,10 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 ## 10. Open questions
 
 1. **Resolved:** platform order is iOS first, then Android (decision 6).
-2. **Hold tolerance on touch. iOS: no slop code was added.** The simulator pass led only to 08a02e2 (other cells ignore taps and `x` while a hold is in progress, so a second finger or palm cannot toggle a mark mid-hold). iOS simulator verified; physical device pass not recorded. Android is pending #64.
+2. **Hold tolerance on touch. Open: no slop code was added, and the need is untested.** The iOS simulator uses a pointer, so it says nothing about finger jitter; a physical-device or Android pass must decide. The simulator pass led only to a related fix in #63 (PR #68): (other cells ignore taps and `x` while a hold is in progress, so a second finger or palm cannot toggle a mark mid-hold). Physical device pass not recorded. Android is pending #64.
 
    Original question: `useHold` cancels on `pointerleave` with no slack (`BOARD_DESIGN.md` §8.8), which on a 26–30 px cell may cancel a normal, slightly jittery press. Default: leave it and decide from the device pass (M3-05/06); if needed, add a small movement slop for `pointerType === "touch"` (cancel only after more than ~10 px travel) rather than widening the cell.
-3. **Zoom or magnifier for dense boards. iOS: not added.** e17e226 suppresses the callout menu (`user-select: none`) and the double-tap-then-hold selection loupe (`useNoDoubleTapLoupe`), which was the observed problem; no zoom or magnifier was built. Android is pending #64.
+3. **Zoom or magnifier for dense boards. iOS: not added.** #63 (PR #68) suppresses the callout menu (`user-select: none`) and the double-tap-then-hold selection loupe (`useNoDoubleTapLoupe`), which was the observed problem; no zoom or magnifier was built. Android is pending #64.
 
    Original question: If 26 px cells prove too small on the smallest phones, options are a tap-and-hold magnifier or pinch-zoom of the board. Deferred; free ✕ taps and the deliberate hold are the mitigation for now.
 4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirmed: `ios init` generates a 16.0 target. Android `minSdk` is pending #64.

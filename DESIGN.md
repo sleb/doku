@@ -19,8 +19,8 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
 
 ```
 ┌──────────────────────────── Tauri shell (Rust) ────────────────────────────┐
-│  commands: save_progress / load_progress / settings                      │
-│  plugins: store, fs, os; mobile: haptics, share                            │
+│  commands: none yet (persistence commands planned)                         │
+│  plugins: opener; mobile: haptics (store, fs planned)                      │
 └───────────────▲────────────────────────────────────────────────────────────┘
                 │ invoke() — thin, async, never on the hot path
 ┌───────────────┴──────────── Frontend (TypeScript + React) ─────────────────┐
