@@ -179,4 +179,37 @@ describe("boot autosave", () => {
     expect(set).not.toHaveBeenCalledWith("save", expect.anything());
     expect(progressStore.getState().next).toBe(0);
   });
+
+  test("a win removes the save while recording progress", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(250);
+    gameStore.setState({ status: "won", elapsedMs: 9000 });
+    expect(await storage.get("save")).toBeUndefined();
+    expect(progressStore.getState().next).toBe(1);
+    expect(await storage.get("progress")).toMatchObject({ next: 1 });
+  });
+
+  test("the dev override ignores a valid save and installs no autosave", async () => {
+    const storage = new MemoryStorage();
+    const played = startLevel(LEVELS[0]) as Started;
+    const save = toSaved(toggleMark(played, 4) as Started);
+    await storage.set("save", save);
+    await boot(storage, { devLevel: 3 });
+    expect(gameStore.getState().status).toBe("playing");
+    gameStore.getState().toggleMark(5);
+    vi.advanceTimersByTime(1000);
+    expect(await storage.get("save")).toEqual(save);
+  });
+
+  test("booting again tears down the previous autosave", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    const set = vi.spyOn(storage, "set");
+    await boot(new MemoryStorage());
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(1000);
+    expect(set).not.toHaveBeenCalledWith("save", expect.anything());
+  });
 });
