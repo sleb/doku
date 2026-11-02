@@ -25,8 +25,8 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
                 │ invoke() — thin, async, never on the hot path
 ┌───────────────┴──────────── Frontend (TypeScript + React) ─────────────────┐
 │  UI components  →  Game store (state machine)  →  Engine (pure TS)         │
-│                                    │                  └ Worker: generator   │
-│                                    └→ Persistence adapter → Tauri commands  │
+│                                    │                  └ Worker: generator  │
+│                                    └→ Persistence adapter → Tauri commands │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
