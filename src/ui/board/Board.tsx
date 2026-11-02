@@ -60,6 +60,7 @@ export function Board({
         if (delta === undefined) return;
         const i = Number((e.target as HTMLElement).dataset.index);
         if (e.key === "ArrowRight" && i % size === size - 1) return;
+        if (e.key === "ArrowLeft" && i % size === 0) return;
         gridRef.current
           ?.querySelector<HTMLElement>(`[data-index="${i + delta}"]`)
           ?.focus();
