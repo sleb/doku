@@ -24,6 +24,9 @@ export function toSaved(state: GameState): SavedGame | null {
 }
 
 export function fromSaved(raw: unknown, level: Level): Started | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return null;
+  }
   const r = raw as SavedGame;
   return {
     status: "paused",

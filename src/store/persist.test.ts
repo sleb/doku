@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import { idleState, placeFace, startLevel, toggleMark } from "./game";
-import { fromSaved, toSaved } from "./persist";
+import { fromSaved, type SavedGame, toSaved } from "./persist";
 
 describe("toSaved", () => {
   test("is null for idle", () => {
@@ -61,5 +61,15 @@ describe("fromSaved", () => {
     });
     expect(got?.wrong).toEqual(new Set([wrongCell]));
     expect(Array.from(got?.board ?? [])).toEqual(Array.from(s.board));
+  });
+});
+
+function validSave() {
+  return toSaved(played().s) as SavedGame;
+}
+
+describe("fromSaved rejects", () => {
+  test.each([undefined, null, 42, "x", [1]])("non-object %j", (raw) => {
+    expect(fromSaved(raw, uniqueLevel7)).toBeNull();
   });
 });
