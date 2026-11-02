@@ -8,6 +8,7 @@ A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley f
 - [`docs/ENGINE_DESIGN.md`](docs/ENGINE_DESIGN.md): low-level engine design (data structures, algorithms, tests, build order).
 - [`docs/BOARD_DESIGN.md`](docs/BOARD_DESIGN.md): low-level design for the milestone 2 playable board (store, Board/Cell, HUD, result modal, tests).
 - [`docs/MOBILE_DESIGN.md`](docs/MOBILE_DESIGN.md): low-level design for milestone 3 (responsive layout, haptics, Android and iOS builds).
+- [`docs/APP_DESIGN.md`](docs/APP_DESIGN.md): low-level design for milestone 4 (full app: level progression, persistence, undo/redo, hints, settings, keyboard).
 - Milestone 1 user stories are GitHub issues in the "engine" milestone.
 
 ## Development
