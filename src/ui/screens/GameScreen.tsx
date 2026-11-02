@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { nextLevel, startOver } from "../../app/campaign";
 import { LEVELS, levelIndex } from "../../levels/campaign";
 import { feedbackFor } from "../../platform/feedback";
@@ -33,9 +33,10 @@ export function GameScreen() {
   const { restart, toggleMark, placeFace, pause, resume } =
     gameStore.getState();
   const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
+  const holdOwner = useRef<number | null>(null);
   useClock();
   useAutoPause();
-  useShortcuts();
+  useShortcuts({ holdOwner });
 
   // Buzz for the outcome of each store change. Subscribed once per mount.
   useEffect(
@@ -89,6 +90,7 @@ export function GameScreen() {
               disabled={finished || paused}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}
+              holdOwner={holdOwner}
             />
           </div>
         }

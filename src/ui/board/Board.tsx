@@ -1,4 +1,10 @@
-import { type CSSProperties, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type RefObject,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
 import { CellView } from "./Cell";
@@ -14,6 +20,8 @@ export interface BoardProps {
   disabled: boolean;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
+  /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
+  holdOwner?: RefObject<number | null>;
 }
 
 export function Board({
@@ -24,9 +32,11 @@ export function Board({
   disabled,
   onToggleMark,
   onPlaceFace,
+  holdOwner: sharedHoldOwner,
 }: BoardProps) {
   const { size } = level;
-  const holdOwner = useRef<number | null>(null);
+  const ownHoldOwner = useRef<number | null>(null);
+  const holdOwner = sharedHoldOwner ?? ownHoldOwner;
   const [active, setActive] = useState(0);
   // A new level starts with the first cell tabbable (state adjusted in render).
   const [activeLevel, setActiveLevel] = useState(level);

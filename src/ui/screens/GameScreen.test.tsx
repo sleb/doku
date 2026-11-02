@@ -378,6 +378,19 @@ describe("GameScreen", () => {
       expect(label(nonSolution[0])).toBe("empty");
     });
 
+    test("z does nothing while a cell is being held, and works after", async () => {
+      const user = userEvent.setup();
+      renderGame();
+      await user.click(cell(nonSolution[0]));
+      const target = cell(nonSolution[1]);
+      fireEvent.pointerDown(target, { button: 0, pointerId: 1 });
+      fireEvent.keyDown(window, { key: "z" });
+      expect(label(nonSolution[0])).toBe("marked");
+      fireEvent.pointerUp(target, { pointerId: 1 });
+      fireEvent.keyDown(window, { key: "z" });
+      expect(label(nonSolution[0])).toBe("empty");
+    });
+
     test("a face placed over a note is not touched by Undo", async () => {
       const user = userEvent.setup();
       renderGame();
