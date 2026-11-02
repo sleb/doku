@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { idleState, MAX_HEARTS } from "../../store/game";
@@ -91,6 +91,28 @@ describe("useShortcuts", () => {
       expect(marked()).toBe(2);
       expect(e.defaultPrevented).toBe(false);
     }
+  });
+
+  describe("during a hold", () => {
+    const held = { current: 5 as number | null };
+    afterEach(() => {
+      held.current = 5;
+    });
+
+    test("undo does nothing and is not prevented", () => {
+      renderHook(() => useShortcuts({ holdOwner: held }));
+      const e = press({ key: "z" });
+      expect(marked()).toBe(2);
+      expect(e.defaultPrevented).toBe(false);
+    });
+
+    test("redo does nothing", () => {
+      gameStore.getState().undo();
+      renderHook(() => useShortcuts({ holdOwner: held }));
+      press({ key: "Z", shiftKey: true });
+      press({ key: "y", ctrlKey: true });
+      expect(future()).toBe(1);
+    });
   });
 
   describe("Escape", () => {
