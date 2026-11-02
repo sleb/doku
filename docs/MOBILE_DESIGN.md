@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
-**Status:** M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending, and the physical-device pass in §8 and the signing team are still to be done by hand. M3-07 (#65) is a partial doc sync; `DESIGN.md` §7 to §9 and §13 and `README.md` are synced, and the native items get recorded after #63/#64.
+**Status:** M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending. The iOS simulator pass is verified; a physical-device pass is not recorded. M3-07 (#65) is synced for iOS; the Android items are pending #64 and get recorded in the final pass, which closes #65.
 
 ## 1. Goals and non-goals
 
@@ -132,7 +132,7 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 - **Plugins:** `tauri-plugin-haptics` under `[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]` in `Cargo.toml`, registered in `run()` behind `#[cfg(mobile)]`. `bun add @tauri-apps/plugin-haptics`.
 - **Capabilities:** keep `capabilities/default.json` as is. Add `capabilities/mobile.json` with `"platforms": ["android", "iOS"]`, `"windows": ["main"]`, `"permissions": ["haptics:allow-impact-feedback", "haptics:allow-notification-feedback"]` (the plugin's `default` set does not grant these; the first simulator run reported them as not allowed). A separate file keeps the desktop permission set unchanged and lets the capability schema be checked per platform.
 - **Cleanup:** remove the scaffold's `greet` command (nothing calls it). The opener plugin stays (it is the scaffold's and harmless).
-- **Native projects:** `bun tauri android init` and `bun tauri ios init` generate `src-tauri/gen/android` and `src-tauri/gen/apple`. Commit them (Tauri's guidance: they hold project config, e.g. permissions and the iOS signing team, that you edit), and add the build outputs (`gen/android/.gradle`, `gen/android/app/build`, `gen/apple/build`, `DerivedData`, `*.xcuserstate`) to `.gitignore`.
+- **Native projects:** `bun tauri android init` and `bun tauri ios init` generate `src-tauri/gen/android` and `src-tauri/gen/apple`. Commit them (Tauri's guidance: they hold project config, e.g. permissions and the iOS signing team, that you edit), and add the build outputs to `src-tauri/.gitignore` (not the root one): `gen/apple/build`, `gen/apple/DerivedData`, `*.xcuserstate` and `gen/apple/Local.xcconfig` are in place for iOS; `gen/android/.gradle` and `gen/android/app/build` are pending #64.
 - **Android:** `VIBRATE` permission goes in via the plugin's manifest merge; verify it appears in the merged manifest. `minSdk` stays Tauri's default.
 - **iOS:** the development team comes from a gitignored `gen/apple/Local.xcconfig` (`DEVELOPMENT_TEAM = ...`), pulled in by the committed `Config.xcconfig` through `project.yml`'s `configFiles`; no team ID is committed. `TAURI_APPLE_DEVELOPMENT_TEAM` is not applied by the Tauri CLI at `ios dev` (2.12.4), and an existing generated project is not re-templated, so it did not work here. A free Apple ID builds to a personal device and the simulator.
 - **Dev loop:** `vite.config.ts` already honors `TAURI_DEV_HOST`, which is what `tauri android dev` and `tauri ios dev` set so the device can reach the dev server on port 1420. The `strictPort` and HMR ports (1420/1421) must be free and the device on the same network.
@@ -172,18 +172,22 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 ## 10. Open questions
 
 1. **Resolved:** platform order is iOS first, then Android (decision 6).
-2. **Hold tolerance on touch.** `useHold` cancels on `pointerleave` with no slack (`BOARD_DESIGN.md` §8.8), which on a 26–30 px cell may cancel a normal, slightly jittery press. Default: leave it and decide from the device pass (M3-05/06); if needed, add a small movement slop for `pointerType === "touch"` (cancel only after more than ~10 px travel) rather than widening the cell.
-3. **Zoom or magnifier for dense boards.** If 26 px cells prove too small on the smallest phones, options are a tap-and-hold magnifier or pinch-zoom of the board. Deferred; free ✕ taps and the deliberate hold are the mitigation for now.
-4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirmed: `ios init` generates a 16.0 target.
+2. **Hold tolerance on touch. iOS: no slop code was added.** The simulator pass led only to 08a02e2 (other cells ignore taps and `x` while a hold is in progress, so a second finger or palm cannot toggle a mark mid-hold). iOS simulator verified; physical device pass not recorded. Android is pending #64.
+
+   Original question: `useHold` cancels on `pointerleave` with no slack (`BOARD_DESIGN.md` §8.8), which on a 26–30 px cell may cancel a normal, slightly jittery press. Default: leave it and decide from the device pass (M3-05/06); if needed, add a small movement slop for `pointerType === "touch"` (cancel only after more than ~10 px travel) rather than widening the cell.
+3. **Zoom or magnifier for dense boards. iOS: not added.** e17e226 suppresses the callout menu (`user-select: none`) and the double-tap-then-hold selection loupe (`useNoDoubleTapLoupe`), which was the observed problem; no zoom or magnifier was built. Android is pending #64.
+
+   Original question: If 26 px cells prove too small on the smallest phones, options are a tap-and-hold magnifier or pinch-zoom of the board. Deferred; free ✕ taps and the deliberate hold are the mitigation for now.
+4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirmed: `ios init` generates a 16.0 target. Android `minSdk` is pending #64.
 5. **Haptics setting.** Always on until M4's settings screen (§6.3); say if a mute switch is needed sooner.
 
 ## 11. Doc sync checklist (M3-07)
 
-Status: done for everything that landed in M3-01 to M3-04; items marked *pending* wait on #63/#64.
+Status: done for everything that landed in M3-01 to M3-05 (iOS). Items marked *pending #64* wait on Android: record `gen/android`, the `VIBRATE` merged manifest, the Android inset outcome, §10 questions 2 to 4 final answers and `minSdk`, then close #65.
 
-- `DESIGN.md` §8: `input` mobile column becomes "same as desktop: tap = ✕, hold = face" (drop "long-press = mark"); drop the orientation lock; `window` row says "safe-area insets via CSS `env()`". §7: layout (including the desktop side panel) moves to M3; `<InputModeToggle>` is not part of M3 (it stays tied to #57). §9: record the haptics plugin and the mobile capability file (recorded as planned; *pending* the native wiring). §12 unchanged. §13: add the decisions below (done).
+- `DESIGN.md` §8: `input` mobile column becomes "same as desktop: tap = ✕, hold = face" (drop "long-press = mark"); drop the orientation lock; `window` row says "safe-area insets via CSS `env()`". §7: layout (including the desktop side panel) moves to M3; `<InputModeToggle>` is not part of M3 (it stays tied to #57). §9: record the haptics plugin and the mobile capability file (done, including the iOS wiring; Android *pending #64*). §12 unchanged. §13: add the decisions below (done).
 - `BOARD_DESIGN.md` §4.2: sizing now comes from the board area (§4.2 here). Done.
-- `README.md`: add this document to the docs index, plus the mobile dev commands (`bun tauri android dev`, `bun tauri ios dev`) and the toolchain prerequisites. Done, labeled pending since the native projects do not exist yet.
+- `README.md`: add this document to the docs index, plus the mobile dev commands (`bun tauri android dev`, `bun tauri ios dev`) and the toolchain prerequisites. Done for iOS; the Android command and prerequisites stay labeled pending #64.
 
 ## 12. Decisions
 
