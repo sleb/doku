@@ -62,6 +62,22 @@ describe("useShortcuts", () => {
     expect(e.defaultPrevented).toBe(true);
   });
 
+  test("Cmd+Y does nothing", () => {
+    renderHook(() => useShortcuts());
+    gameStore.getState().undo();
+    const e = press({ key: "y", metaKey: true });
+    expect(future()).toBe(1);
+    expect(e.defaultPrevented).toBe(false);
+    press({ key: "y", metaKey: true, ctrlKey: true });
+    expect(future()).toBe(1);
+  });
+
+  test("one z undoes exactly once", () => {
+    renderHook(() => useShortcuts());
+    press({ key: "z" });
+    expect(marked()).toBe(1);
+  });
+
   test("ignores auto-repeat", () => {
     renderHook(() => useShortcuts());
     const e = press({ key: "z", repeat: true });
