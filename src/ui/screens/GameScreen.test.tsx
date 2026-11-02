@@ -101,7 +101,7 @@ describe("GameScreen", () => {
     expect(screen.getByRole("button", { name: "Next level" })).toHaveFocus();
     expect(screen.getByRole("grid").closest("[inert]")).not.toBeNull();
     for (const i of nonSolution.slice(0, 3)) {
-      expect(cell(i)).toBeDisabled();
+      expect(cell(i)).toHaveAttribute("aria-disabled", "true");
       expect(label(i)).toBe("empty");
     }
     await userEvent.click(cell(nonSolution[0]));

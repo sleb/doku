@@ -55,6 +55,7 @@ export const CellView = memo(function CellView({
   );
   // A second finger or palm on a neighbor must not mark it mid-hold.
   const toggleMark = () => {
+    if (disabled) return;
     const owner = holdOwner?.current;
     if (owner == null || owner === index) onToggleMark(index);
   };
@@ -75,7 +76,7 @@ export const CellView = memo(function CellView({
       data-conflict={isConflict ? "true" : undefined}
       className={className}
       data-holding={hold.holding ? "true" : undefined}
-      disabled={disabled}
+      aria-disabled={disabled ? "true" : undefined}
       tabIndex={tabIndex}
       data-index={index}
       onPointerDown={(e) => {

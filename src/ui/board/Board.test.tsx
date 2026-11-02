@@ -166,17 +166,18 @@ describe("Board", () => {
       return h;
     };
 
-    test("empty and own-mark cells are enabled; face and wrong cells disabled", () => {
+    test("empty and own-mark cells are not aria-disabled; face and wrong cells aria-disabled", () => {
       renderMixed(false);
-      expect(at(0)).toBeEnabled();
-      expect(at(1)).toBeEnabled();
-      expect(at(2)).toBeDisabled();
-      expect(at(3)).toBeDisabled();
+      expect(at(0)).not.toHaveAttribute("aria-disabled");
+      expect(at(1)).not.toHaveAttribute("aria-disabled");
+      expect(at(2)).toHaveAttribute("aria-disabled", "true");
+      expect(at(3)).toHaveAttribute("aria-disabled", "true");
     });
 
-    test("a disabled board disables every cell", () => {
+    test("a disabled board aria-disables every cell", () => {
       renderMixed(true);
-      for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
+      for (const b of screen.getAllByRole("button"))
+        expect(b).toHaveAttribute("aria-disabled", "true");
     });
 
     test("click and hold pass the flat index to the callbacks", async () => {
