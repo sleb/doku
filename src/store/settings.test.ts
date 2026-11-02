@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseSettings } from "./settings";
+import { parseSettings, settingsStore } from "./settings";
 
 const defaults = { haptics: true, seenRules: false };
 
@@ -38,17 +38,48 @@ describe("parseSettings", () => {
   });
 
   test("extra keys are dropped", () => {
-    expect(parseSettings({ haptics: false, seenRules: true, theme: "x" })).toEqual(
-      { haptics: false, seenRules: true },
-    );
+    expect(
+      parseSettings({ haptics: false, seenRules: true, theme: "x" }),
+    ).toEqual({ haptics: false, seenRules: true });
   });
 
   test("never throws on arbitrary JSON-ish input", () => {
-    const junk = [undefined, null, 0, NaN, "", [], {}, [[]], { haptics: {} }, { seenRules: [1] }, () => 1, Symbol("s")];
+    const junk = [
+      undefined,
+      null,
+      0,
+      NaN,
+      "",
+      [],
+      {},
+      [[]],
+      { haptics: {} },
+      { seenRules: [1] },
+      () => 1,
+      Symbol("s"),
+    ];
     for (const j of junk) {
       const out = parseSettings(j);
       expect(typeof out.haptics).toBe("boolean");
       expect(typeof out.seenRules).toBe("boolean");
     }
+  });
+});
+
+describe("settingsStore", () => {
+  test("starts with defaults", () => {
+    const { haptics, seenRules } = settingsStore.getState();
+    expect({ haptics, seenRules }).toEqual(defaults);
+  });
+});
+
+describe("settingsStore.set", () => {
+  test("merges a patch and leaves other fields alone", () => {
+    settingsStore.getState().set({ haptics: false });
+    const { haptics, seenRules } = settingsStore.getState();
+    expect({ haptics, seenRules }).toEqual({
+      haptics: false,
+      seenRules: false,
+    });
   });
 });

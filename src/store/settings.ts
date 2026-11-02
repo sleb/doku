@@ -1,3 +1,5 @@
+import { createStore } from "zustand/vanilla";
+
 export type Settings = { haptics: boolean; seenRules: boolean };
 
 export const defaultSettings: Settings = { haptics: true, seenRules: false };
@@ -13,3 +15,12 @@ export function parseSettings(raw: unknown): Settings {
     seenRules: bool(r.seenRules, defaultSettings.seenRules),
   };
 }
+
+export type SettingsStore = Settings & {
+  set(patch: Partial<Settings>): void;
+};
+
+export const settingsStore = createStore<SettingsStore>()((set) => ({
+  ...defaultSettings,
+  set: (patch) => set(patch),
+}));
