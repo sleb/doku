@@ -56,7 +56,7 @@ export function Board({
       aria-rowcount={size}
       aria-colcount={size}
       onKeyDown={(e) => {
-        const delta = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        const delta = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: size }[e.key];
         if (delta === undefined) return;
         const i = Number((e.target as HTMLElement).dataset.index);
         gridRef.current
