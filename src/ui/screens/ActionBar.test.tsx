@@ -3,12 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
-import { idleState } from "../../store/game";
+import { idleState, MAX_HEARTS } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { ActionBar } from "./ActionBar";
 
 const undoBtn = () => screen.getByRole("button", { name: "Undo" });
 const redoBtn = () => screen.getByRole("button", { name: "Redo" });
+const hintBtn = () =>
+  screen.getByRole("button", { name: /^Hint, costs one heart$/ });
 const cellAt = (i: number) => {
   const s = gameStore.getState();
   if (s.status === "idle") throw new Error("idle");
@@ -75,10 +77,48 @@ describe("ActionBar", () => {
     }
   });
 
+  test("Hint is enabled with 3 and 2 hearts, disabled on the last", async () => {
+    const user = userEvent.setup();
+    render(<ActionBar />);
+    expect((hintBtn() as HTMLButtonElement).disabled).toBe(false);
+    await user.click(hintBtn());
+    expect(gameStore.getState().hearts).toBe(MAX_HEARTS - 1);
+    expect((hintBtn() as HTMLButtonElement).disabled).toBe(false);
+    await user.click(hintBtn());
+    expect(gameStore.getState().hearts).toBe(1);
+    expect((hintBtn() as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("clicking Hint places the first row's face", async () => {
+    const user = userEvent.setup();
+    render(<ActionBar />);
+    await user.click(hintBtn());
+    expect(cellAt(level.solution[0])).toBe(Cell.Face);
+  });
+
+  test("Hint shows a non-wrapping cost marker and is 44px", () => {
+    render(<ActionBar />);
+    expect(hintBtn().textContent).toBe("Hint-1 ♥");
+    const cost = hintBtn().querySelector("span");
+    expect(cost?.className).toMatch(/whitespace-nowrap/);
+    expect(hintBtn().className).toMatch(/min-h-11/);
+    expect(hintBtn().className).toMatch(/min-w-11/);
+  });
+
+  test("Hint is disabled when paused, won or lost", () => {
+    for (const status of ["paused", "won", "lost"] as const) {
+      gameStore.setState({ status }, false);
+      const { unmount } = render(<ActionBar />);
+      expect((hintBtn() as HTMLButtonElement).disabled).toBe(true);
+      unmount();
+    }
+  });
+
   test("renders disabled buttons while idle", () => {
     gameStore.setState(idleState, false);
     render(<ActionBar />);
     expect((undoBtn() as HTMLButtonElement).disabled).toBe(true);
     expect((redoBtn() as HTMLButtonElement).disabled).toBe(true);
+    expect((hintBtn() as HTMLButtonElement).disabled).toBe(true);
   });
 });

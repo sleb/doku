@@ -227,6 +227,16 @@ describe("GameScreen", () => {
       expect(play().mock.calls).toEqual([["wrong"]]);
     });
 
+    test("the Hint button plays place, not wrong, and drops a heart", async () => {
+      render(<GameScreen level={level} />);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Hint, costs one heart" }),
+      );
+      expect(play().mock.calls).toEqual([["place"]]);
+      expect(screen.getByRole("img", { name: "2 of 3 hearts" })).toBeTruthy();
+      expect(label(solution[0])).toMatch(/face/i);
+    });
+
     test("a cross tap is silent", async () => {
       render(<GameScreen level={level} />);
       await userEvent.click(cell(nonSolution[0]));

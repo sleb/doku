@@ -94,7 +94,7 @@ type Started = {
 };
 ```
 
-Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arrives with Hint in #75. The stacks are not persisted until M4-08.
+Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arrived with Hint in M4-04. The stacks are not persisted until M4-08.
 
 `idle` is unchanged. State machine: `idle → playing ⇄ paused → won | lost`; `restart` and `startLevel` go to `playing` from anywhere.
 
@@ -107,10 +107,12 @@ Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arr
 | `toggleMark(s, cell)` | Existing behavior, plus: when it changes an editable cell, pushes `cell` on `history` and clears `future`. |
 | `undo(s)` / `redo(s)` | Pop a cell from `history` (or `future`), flip its mark, push the cell on the other stack. No-op on empty stacks or when not `playing`. |
 | `placeFace(s, cell)` | Unchanged, plus: whichever way it resolves the cell becomes locked, so `cell` is removed from every entry of `history` and `future`. This keeps the invariant below. |
-| `useHint(s)` | `playing` only. `nextHint(board, level)` (§4.4) returns a cell; the transition commits a correct face there exactly as `placeFace` does (so it can win the level), increments `hintsUsed` and costs one heart. Refused (no-op) when `hearts <= 1`, so a hint can never end the level in a loss. |
+| `hint(s)` | `playing` only. `nextHint(board, level)` (§4.4) returns a cell; the transition commits a correct face there exactly as `placeFace` does (so it can win the level), increments `hintsUsed` and costs one heart. Refused (no-op) when `hearts <= 1`, so a hint can never end the level in a loss. |
 | `restart(s)` / `startLevel(l)` | Reset to a fresh board: hearts 3, `elapsedMs` 0, `hintsUsed` 0, empty stacks. |
 
-Implemented in M4-03: `undo`/`redo` flip the cell (Mark to Empty or back) with no before/after tagging, never touch `hearts`, `wrong` or `elapsedMs`, and return the same reference when they are no-ops. A toggle on a locked cell pushes nothing and leaves `future` alone. `useHint` is #75.
+Implemented in M4-03: `undo`/`redo` flip the cell (Mark to Empty or back) with no before/after tagging, never touch `hearts`, `wrong` or `elapsedMs`, and return the same reference when they are no-ops. A toggle on a locked cell pushes nothing and leaves `future` alone. 
+
+Implemented in M4-04: the transition is named `hint` (not `useHint`: Biome's hooks lint flags any `use*` call outside a component) and the store action is `hint()`. `hintsUsed` is required on `Started`, 0 from `startLevel`, so `restart` resets it. `commitFace` is shared with `placeFace` (win detection, stack pruning); a hint overwrites a ✕ note on its target cell and prunes it from the stacks. `hint` returns the same reference when not `playing`, when `hearts <= 1`, or when no row is open. `feedbackFor` maps a `hintsUsed` increase to `place` (after win/lose, before the heart-drop check).
 
 **Invariant (property-tested):** every cell in `history` and `future` is currently editable (not a face, not wrong). Hence `undo`/`redo` never need a guard against locked cells, and flipping a cell is always valid.
 
@@ -126,6 +128,7 @@ Implemented in M4-03: `undo`/`redo` flip the cell (Mark to Empty or back) with n
 
 ```ts
 export function nextHint(board: Board, level: Level): { cell: number } | null;
+// Implemented in M4-04 as `number | null` (the cell index); the object form arrives with M5.
 ```
 
 It returns the solution cell of the first row (top to bottom) that has no face yet, or `null` when every row has one. The result is always correct and always editable (a wrong ✕ can never sit on a solution cell; a player ✕ can, and `placeFace` allows it). Milestone 5 adds `technique` and `explanation` and changes which cell is chosen; callers read only `cell` until then. Tests: pure, no input mutation, returns a cell where `judgeTap === "correct"`, `null` on a complete board, and repeated hints on a growing board terminate in a solved board.
@@ -226,7 +229,9 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
 - **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick.
 - **Action bar:** Undo and Redo disabled when their stack is empty; Hint disabled unless `playing` and `hearts > 1`; it shows the remaining hearts it will leave (the cost is visible before use). All three are real buttons with accessible names, shown in the `controls` slot (side panel in the wide layout, under the board in the tall one). The button hit area is at least 44 px (`MOBILE_DESIGN.md` §4.3).
 
-Implemented in M4-03: `ActionBar` (`src/ui/screens/ActionBar.tsx`) has Undo and Redo only; Hint is added in #75. Both are also disabled unless `status === "playing"`, so a paused board cannot be studied. Keyboard: a minimal `useUndoShortcuts` hook (`z`, `Shift+Z`, `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Ctrl+Y` on every platform) is a stopgap until #80 folds it into `useShortcuts`; it acts only while playing and ignores auto-repeat and Alt. The layout e2e specs now account for the controls row.
+Implemented in M4-03: `ActionBar` (`src/ui/screens/ActionBar.tsx`) has Undo and Redo only; Hint is added in M4-04 (below). Both are also disabled unless `status === "playing"`, so a paused board cannot be studied. Keyboard: a minimal `useUndoShortcuts` hook (`z`, `Shift+Z`, `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Ctrl+Y` on every platform) is a stopgap until #80 folds it into `useShortcuts`; it acts only while playing and ignores auto-repeat and Alt. The layout e2e specs now account for the controls row.
+
+Implemented in M4-04: Hint is the third button in the same row (same `min-h-11 min-w-11`, no extra height), labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`; disabled unless `playing` and `hearts > 1`. The hook is renamed `useActionShortcuts` and adds `h` (plain key only: ignores repeat, Alt, Ctrl, Meta; playing only). The layout e2e thresholds are unchanged.
 
 ### 7.3 Dialogs
 
@@ -269,7 +274,7 @@ Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) must 
 ## 9. Testing (strict TDD, each row written failing first)
 
 **Node**
-- `game.ts`: `tick` (accumulates, ignores bad deltas, only while `playing`); `pause`/`resume` state machine incl. board actions no-op when paused; `toggleMark` pushes history and clears `future`, and a no-op on a locked cell pushes nothing; `undo`/`redo` round-trip; invariant "history and future cells are editable" as a property test over random action sequences; `placeFace` prunes stacks; `useHint` places a correct face, costs exactly one heart, can win, is refused at 1 heart and when not `playing`; `feedbackFor` returns `place` (not `wrong`) for a hint; `restart` resets clock, hints, stacks; frozen inputs never mutated (extends `immutability.test.ts`).
+- `game.ts`: `tick` (accumulates, ignores bad deltas, only while `playing`); `pause`/`resume` state machine incl. board actions no-op when paused; `toggleMark` pushes history and clears `future`, and a no-op on a locked cell pushes nothing; `undo`/`redo` round-trip; invariant "history and future cells are editable" as a property test over random action sequences; `placeFace` prunes stacks; `hint` places a correct face, costs exactly one heart, can win, is refused at 1 heart and when not `playing`; `feedbackFor` returns `place` (not `wrong`) for a hint; `restart` resets clock, hints, stacks; frozen inputs never mutated (extends `immutability.test.ts`).
 - `hints.ts`: §4.4.
 - `progress.ts`: `recordWin` (advances, never regresses, keeps min best), `startOver`, clamping.
 - `persist.ts`: round-trip `toSaved`/`fromSaved`; rejection table (wrong level id, wrong length, bad cell value, wrong index not a mark, hearts 0 or 4, negative elapsed, non-integer hints); a fuzz test that `fromSaved` never throws on arbitrary JSON.
@@ -302,7 +307,7 @@ Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full deskto
 1. **M4-01 Seed pack and campaign order:** §3.1. `pack-1.json`, `campaign.ts`, `tools/seed-pack.ts`, remove `demoLevel.ts`.
 2. **M4-02 Timer and pause:** `tick`/`pause`/`resume`, `useClock`, auto-pause, `<Dialog>`, `PauseDialog`, timer in `TopBar`. §4.2, §7.1, §7.2.
 3. **M4-03 Undo and redo for notes:** history/future stacks, pruning, `ActionBar` Undo/Redo, `z` shortcuts. [02 for the `Dialog`-free parts only; can start in parallel]
-4. **M4-04 Hints:** `engine/hints.ts`, `useHint`, Hint button, `h`. §4.4.
+4. **M4-04 Hints:** `engine/hints.ts`, `hint`, Hint button, `h`. §4.4.
 5. **M4-05 Storage seam:** `Storage`, three adapters, `tauri-plugin-store` wiring and capability. §5.1, §8.
 6. **M4-06 Settings and rules:** settings store and persistence, `SettingsDialog`, `RulesDialog`, haptics gating. [05, 02]
 7. **M4-07 Level progression:** `progress.ts`, `campaign.ts` flow, `GameScreen` without props, `ResultModal` stats and "Next level", `Finale`, `?level=` override. [01, 02, 05]
