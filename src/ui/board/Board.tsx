@@ -28,6 +28,12 @@ export function Board({
   const { size } = level;
   const holdOwner = useRef<number | null>(null);
   const [active, setActive] = useState(0);
+  // A new level starts with the first cell tabbable (state adjusted in render).
+  const [activeLevel, setActiveLevel] = useState(level);
+  if (activeLevel !== level) {
+    setActiveLevel(level);
+    setActive(0);
+  }
   const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {

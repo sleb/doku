@@ -2,7 +2,10 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
-import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
+import {
+  multiSolutionLevel7,
+  uniqueLevel7 as level,
+} from "../../engine/__fixtures__/levels";
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
@@ -214,6 +217,21 @@ describe("Board", () => {
       act(() => buttons()[7].focus());
       const tabbable = buttons().filter((b) => b.tabIndex === 0);
       expect(tabbable).toEqual([buttons()[7]]);
+    });
+
+    test("a new level resets the tabbable cell to the first", () => {
+      const props = {
+        board: emptyBoard(level),
+        wrong: none,
+        conflicts: none,
+        disabled: false,
+        ...handlers(),
+      };
+      const { rerender } = render(<Board level={level} {...props} />);
+      act(() => buttons()[7].focus());
+      rerender(<Board level={multiSolutionLevel7} {...props} />);
+      const tabbable = buttons().filter((b) => b.tabIndex === 0);
+      expect(tabbable).toEqual([buttons()[0]]);
     });
   });
 });
