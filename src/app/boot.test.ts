@@ -128,3 +128,15 @@ describe("boot save", () => {
     expect(state.board?.[4]).toBe(1);
   });
 });
+
+describe("boot stale save", () => {
+  test("a save for another level is removed and a fresh level starts", async () => {
+    const storage = new MemoryStorage();
+    const other = startLevel(LEVELS[1]) as Started;
+    await storage.set("save", toSaved(toggleMark(other, 4) as Started));
+    await boot(storage);
+    expect(gameStore.getState().status).toBe("playing");
+    expect(gameStore.getState().level).toBe(LEVELS[0]);
+    expect(await storage.get("save")).toBeUndefined();
+  });
+});

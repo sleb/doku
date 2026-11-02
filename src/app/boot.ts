@@ -41,7 +41,10 @@ async function restoreSaved(storage: Storage): Promise<boolean> {
   } catch {
     // Unreadable: start fresh.
   }
-  if (!restored) return false;
+  if (!restored) {
+    await storage.remove("save").catch(() => {});
+    return false;
+  }
   gameStore.setState(restored);
   return true;
 }
