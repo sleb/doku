@@ -28,6 +28,7 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
     return null;
   }
   const r = raw as SavedGame;
+  if (r.levelId !== level.id) return null;
   return {
     status: "paused",
     level,

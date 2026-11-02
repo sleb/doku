@@ -73,3 +73,9 @@ describe("fromSaved rejects", () => {
     expect(fromSaved(raw, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved level id", () => {
+  test("a save for another level is rejected", () => {
+    expect(fromSaved({ ...validSave(), levelId: "other" }, uniqueLevel7)).toBeNull();
+  });
+});
