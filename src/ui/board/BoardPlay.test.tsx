@@ -177,7 +177,7 @@ describe("playing the board", () => {
     hold(cell(solution[0]));
     hold(cell(wrongCell));
     for (const i of [solution[0], wrongCell]) {
-      expect(cell(i)).toBeDisabled();
+      expect(cell(i)).toHaveAttribute("aria-disabled", "true");
       await userEvent.click(cell(i));
       hold(cell(i));
     }
@@ -185,7 +185,7 @@ describe("playing the board", () => {
     expect(label(wrongCell)).toBe("wrong");
     expect(hearts()).toBe(2);
     await userEvent.click(cell(solution[1]));
-    expect(cell(solution[1])).toBeEnabled();
+    expect(cell(solution[1])).not.toHaveAttribute("aria-disabled");
     await userEvent.click(cell(solution[1]));
     expect(label(solution[1])).toBe("empty");
   });
@@ -197,7 +197,8 @@ describe("playing the board", () => {
     const free = Array.from({ length: n * n }, (_, i) => i).filter(
       (i) => !solution.includes(i),
     );
-    for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
+    for (const b of screen.getAllByRole("button"))
+      expect(b).toHaveAttribute("aria-disabled", "true");
     await userEvent.click(cell(free[0]));
     hold(cell(free[0]));
     expect(screen.getAllByRole("button", { name: /empty$/ })).toHaveLength(
@@ -212,7 +213,8 @@ describe("playing the board", () => {
       .slice(0, 4);
     for (const i of wrongs.slice(0, 3)) hold(cell(i));
     expect(store.getState().status).toBe("lost");
-    for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
+    for (const b of screen.getAllByRole("button"))
+      expect(b).toHaveAttribute("aria-disabled", "true");
     await userEvent.click(cell(wrongs[3]));
     hold(cell(wrongs[3]));
     expect(cell(wrongs[3]).getAttribute("aria-label")).toMatch(/empty$/);
@@ -220,6 +222,9 @@ describe("playing the board", () => {
 
   test("only the changed cell re-renders", async () => {
     const { cell } = setup();
+    // Focusing moves the roving tabindex (re-rendering the old and new active
+    // cell), so settle focus first and measure the mark alone.
+    act(() => cell(solution[3]).focus());
     renders.byIndex.clear();
     await act(async () => {
       await userEvent.click(cell(solution[3]));

@@ -101,7 +101,7 @@ describe("GameScreen", () => {
     expect(screen.getByRole("button", { name: "Next level" })).toHaveFocus();
     expect(screen.getByRole("grid").closest("[inert]")).not.toBeNull();
     for (const i of nonSolution.slice(0, 3)) {
-      expect(cell(i)).toBeDisabled();
+      expect(cell(i)).toHaveAttribute("aria-disabled", "true");
       expect(label(i)).toBe("empty");
     }
     await userEvent.click(cell(nonSolution[0]));
@@ -148,6 +148,39 @@ describe("GameScreen", () => {
       screen.getByRole("heading", { name: `Level 2 of ${LEVELS.length}` }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  test("Tab enters the board on the active cell; pause then resume returns focus to it", async () => {
+    const user = userEvent.setup();
+    renderGame();
+    act(() => cell(7).focus());
+    act(() => cell(7).blur());
+    await user.tab(); // the top bar's Pause button comes first
+    await user.tab();
+    expect(cell(7)).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(gameStore.getState().status).toBe("paused");
+    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(cell(7)).toHaveFocus();
+  });
+
+  test("resume focuses the active cell when focus was lost while paused", async () => {
+    const user = userEvent.setup();
+    renderGame();
+    expect(document.body).toHaveFocus();
+    act(() => gameStore.getState().pause());
+    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(cell(0)).toHaveFocus();
+  });
+
+  test("a focused cell that becomes a face keeps focus", () => {
+    renderGame();
+    const target = cell(solution[0]);
+    act(() => target.focus());
+    holdCell(target);
+    expect(label(solution[0])).toBe("face");
+    expect(target).toHaveFocus();
+    expect(target).toHaveAttribute("aria-disabled", "true");
   });
 
   test("one wrong tap keeps the dialog hidden and shows 2 hearts", async () => {
@@ -365,6 +398,19 @@ describe("GameScreen", () => {
       renderGame();
       await user.click(cell(nonSolution[0]));
       await user.keyboard("z");
+      expect(label(nonSolution[0])).toBe("empty");
+    });
+
+    test("z does nothing while a cell is being held, and works after", async () => {
+      const user = userEvent.setup();
+      renderGame();
+      await user.click(cell(nonSolution[0]));
+      const target = cell(nonSolution[1]);
+      fireEvent.pointerDown(target, { button: 0, pointerId: 1 });
+      fireEvent.keyDown(window, { key: "z" });
+      expect(label(nonSolution[0])).toBe("marked");
+      fireEvent.pointerUp(target, { pointerId: 1 });
+      fireEvent.keyDown(window, { key: "z" });
       expect(label(nonSolution[0])).toBe("empty");
     });
 

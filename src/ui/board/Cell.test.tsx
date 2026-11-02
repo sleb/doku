@@ -83,6 +83,12 @@ describe("CellView", () => {
     expect(b.className).toContain("ring-");
   });
 
+  test("shows an outline on keyboard focus, inset past the conflict ring", () => {
+    const cls = renderCell().className;
+    expect(cls).toContain("focus-visible:outline-3");
+    expect(cls).toContain("focus-visible:-outline-offset-8");
+  });
+
   test("no conflict means no ring", () => {
     const b = renderCell();
     expect(b.dataset.conflict).toBeUndefined();
@@ -160,19 +166,45 @@ describe("CellView", () => {
     expect(fireEvent.keyUp(b, { key: "a" })).toBe(true);
   });
 
-  test("disabled is reflected on the button", () => {
-    expect(renderCell({ disabled: true })).toBeDisabled();
+  test("a locked cell is aria-disabled but stays focusable (not natively disabled)", () => {
+    const locked = renderCell({ disabled: true });
+    expect(locked.getAttribute("aria-disabled")).toBe("true");
+    expect(locked).toBeEnabled();
     cleanup();
-    expect(renderCell({ disabled: false })).toBeEnabled();
+    const open = renderCell({ disabled: false });
+    expect(open.hasAttribute("aria-disabled")).toBe(false);
   });
 
-  test("a disabled cell ignores clicks and keys", async () => {
-    const b = renderCell({ disabled: true });
-    await userEvent.dblClick(b);
-    b.focus();
-    await userEvent.keyboard("x ");
-    expect(b.onToggleMark).not.toHaveBeenCalled();
-    expect(b.onPlaceFace).not.toHaveBeenCalled();
+  describe("a locked cell ignores input", () => {
+    test("click", async () => {
+      const b = renderCell({ disabled: true });
+      await userEvent.click(b);
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("x", async () => {
+      const b = renderCell({ disabled: true });
+      b.focus();
+      await userEvent.keyboard("x");
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("Enter", async () => {
+      const b = renderCell({ disabled: true });
+      b.focus();
+      await userEvent.keyboard("{Enter}");
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("Space-hold", async () => {
+      const b = renderCell({ disabled: true });
+      b.focus();
+      vi.useFakeTimers();
+      fireEvent.keyDown(b, { key: " " });
+      act(() => vi.advanceTimersByTime(HOLD_TOTAL_MS * 2));
+      vi.useRealTimers();
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
   });
 
   describe("hold to place a face", () => {

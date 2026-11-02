@@ -1,4 +1,10 @@
-import { type CSSProperties, useMemo, useRef } from "react";
+import {
+  type CSSProperties,
+  type RefObject,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
 import { CellView } from "./Cell";
@@ -14,6 +20,8 @@ export interface BoardProps {
   disabled: boolean;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
+  /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
+  holdOwner?: RefObject<number | null>;
 }
 
 export function Board({
@@ -24,9 +32,18 @@ export function Board({
   disabled,
   onToggleMark,
   onPlaceFace,
+  holdOwner: sharedHoldOwner,
 }: BoardProps) {
   const { size } = level;
-  const holdOwner = useRef<number | null>(null);
+  const ownHoldOwner = useRef<number | null>(null);
+  const holdOwner = sharedHoldOwner ?? ownHoldOwner;
+  const [active, setActive] = useState(0);
+  // A new level starts with the first cell tabbable (state adjusted in render).
+  const [activeLevel, setActiveLevel] = useState(level);
+  if (activeLevel !== level) {
+    setActiveLevel(level);
+    setActive(0);
+  }
   const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
@@ -48,6 +65,29 @@ export function Board({
       aria-label="Puzzle board"
       aria-rowcount={size}
       aria-colcount={size}
+      onKeyDown={(e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+        const i = Number((e.target as HTMLElement).dataset.index);
+        const row = Math.floor(i / size);
+        const col = i % size;
+        let target: number;
+        if (e.key === "Home") target = row * size;
+        else if (e.key === "End") target = row * size + size - 1;
+        else if (e.key === "ArrowRight") target = i + (col < size - 1 ? 1 : 0);
+        else if (e.key === "ArrowLeft") target = i - (col > 0 ? 1 : 0);
+        else if (e.key === "ArrowDown")
+          target = i + (row < size - 1 ? size : 0);
+        else if (e.key === "ArrowUp") target = i - (row > 0 ? size : 0);
+        else return;
+        e.preventDefault();
+        gridRef.current
+          ?.querySelector<HTMLElement>(`[data-index="${target}"]`)
+          ?.focus();
+      }}
+      onFocus={(e) => {
+        const i = (e.target as HTMLElement).dataset.index;
+        if (i !== undefined) setActive(Number(i));
+      }}
       className="relative grid w-max border-4 border-neutral-800"
       style={style}
     >
@@ -66,6 +106,7 @@ export function Board({
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
                 disabled={disabled || isLocked(board, wrong, g.index)}
+                tabIndex={g.index === active ? 0 : -1}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
                 holdOwner={holdOwner}
