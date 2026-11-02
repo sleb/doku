@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
 import {
-  multiSolutionLevel7,
   uniqueLevel7 as level,
+  multiSolutionLevel7,
 } from "../../engine/__fixtures__/levels";
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
@@ -318,6 +318,13 @@ describe("Board", () => {
       focusAt(n * n - 2);
       await userEvent.keyboard("{ArrowDown}");
       expect(activeIndex()).toBe(n * n - 2);
+    });
+
+    test("Home focuses the first cell of the row", async () => {
+      renderBoard();
+      focusAt(2 * n + 4);
+      await userEvent.keyboard("{Home}");
+      expect(activeIndex()).toBe(2 * n);
     });
   });
 });
