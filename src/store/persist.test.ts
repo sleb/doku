@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { Cell } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
-import { idleState, placeFace, startLevel, toggleMark } from "./game";
+import {
+  idleState,
+  placeFace,
+  type Started,
+  startLevel,
+  toggleMark,
+} from "./game";
 import { fromSaved, type SavedGame, toSaved } from "./persist";
 
 describe("toSaved", () => {
@@ -10,7 +16,7 @@ describe("toSaved", () => {
   });
 
   test("is null for won and lost", () => {
-    const s = startLevel(uniqueLevel7);
+    const s = startLevel(uniqueLevel7) as Started;
     expect(toSaved({ ...s, status: "won" })).toBeNull();
     expect(toSaved({ ...s, status: "lost" })).toBeNull();
   });
