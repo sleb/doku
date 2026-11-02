@@ -34,6 +34,8 @@ export function GameScreen() {
     gameStore.getState();
   const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
   const holdOwner = useRef<number | null>(null);
+  const boardArea = useRef<HTMLDivElement>(null);
+  const wasPaused = useRef(false);
   useClock();
   useAutoPause();
   useShortcuts({ holdOwner });
@@ -47,6 +49,20 @@ export function GameScreen() {
       }),
     [],
   );
+
+  // Back from a pause, hand focus to the board's active cell if it fell to the
+  // page (the board is hidden while paused, so it cannot hold focus then).
+  useEffect(() => {
+    if (status === "paused") wasPaused.current = true;
+    else if (status === "playing" && wasPaused.current) {
+      wasPaused.current = false;
+      const a = document.activeElement;
+      if (!a || a === document.body)
+        boardArea.current
+          ?.querySelector<HTMLElement>("[tabindex='0']")
+          ?.focus();
+    }
+  }, [status]);
 
   // First launch: Rules open over a paused game. Derived from `seenRules`
   // (set on dismissal), so StrictMode's double effects cannot reopen it.
@@ -79,6 +95,7 @@ export function GameScreen() {
         }
         board={
           <div
+            ref={boardArea}
             inert={finished || paused}
             style={paused ? { visibility: "hidden" } : undefined}
           >

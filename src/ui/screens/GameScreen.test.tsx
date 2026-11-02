@@ -164,6 +164,15 @@ describe("GameScreen", () => {
     expect(cell(7)).toHaveFocus();
   });
 
+  test("resume focuses the active cell when focus was lost while paused", async () => {
+    const user = userEvent.setup();
+    renderGame();
+    expect(document.body).toHaveFocus();
+    act(() => gameStore.getState().pause());
+    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(cell(0)).toHaveFocus();
+  });
+
   test("a focused cell that becomes a face keeps focus", () => {
     renderGame();
     const target = cell(solution[0]);

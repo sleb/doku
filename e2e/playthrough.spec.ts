@@ -84,12 +84,12 @@ test("the board is inert behind the result dialog", async ({ page }) => {
   ).toBeVisible();
   await expect(retry(page)).toBeFocused();
 
-  // Cells are also `disabled`, which would mask a missing `inert`. Strip
-  // `disabled` from every cell so only `inert` can keep the board unreachable.
+  // Cells are also `aria-disabled`, which would mask a missing `inert`. Strip
+  // it from every cell so only `inert` can keep the board unreachable.
   const other = cell(page, 5, solution[5]);
   await page.evaluate(() => {
     for (const b of document.querySelectorAll('button[aria-label^="Row "]')) {
-      b.removeAttribute("disabled");
+      b.removeAttribute("aria-disabled");
     }
   });
   await expect(other).toBeEnabled();
