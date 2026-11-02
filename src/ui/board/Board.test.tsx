@@ -219,6 +219,18 @@ describe("Board", () => {
       expect(tabbable).toEqual([buttons()[7]]);
     });
 
+    test("Tab lands on the active cell and a second Tab leaves the board", async () => {
+      renderBoard();
+      act(() => buttons()[7].focus());
+      act(() => buttons()[7].blur());
+      await userEvent.tab();
+      expect(document.activeElement).toBe(buttons()[7]);
+      await userEvent.tab();
+      expect(screen.getByRole("grid").contains(document.activeElement)).toBe(
+        false,
+      );
+    });
+
     test("a new level resets the tabbable cell to the first", () => {
       const props = {
         board: emptyBoard(level),
