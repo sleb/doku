@@ -6,9 +6,12 @@ import {
   idleState,
   isLocked,
   MAX_HEARTS,
+  pause,
   placeFace,
   restart,
+  resume,
   startLevel,
+  tick,
   toggleMark,
 } from "./game";
 
@@ -298,5 +301,91 @@ describe("isLocked", () => {
     expect(isLocked(board, wrong, 1)).toBe(false);
     expect(isLocked(board, wrong, 2)).toBe(true);
     expect(isLocked(board, wrong, 3)).toBe(true);
+  });
+});
+
+describe("clock and pause", () => {
+  type Started = Exclude<GameState, { status: "idle" }>;
+  const begin = (): Started => {
+    const s = startLevel(uniqueLevel7);
+    if (s.status === "idle") throw new Error("unreachable");
+    return s;
+  };
+  const elapsed = (s: GameState) => (s.status === "idle" ? -1 : s.elapsedMs);
+
+  it("startLevel and restart reset elapsedMs to 0", () => {
+    expect(begin().elapsedMs).toBe(0);
+    const ticked = tick(begin(), 5000);
+    expect(elapsed(restart(ticked))).toBe(0);
+  });
+
+  it("tick adds dt while playing", () => {
+    expect(elapsed(tick(tick(begin(), 400), 600))).toBe(1000);
+  });
+
+  it("tick ignores negative, NaN and infinite dt", () => {
+    const s = begin();
+    for (const dt of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(tick(s, dt)).toBe(s);
+    }
+  });
+
+  it("tick is a no-op unless playing", () => {
+    const s = begin();
+    for (const status of ["paused", "won", "lost"] as const) {
+      const state = { ...s, status };
+      expect(tick(state, 100)).toBe(state);
+    }
+    expect(tick(idleState, 100)).toBe(idleState);
+  });
+
+  it("pause and resume switch playing and paused", () => {
+    const p = pause(begin());
+    expect(p.status).toBe("paused");
+    expect(resume(p).status).toBe("playing");
+  });
+
+  it("pause and resume are no-ops in other states", () => {
+    const s = begin();
+    expect(resume(s)).toBe(s);
+    for (const status of ["won", "lost"] as const) {
+      const state = { ...s, status };
+      expect(pause(state)).toBe(state);
+      expect(resume(state)).toBe(state);
+    }
+    const p = pause(s);
+    expect(pause(p)).toBe(p);
+    expect(pause(idleState)).toBe(idleState);
+    expect(resume(idleState)).toBe(idleState);
+  });
+
+  it("toggleMark and placeFace are no-ops while paused", () => {
+    const p = pause(begin());
+    expect(toggleMark(p, 0)).toBe(p);
+    expect(placeFace(p, 0)).toBe(p);
+  });
+
+  it("restart while paused plays again from 0", () => {
+    const p = pause(tick(begin(), 3000));
+    const r = restart(p);
+    expect(r.status).toBe("playing");
+    expect(elapsed(r)).toBe(0);
+  });
+
+  it("winning and losing freeze elapsed", () => {
+    const sol = uniqueLevel7.solution.map((c, r) => r * uniqueLevel7.size + c);
+    let s: GameState = tick(begin(), 1234);
+    for (const c of sol) s = placeFace(s, c);
+    expect(s.status).toBe("won");
+    expect(tick(s, 500)).toBe(s);
+    expect(elapsed(s)).toBe(1234);
+  });
+
+  it("does not mutate the previous state", () => {
+    const s = Object.freeze(begin());
+    expect(tick(s, 10)).not.toBe(s);
+    expect(pause(s)).not.toBe(s);
+    expect(s.elapsedMs).toBe(0);
+    expect(s.status).toBe("playing");
   });
 });

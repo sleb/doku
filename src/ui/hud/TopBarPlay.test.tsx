@@ -14,7 +14,7 @@ const wrongCell = Array.from({ length: n * n }, (_, i) => i).find(
 
 function Harness({ store }: { store: StoreApi<GameStore> }) {
   const hearts = useStore(store, (s) => s.hearts);
-  return <TopBar level={level} hearts={hearts} />;
+  return <TopBar level={level} hearts={hearts} onPause={() => {}} />;
 }
 
 test("a wrong face costs a heart in the top bar", () => {

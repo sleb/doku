@@ -9,16 +9,17 @@ import {
 
 export const MAX_HEARTS = 3;
 
-export type GameStatus = "idle" | "playing" | "won" | "lost";
+export type GameStatus = "idle" | "playing" | "paused" | "won" | "lost";
 
 export type GameState =
   | { status: "idle"; level: null; board: null; hearts: number }
   | {
-      status: "playing" | "won" | "lost";
+      status: "playing" | "paused" | "won" | "lost";
       level: Level;
       board: Board;
       wrong: ReadonlySet<number>;
       hearts: number;
+      elapsedMs: number;
     };
 
 export const idleState: GameState = {
@@ -35,7 +36,24 @@ export function startLevel(level: Level): GameState {
     board: emptyBoard(level),
     wrong: new Set(),
     hearts: MAX_HEARTS,
+    elapsedMs: 0,
   };
+}
+
+/** Advance the clock by `dt` ms; time is injected, never read here. */
+export function tick(state: GameState, dt: number): GameState {
+  if (state.status !== "playing" || !Number.isFinite(dt) || dt < 0) {
+    return state;
+  }
+  return { ...state, elapsedMs: state.elapsedMs + dt };
+}
+
+export function pause(state: GameState): GameState {
+  return state.status === "playing" ? { ...state, status: "paused" } : state;
+}
+
+export function resume(state: GameState): GameState {
+  return state.status === "paused" ? { ...state, status: "playing" } : state;
 }
 
 export function restart(state: GameState): GameState {

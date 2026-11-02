@@ -226,4 +226,18 @@ describe("createGameStore", () => {
       RangeError,
     );
   });
+
+  it("tick, pause and resume drive the clock state", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().tick(250);
+    store.getState().pause();
+    expect(store.getState().status).toBe("paused");
+    store.getState().tick(250);
+    store.getState().resume();
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.status).toBe("playing");
+    expect(s.elapsedMs).toBe(250);
+  });
 });

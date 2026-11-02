@@ -73,7 +73,7 @@ test("?level=demo-11 selects the 11x11 demo level (read once at load)", async ()
     expect(
       screen.getByRole("heading", { name: demoLevel11.id }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("button")).toHaveLength(121);
+    expect(screen.getAllByRole("button", { name: /^Row / })).toHaveLength(121);
   } finally {
     window.history.pushState({}, "", "/");
   }
