@@ -239,13 +239,13 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
 
 - **Clock driver:** a `useClock()` hook in `GameScreen`. While `status === "playing"` it runs a 500 ms interval and calls `tick(now - last)` using `performance.now()` deltas, so a delayed interval does not lose time. The store is pure; time is injected by the hook, never read by the store.
 - **Auto-pause:** `visibilitychange → hidden` and `window blur` dispatch `pause`. This covers minimizing on desktop and backgrounding on mobile. The player returns to the Pause dialog and presses Resume.
-- **Manual pause:** the pause button and `Esc` (Esc only pauses; it never resumes). Implemented: the minimal Esc handler lives in `useAutoPause` until #80 folds it into `useShortcuts`. The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
+- **Manual pause:** the pause button and `Esc` (Esc only pauses; it never resumes). Implemented in M4-09: Esc is handled by `useShortcuts`; `useAutoPause` keeps only visibility and blur. The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
 - **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick.
 - **Action bar:** Undo and Redo disabled when their stack is empty; Hint disabled unless `playing` and `hearts > 1`; it shows the remaining hearts it will leave (the cost is visible before use). All three are real buttons with accessible names, shown in the `controls` slot (side panel in the wide layout, under the board in the tall one). The button hit area is at least 44 px (`MOBILE_DESIGN.md` §4.3).
 
-Implemented in M4-03: `ActionBar` (`src/ui/screens/ActionBar.tsx`) has Undo and Redo only; Hint is added in M4-04 (below). Both are also disabled unless `status === "playing"`, so a paused board cannot be studied. Keyboard: a minimal `useUndoShortcuts` hook (`z`, `Shift+Z`, `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Ctrl+Y` on every platform) is a stopgap until #80 folds it into `useShortcuts`; it acts only while playing and ignores auto-repeat and Alt. The layout e2e specs now account for the controls row.
+Implemented in M4-03: `ActionBar` (`src/ui/screens/ActionBar.tsx`) has Undo and Redo only; Hint is added in M4-04 (below). Both are also disabled unless `status === "playing"`, so a paused board cannot be studied. Keyboard (`z`, `Shift+Z`, `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Ctrl+Y` on every platform) is handled by `useShortcuts` (M4-09); it acts only while playing and ignores auto-repeat and Alt. The layout e2e specs now account for the controls row.
 
-Implemented in M4-04: Hint is the third button in the same row (same `min-h-11 min-w-11`, no extra height), labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`; disabled unless `playing` and `hearts > 1`. The hook is renamed `useActionShortcuts` and adds `h` (plain key only: ignores repeat, Alt, Ctrl, Meta; playing only). The layout e2e thresholds are unchanged.
+Implemented in M4-04: Hint is the third button in the same row (same `min-h-11 min-w-11`, no extra height), labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`; disabled unless `playing` and `hearts > 1`. The shortcuts hook adds `h` (plain key only: ignores repeat, Alt, Ctrl, Meta; playing only). The layout e2e thresholds are unchanged.
 
 ### 7.3 Dialogs
 
@@ -262,6 +262,8 @@ Implemented in M4-07: `SettingsDialog` also has "Start over", which swaps to an 
 When `progress.next === LEVELS.length` the app shows `<Finale>`: "You finished", the sum of `bestMs` over the ids in `LEVELS` as "Total of best times", and "Start over" (no confirm). It is the only screen that exists without a board. `gameStore` is idle there, and the autosave has removed `save`.
 
 ### 7.5 Keyboard and pointer input
+
+Implemented in M4-09 (#80). Differences from the first draft below: `Cmd+Y` is deliberately not bound; `Ctrl+Y` redoes everywhere. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing during a hold while `Esc` still pauses. Modified arrows (Ctrl/Meta/Alt/Shift) are neither handled nor prevented. Cells show a `focus-visible` outline inset past the conflict ring. After Resume, if focus fell to the page, `GameScreen` focuses the board's tabbable cell (a real browser cannot restore focus onto the `visibility: hidden` board from `Dialog`'s cleanup; the e2e caught this where jsdom did not).
 
 Existing per-cell keys stay: `x` toggles ✕, holding `Space` places a face. New:
 
