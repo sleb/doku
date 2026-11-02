@@ -334,5 +334,16 @@ describe("Board", () => {
       await userEvent.keyboard("{End}");
       expect(activeIndex()).toBe(3 * n - 1);
     });
+
+    test("arrows move onto and past a locked cell", async () => {
+      const board = emptyBoard(level) as Uint8Array;
+      board[2] = Cell.Face;
+      renderBoard(board);
+      focusAt(1);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(2);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(3);
+    });
   });
 });
