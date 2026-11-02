@@ -10,3 +10,4 @@
 /gen/apple/build
 /gen/apple/DerivedData
 *.xcuserstate
+/gen/apple/Local.xcconfig

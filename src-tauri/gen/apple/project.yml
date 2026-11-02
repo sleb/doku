@@ -7,6 +7,9 @@ fileGroups: [../../src]
 configs:
   debug: debug
   release: release
+configFiles:
+  debug: Config.xcconfig
+  release: Config.xcconfig
 settingGroups:
   app:
     base:

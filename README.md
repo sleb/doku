@@ -53,7 +53,7 @@ bun tauri ios dev "iPhone 18 Pro Max"
 bun tauri android init && bun tauri android dev   # pending #64
 ```
 
-For a physical iOS device, set your signing team with `TAURI_APPLE_DEVELOPMENT_TEAM` (never commit it) and run `bun tauri ios dev --device`. Free the dev-server port 1420 first if a previous run is still alive.
+For a physical iOS device, add your Apple ID in Xcode (Settings → Accounts), then create `src-tauri/gen/apple/Local.xcconfig` (gitignored) containing `DEVELOPMENT_TEAM = <your team ID>`. Find the team ID as the `OU` of your Apple Development certificate: `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject`. Then run `bun tauri ios dev "<device name>"` (`xcrun devicectl list devices` lists names). `TAURI_APPLE_DEVELOPMENT_TEAM` is not applied by this Tauri CLI version when running `ios dev`. Free the dev-server port 1420 first if a previous run is still alive.
 
 Prerequisites: Xcode and `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` for iOS; Android Studio SDK and NDK, JDK 17, `ANDROID_HOME`/`JAVA_HOME` and the Android Rust targets for Android. `vite.config.ts` honors `TAURI_DEV_HOST` so a device can reach the dev server on port 1420.
 

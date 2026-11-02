@@ -22,6 +22,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		16FF6BBC1B5A3FF646A3D6E4 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		186ACC98C2FEEF09016791EE /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		1EA822D7D1CD89A7388E4147 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		1F002B3505F4395646ECBF49 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
@@ -119,6 +120,15 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		A973CE1593F272BBFE6DAE43 /* apple */ = {
+			isa = PBXGroup;
+			children = (
+				16FF6BBC1B5A3FF646A3D6E4 /* Config.xcconfig */,
+			);
+			name = apple;
+			path = .;
+			sourceTree = "<group>";
+		};
 		AF365F427D9CBF324D9BC142 /* bindings */ = {
 			isa = PBXGroup;
 			children = (
@@ -133,6 +143,7 @@
 				9B8092FA25D44E5DCE9711BD /* assets */,
 				F1A3C7E006998D2C709A08B4 /* Assets.xcassets */,
 				F474A63B73B9DB3CBC1EF795 /* LaunchScreen.storyboard */,
+				A973CE1593F272BBFE6DAE43 /* apple */,
 				87E3263B5318BCEED42E6176 /* doku_iOS */,
 				699CD9FE0C730F50AA5F0848 /* Externals */,
 				ED2AFA827BBD2C5941364AAE /* Sources */,
@@ -150,14 +161,14 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
-		"TEMP_15F1265E-F80F-4FB5-BFEC-0E769D8B7396" /* arm64 */ = {
+		"TEMP_6AB918B3-CD43-437D-B0C3-DC8F066B0C41" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
 			sourceTree = "<group>";
 		};
-		"TEMP_609FB2CC-38F2-4271-BDE7-AA4B233D4907" /* x86_64 */ = {
+		"TEMP_D9A084E5-F4A8-4797-A84C-4B84B60CF5F9" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -268,6 +279,7 @@
 /* Begin XCBuildConfiguration section */
 		1CA70BE9AFC27B4575236FE1 /* debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 16FF6BBC1B5A3FF646A3D6E4 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -362,6 +374,7 @@
 		};
 		5C60C8A0C31DC4E6AF8B0F78 /* release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 16FF6BBC1B5A3FF646A3D6E4 /* Config.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
