@@ -140,3 +140,18 @@ describe("boot stale save", () => {
     expect(await storage.get("save")).toBeUndefined();
   });
 });
+
+describe("boot corrupt save", () => {
+  test("a corrupt save starts fresh, is removed and does not throw", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("save", { levelId: LEVELS[0].id, board: "junk" });
+    await expect(boot(storage)).resolves.toBeUndefined();
+    expect(gameStore.getState().status).toBe("playing");
+    expect(await storage.get("save")).toBeUndefined();
+  });
+
+  test("no save starts the level normally", async () => {
+    await boot(new MemoryStorage());
+    expect(gameStore.getState().status).toBe("playing");
+  });
+});
