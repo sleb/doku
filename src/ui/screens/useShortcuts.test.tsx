@@ -131,6 +131,23 @@ describe("useShortcuts", () => {
       expect(gameStore.getState().hearts).toBe(MAX_HEARTS);
       expect(e.defaultPrevented).toBe(false);
     });
+
+    test("shortcuts work again once the hold ends", () => {
+      held.current = 5;
+      renderHook(() => useShortcuts({ holdOwner: held }));
+      press({ key: "z" });
+      expect(marked()).toBe(2);
+      held.current = null;
+      press({ key: "z" });
+      expect(marked()).toBe(1);
+    });
+
+    test("Escape still pauses during a hold", () => {
+      held.current = 5;
+      renderHook(() => useShortcuts({ holdOwner: held }));
+      press({ key: "Escape" });
+      expect(gameStore.getState().status).toBe("paused");
+    });
   });
 
   describe("Escape", () => {
