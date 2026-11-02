@@ -7,10 +7,16 @@ type Source = "pointer" | "key";
  * Press-and-hold gesture. `start` arms the gesture: `holding` turns on after
  * HOLD_DELAY_MS (so a plain click never shows the glow) and the hold completes
  * HOLD_MS later. `cancel` disarms it.
+ * `onActive` reports when the gesture is armed (true) and when it ends by
+ * cancel or completion (false).
  * On completion `onComplete` fires once. `swallowClick` reports (and resets)
  * whether a pointer hold just completed, so its trailing click can be ignored.
  */
-export function useHold(onComplete: () => void, disabled: boolean) {
+export function useHold(
+  onComplete: () => void,
+  disabled: boolean,
+  onActive?: (active: boolean) => void,
+) {
   const [holding, setHolding] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const delay = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -19,6 +25,8 @@ export function useHold(onComplete: () => void, disabled: boolean) {
   latest.current = onComplete;
   const off = useRef(disabled);
   off.current = disabled;
+  const activeCb = useRef(onActive);
+  activeCb.current = onActive;
 
   const cancel = useCallback(() => {
     clearTimeout(delay.current);
@@ -26,6 +34,7 @@ export function useHold(onComplete: () => void, disabled: boolean) {
     delay.current = undefined;
     timer.current = undefined;
     setHolding(false);
+    activeCb.current?.(false);
   }, []);
 
   const start = useCallback((source: Source) => {
@@ -36,6 +45,7 @@ export function useHold(onComplete: () => void, disabled: boolean) {
     )
       return;
     completed.current = false;
+    activeCb.current?.(true);
     delay.current = setTimeout(() => {
       delay.current = undefined;
       setHolding(true);
@@ -43,6 +53,7 @@ export function useHold(onComplete: () => void, disabled: boolean) {
         timer.current = undefined;
         completed.current = source === "pointer";
         setHolding(false);
+        activeCb.current?.(false);
         latest.current();
       }, HOLD_MS);
     }, HOLD_DELAY_MS);

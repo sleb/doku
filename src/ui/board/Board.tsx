@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo } from "react";
+import { type CSSProperties, useMemo, useRef } from "react";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
 import { CellView } from "./Cell";
@@ -26,6 +26,7 @@ export function Board({
   onPlaceFace,
 }: BoardProps) {
   const { size } = level;
+  const holdOwner = useRef<number | null>(null);
   const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
@@ -67,6 +68,7 @@ export function Board({
                 disabled={disabled || isLocked(board, wrong, g.index)}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
+                holdOwner={holdOwner}
               />
             </div>
           ))}

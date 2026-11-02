@@ -130,6 +130,28 @@ describe("playing the board", () => {
     expect(label(solution[1])).toBe("face");
   });
 
+  test("while one cell is held, taps and x on other cells are ignored", () => {
+    const { cell, label } = setup();
+    const a = cell(solution[0]);
+    const b = cell(solution[1]);
+    fireEvent.pointerDown(a, { button: 0, pointerId: 1 });
+    fireEvent.click(b);
+    expect(label(solution[1])).toBe("empty");
+    b.focus();
+    fireEvent.keyDown(b, { key: "x" });
+    expect(label(solution[1])).toBe("empty");
+    fireEvent.pointerUp(a, { pointerId: 1 });
+    fireEvent.click(b);
+    expect(label(solution[1])).toBe("marked");
+  });
+
+  test("a completed hold stops ignoring other cells", () => {
+    const { cell, label } = setup();
+    hold(cell(solution[0]));
+    fireEvent.click(cell(solution[1]));
+    expect(label(solution[1])).toBe("marked");
+  });
+
   test("keys act on the focused cell without firing a click", async () => {
     const { cell, label, hearts } = setup();
     const clicks = vi.fn();
