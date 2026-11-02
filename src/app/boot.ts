@@ -6,6 +6,7 @@ import {
   currentLevel,
   hydrateProgress,
   persistProgress,
+  progressStore,
 } from "../store/progress";
 import { hydrateSettings, persistSettings } from "../store/settings";
 import { recordWins, startCurrent } from "./campaign";
