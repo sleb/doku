@@ -150,6 +150,16 @@ describe("GameScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  test("a focused cell that becomes a face keeps focus", () => {
+    renderGame();
+    const target = cell(solution[0]);
+    act(() => target.focus());
+    holdCell(target);
+    expect(label(solution[0])).toBe("face");
+    expect(target).toHaveFocus();
+    expect(target).toHaveAttribute("aria-disabled", "true");
+  });
+
   test("one wrong tap keeps the dialog hidden and shows 2 hearts", async () => {
     renderGame();
     hold([nonSolution[0]]);
