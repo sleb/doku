@@ -174,6 +174,13 @@ describe("useShortcuts", () => {
       expect(e.defaultPrevented).toBe(true);
     });
 
+    test.each([{ ctrlKey: true }, { metaKey: true }])("ignores %o", (mods) => {
+      renderHook(() => useShortcuts());
+      const e = press({ key: "Escape", ...mods });
+      expect(gameStore.getState().status).toBe("playing");
+      expect(e.defaultPrevented).toBe(false);
+    });
+
     test("does not resume a paused game", () => {
       renderHook(() => useShortcuts());
       gameStore.getState().pause();
