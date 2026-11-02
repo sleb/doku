@@ -42,6 +42,13 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
   ) {
     return null;
   }
+  if (
+    typeof r.elapsedMs !== "number" ||
+    !Number.isFinite(r.elapsedMs) ||
+    r.elapsedMs < 0
+  ) {
+    return null;
+  }
   if (!Array.isArray(r.wrong)) return null;
   const wrong = new Set<number>();
   for (const cell of r.wrong) {

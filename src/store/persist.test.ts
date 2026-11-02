@@ -120,3 +120,9 @@ describe("fromSaved hearts", () => {
     expect(fromSaved({ ...validSave(), hearts }, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved elapsed", () => {
+  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, "5", null])("%j is rejected", (elapsedMs) => {
+    expect(fromSaved({ ...validSave(), elapsedMs }, uniqueLevel7)).toBeNull();
+  });
+});
