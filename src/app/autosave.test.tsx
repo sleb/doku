@@ -124,3 +124,22 @@ describe("installAutosave backgrounding", () => {
     expect(flush).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("installAutosave visible and pagehide", () => {
+  test("becoming visible writes and flushes nothing", async () => {
+    const flush = vi.spyOn(storage, "flush");
+    gameStore.getState().toggleMark(3);
+    setVisibility("visible");
+    expect(await storage.get("save")).toBeUndefined();
+    expect(flush).not.toHaveBeenCalled();
+  });
+
+  test("pagehide writes immediately then flushes", async () => {
+    const flush = vi.spyOn(storage, "flush");
+    gameStore.getState().toggleMark(3);
+    gameStore.getState().tick(3000);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(await storage.get("save")).toMatchObject({ elapsedMs: 3000 });
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+});

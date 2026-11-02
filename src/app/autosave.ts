@@ -14,13 +14,16 @@ export function installAutosave(
     const saved = toSaved(gameStore.getState());
     if (saved) storage.set(KEY, saved).catch(() => {});
   };
-  const onHidden = () => {
-    if (document.visibilityState !== "hidden") return;
+  const flushNow = () => {
     clearTimeout(timer);
     write();
     storage.flush().catch(() => {});
   };
-  document.addEventListener("visibilitychange", onHidden);
+  const onVisibility = () => {
+    if (document.visibilityState === "hidden") flushNow();
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("pagehide", flushNow);
   const unsubscribe = gameStore.subscribe((s, prev) => {
     const changed =
       s.board !== prev.board ||
@@ -40,7 +43,8 @@ export function installAutosave(
   });
   return () => {
     unsubscribe();
-    document.removeEventListener("visibilitychange", onHidden);
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("pagehide", flushNow);
     clearTimeout(timer);
   };
 }
