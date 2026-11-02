@@ -312,5 +312,12 @@ describe("Board", () => {
       await userEvent.keyboard("{ArrowUp}");
       expect(activeIndex()).toBe(3);
     });
+
+    test("ArrowDown stays on the last row", async () => {
+      renderBoard();
+      focusAt(n * n - 2);
+      await userEvent.keyboard("{ArrowDown}");
+      expect(activeIndex()).toBe(n * n - 2);
+    });
   });
 });
