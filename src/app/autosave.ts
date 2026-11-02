@@ -22,6 +22,12 @@ export function installAutosave(
       ("wrong" in s && "wrong" in prev && s.wrong !== prev.wrong) ||
       ("hintsUsed" in s && "hintsUsed" in prev && s.hintsUsed !== prev.hintsUsed);
     if (!changed) return;
+    if (toSaved(s) === null) {
+      // Finished or idle: a late debounced write must not resurrect a save.
+      clearTimeout(timer);
+      storage.remove(KEY).catch(() => {});
+      return;
+    }
     clearTimeout(timer);
     timer = setTimeout(write, debounceMs);
   });

@@ -75,3 +75,16 @@ describe("installAutosave moves", () => {
     });
   });
 });
+
+describe("installAutosave finish", () => {
+  test.each(["won", "lost"] as const)("%s removes the save and cancels a pending write", async (status) => {
+    gameStore.getState().toggleMark(3);
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toBeDefined();
+    gameStore.getState().toggleMark(4);
+    gameStore.setState({ status });
+    expect(await storage.get("save")).toBeUndefined();
+    vi.advanceTimersByTime(1000);
+    expect(await storage.get("save")).toBeUndefined();
+  });
+});
