@@ -8,7 +8,10 @@ const pos = { levelNumber: 1, levelCount: 8 };
 
 test("shows the remaining hearts and keeps the level id as data", () => {
   render(<TopBar level={level} {...pos} hearts={2} onPause={() => {}} />);
-  expect(screen.getByRole("heading")).toHaveAttribute("data-level-id", level.id);
+  expect(screen.getByRole("heading")).toHaveAttribute(
+    "data-level-id",
+    level.id,
+  );
   expect(screen.getByRole("img", { name: "2 of 3 hearts" })).toBeTruthy();
 });
 
