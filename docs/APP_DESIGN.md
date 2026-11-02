@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"; it was "Full desktop app" before mobile was pulled forward). It turns the single-level game into an app a person can open, play through a series of levels, quit, and come back to. It covers campaign progression, persistence, timer and pause, undo/redo, hints, settings, keyboard play, and the desktop window. The engine, the board and the mobile work (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`) are consumed as-is except where stated. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§12).
 
-**Status:** M4-01 (seed pack) and M4-02 (timer and pause, `Dialog`), M4-04 (hints), M4-05 (storage) and M4-06 (settings and rules) are implemented; the rest is design only.
+**Status:** M4-01 (seed pack) and M4-02 (timer and pause, `Dialog`), M4-04 (hints), M4-05 (storage) and M4-06 (settings and rules) and M4-07 (level progression) are implemented; the rest is design only.
 
 ## 1. Goals and non-goals
 
@@ -57,9 +57,11 @@ interface Progress {
 
 `src/store/progress.ts` has pure transitions plus a thin Zustand binding, the same split as `game.ts` / `gameStore.ts`:
 
-- `recordWin(p, index, id, elapsedMs)` → `next = max(p.next, index + 1)`, `bestMs[id] = min(existing, elapsedMs)`. Replaying never moves `next` backward and never raises a best.
+- `recordWin(p, index, elapsedMs)` (the id is `LEVELS[index].id`) → `next = max(p.next, index + 1)`, `bestMs[id] = min(existing, elapsedMs)`. Replaying never moves `next` backward and never raises a best.
 - `startOver(p)` → `next = 0`, keeps `bestMs`.
 - `currentLevel(p)` → `LEVELS[p.next]` or `null` when finished.
+
+Implemented in M4-07: `parseProgress(raw, count)` is total and pure; `next` is clamped to an integer in `[0, count]`, non-finite, negative or non-number `bestMs` entries are dropped. `hydrateProgress` / `persistProgress` follow the settings pattern (hydrate first, write on change, key `progress`). A hinted win still sets a best.
 
 `next` is clamped into `[0, LEVELS.length]` on load, so a pack that shrinks between versions cannot strand the player.
 
@@ -67,7 +69,7 @@ interface Progress {
 
 `src/app/campaign.ts` is the only code that starts levels. It owns the wiring between stores; components call its functions.
 
-- `boot(storage)` (§5.4): hydrate settings and progress, then restore a saved game if one matches the current level, otherwise `gameStore.startLevel(currentLevel)`.
+- `boot(storage, { devLevel })` (§5.4): hydrate settings and progress, then restore a saved game if one matches the current level (restore is #79), otherwise `startCurrent()`.
 - `nextLevel()`: after a win, `gameStore.startLevel(LEVELS[progress.next])`, or idle if finished.
 - `retry()`: `gameStore.restart()` (already exists).
 - `startOver()`: progress `startOver`, then start level 0.
@@ -75,7 +77,9 @@ interface Progress {
 
 Win on the last level records `next === LEVELS.length`; the result modal's button reads "Finish" and leads to the finale (§7.4). Level numbers shown to the player are `index + 1` of `LEVELS.length`.
 
-**Dev override:** `?level=<id>` (only when `import.meta.env.DEV`) makes `boot` ignore saved game and progress and start that level, without writing progress. This keeps the e2e specs that need the 11×11 board deterministic. Production builds have no override.
+Implemented in M4-07: `src/app/campaign.ts` exports `recordWins` (the subscription, installed once by `boot`), `startCurrent`, `nextLevel` (same as `startCurrent`; goes idle when finished) and `startOver`. Replaying an earlier level never lowers `next`. The `App` shows `<Finale>` when `progress.next === LEVELS.length` **and** `gameStore.status === "idle"`, so the last win's result modal ("Finish") is not hidden; "Finish" calls `nextLevel()`, which goes idle.
+
+**Dev override:** `?level=<id>` (only when `import.meta.env.DEV`) is parsed by the pure `devLevelOverride(search, isDev)` in `boot.ts` and passed as `boot(storage, { devLevel })`. It makes `boot` ignore saved game and progress and start that level, installing no win recording and no progress persistence, so it never writes progress. An unknown id boots normally. It does not skip the first-launch Rules. This keeps the e2e specs that need the 11×11 board deterministic. Production builds have no override.
 
 ## 4. Game state (`src/store/game.ts`)
 
@@ -179,12 +183,12 @@ Not saved: `history`/`future` (undo does not survive a restart) and the status. 
 
 ### 5.3 Settings and progress persistence
 
-Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to defaults) and `parseProgress(unknown): Progress` (clamp `next`, drop non-finite `bestMs` entries). Both are total functions: garbage in, defaults out.
+Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to defaults) and `parseProgress(unknown, count): Progress` (clamp `next`, drop non-finite `bestMs` entries). Both are total functions: garbage in, defaults out.
 
 ### 5.4 Wiring (`src/app/boot.ts`, `src/app/autosave.ts`)
 
 - `main.tsx`: `boot(storage).then(render)`. Nothing renders until boot resolves (tens of ms); no splash screen. A thrown read is logged and treated as "nothing stored".
-Implemented in M4-06: `boot(storage)` is minimal, `hydrateSettings` then `persistSettings` (hydrate first so loading does not write back; settings write immediately, no debounce). #78 and #79 extend it with progress, restore and autosave. e2e specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
+Implemented in M4-06: `boot(storage)` is minimal, `hydrateSettings` then `persistSettings` (hydrate first so loading does not write back; settings write immediately, no debounce). M4-07 added progress hydration and persistence, win recording and `startCurrent`; restore and autosave remain #79. e2e specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
 
 - **Autosave** is a `gameStore` subscription that fires `storage.set("save", toSaved(state))` when any of `board`, `wrong`, `hearts`, `hintsUsed`, `status` changed (shallow compare, so the 500 ms clock ticks do not write). Writes are coalesced with a 250 ms trailing debounce. `won` and `lost` and `idle` call `storage.remove("save")`. Progress and settings write on change (they change rarely).
 - **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save (now including `elapsedMs`, so a kill loses at most the time since the last background) and `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
@@ -201,7 +205,7 @@ interface Settings { haptics: boolean; seenRules: boolean }
 - The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics` (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
 - `seenRules` triggers the rules dialog on first launch (§7.3) and is set when it is dismissed.
 
-Implemented in M4-06: `Settings` is `{ haptics, seenRules }`; `parseSettings` is total with per-field fallback and drops extra keys; gating reads the store at event time. Start over ships with #78.
+Implemented in M4-06: `Settings` is `{ haptics, seenRules }`; `parseSettings` is total with per-field fallback and drops extra keys; gating reads the store at event time. Start over shipped with M4-07 (§7.3).
 
 Theme, sound and the color-blind palette are milestone 6 and add fields then. The settings dialog also has "Start over" (§7.3) because it is the one destructive action; it asks for confirmation.
 
@@ -245,13 +249,13 @@ Implemented in M4-02: `PauseDialog` started with Resume and Restart level. `Resu
 
 - **ResultModal (won):** "You solved it", the time, "Best: m:ss" (or "New best"), "Hints: n" if any, and one button: "Next level" (or "Finish" on the last level). Focus lands on that button. (lost): "Out of hearts" and "Retry", as today.
 - **RulesDialog:** the four rules from `DESIGN.md` §1 in plain text, the input cheat sheet (tap = ✕, hold = face; keyboard keys), and a "Got it" button. No interactive board; that is milestone 6.
-Implemented in M4-06: Pause has Resume, Restart level, Rules, Settings. `GameScreen` holds `sheet: "rules" | "settings" | null`; while a sheet is open the Pause dialog is unmounted and returns on close (Escape or the button), without resuming. `RulesDialog` ("Got it", Escape) and `SettingsDialog` (a `role="switch"` Haptics control and "Done") both pass `onClose`. On first launch (`!seenRules`, level loaded) Rules open over a game that is **paused** (clock stopped); dismissal sets `seenRules: true` and resumes straight to play. `seenRules` is derived state, not an effect, so StrictMode cannot reopen it. **Start over is deferred to #78**, since it needs `progress`.
+Implemented in M4-06: Pause has Resume, Restart level, Rules, Settings. `GameScreen` holds `sheet: "rules" | "settings" | null`; while a sheet is open the Pause dialog is unmounted and returns on close (Escape or the button), without resuming. `RulesDialog` ("Got it", Escape) and `SettingsDialog` (a `role="switch"` Haptics control and "Done") both pass `onClose`. On first launch (`!seenRules`, level loaded) Rules open over a game that is **paused** (clock stopped); dismissal sets `seenRules: true` and resumes straight to play. `seenRules` is derived state, not an effect, so StrictMode cannot reopen it.
 
-- **SettingsDialog (target):** a haptics switch and "Start over" with a confirm step. Opened from the Pause dialog.
+Implemented in M4-07: `SettingsDialog` also has "Start over", which swaps to an inline confirm ("Start over? Your best times are kept." with Confirm and Cancel). Escape cancels the confirm first (a second Escape closes the dialog); Confirm calls `campaign.startOver` and closes the sheet. `ResultModal` takes `elapsedMs`, `bestMs`, `hintsUsed`, `isLast`: "New best" when `elapsedMs <= best` (the win is already recorded, so a first win or a tie shows it), otherwise "Best: m:ss"; "Hints: n" only when n > 0; Retry appears only on a loss. The `TopBar` heading reads "Level n of N" (id kept as `data-level-id`). `GameScreen` takes no props and reads its level from `gameStore`.
 
 ### 7.4 Finale
 
-When `progress.next === LEVELS.length` the app shows `<Finale>`: "You finished all N levels", the sum of `bestMs` as total time, and "Start over". It is the only screen that exists without a board. `gameStore` is idle there, and the autosave has removed `save`.
+When `progress.next === LEVELS.length` the app shows `<Finale>`: "You finished", the sum of `bestMs` over the ids in `LEVELS` as "Total of best times", and "Start over" (no confirm). It is the only screen that exists without a board. `gameStore` is idle there, and the autosave has removed `save`.
 
 ### 7.5 Keyboard and pointer input
 
