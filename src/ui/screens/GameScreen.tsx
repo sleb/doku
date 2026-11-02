@@ -15,9 +15,9 @@ import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
 import { RulesDialog } from "./RulesDialog";
 import { SettingsDialog } from "./SettingsDialog";
-import { useActionShortcuts } from "./useActionShortcuts";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
+import { useShortcuts } from "./useShortcuts";
 
 export function GameScreen() {
   const level = useGameStore((s) => s.level);
@@ -35,7 +35,7 @@ export function GameScreen() {
   const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
   useClock();
   useAutoPause();
-  useActionShortcuts();
+  useShortcuts();
 
   // Buzz for the outcome of each store change. Subscribed once per mount.
   useEffect(

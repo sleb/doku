@@ -5,7 +5,7 @@ import { gameStore } from "../../store/gameStore";
  * z / Ctrl-or-Cmd+Z undo; Shift+Z / Ctrl-or-Cmd+Shift+Z / Ctrl+Y (every platform)
  * redo; plain h takes a hint. Only while playing. #80 folds this into useShortcuts.
  */
-export function useActionShortcuts(): void {
+export function useShortcuts(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.altKey) return;
