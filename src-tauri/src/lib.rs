@@ -7,6 +7,9 @@ pub fn run() {
     #[cfg(mobile)]
     let builder = builder.plugin(tauri_plugin_haptics::init());
 
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+
     builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -284,7 +284,7 @@ Existing per-cell keys stay: `x` toggles ✕, holding `Space` places a face. New
 ## 8. Desktop window and Rust shell
 
 - `tauri.conf.json`: `minWidth` 420, `minHeight` 560 (an 11×11 board stays above the cell floor recorded in `MOBILE_DESIGN.md` §8; revisit with a measurement), keep the 800×600 default. The wide layout already switches at aspect ≥ 1.2 and width ≥ 36rem.
-- `tauri-plugin-window-state` for the remembered size and position, desktop only: a `[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]` entry registered behind `#[cfg(desktop)]`, with its permission in a new `capabilities/desktop.json` (`platforms: ["macOS", "windows", "linux"]`) so the mobile build never references a missing plugin.
+- `tauri-plugin-window-state` for the remembered size and position, desktop only: a `[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]` entry registered behind `#[cfg(desktop)]`, with its permission in a new `capabilities/desktop.json` (`platforms: ["macOS", "windows", "linux"]`) so the mobile build never references a missing plugin. Landed (M4-10): `tauri-plugin-window-state = "2"` (resolves to 2.5.0), permission `window-state:default`, default state flags, no JS package. State is saved on close, so a force-kill may lose the last position.
 - `tauri-plugin-store` on every platform, `store:default` in `capabilities/default.json`; `@tauri-apps/plugin-store` as a JS dependency. Still no custom `#[tauri::command]`s.
 
 Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) must stay green.
