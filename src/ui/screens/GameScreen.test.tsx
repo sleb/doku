@@ -6,6 +6,7 @@ import {
   uniqueLevel7 as level,
   uniqueLevel11,
 } from "../../engine/__fixtures__/levels";
+import { LEVELS } from "../../levels/campaign";
 import { haptics } from "../../platform/haptics";
 import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
@@ -54,6 +55,17 @@ function Probe({ seen }: { seen: (Element | null)[] }) {
 function hold(cells: number[]) {
   for (const i of cells) holdCell(cell(i));
 }
+
+describe("GameScreen without props", () => {
+  test("plays the store's level and shows its campaign position", () => {
+    act(() => gameStore.getState().startLevel(LEVELS[2]));
+    render(<GameScreen />);
+    expect(
+      screen.getByRole("heading", { name: `Level 3 of ${LEVELS.length}` }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+  });
+});
 
 describe("GameScreen", () => {
   test("places the top bar and board in the layout header and board areas", () => {
