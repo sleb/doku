@@ -1,9 +1,7 @@
-import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import { levelById } from "./levels";
 
-const { regions } = JSON.parse(
-  readFileSync(new URL("../src/levels/demo-7.json", import.meta.url), "utf8"),
-) as { regions: number[][] };
+const { regions } = levelById("demo-7");
 
 const cell = (page: Page, r: number, c: number) =>
   page.getByRole("button", {

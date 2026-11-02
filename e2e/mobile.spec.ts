@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { HOLD_TOTAL_MS } from "../src/ui/board/hold";
 import {
@@ -13,10 +12,9 @@ import {
   touchOut,
   touchUp,
 } from "./helpers";
+import { levelById } from "./levels";
 
-const { size, solution } = JSON.parse(
-  readFileSync(new URL("../src/levels/demo-7.json", import.meta.url), "utf8"),
-) as { size: number; solution: number[] };
+const { size, solution } = levelById("demo-7");
 
 const SETTLE_MS = HOLD_TOTAL_MS + 300;
 

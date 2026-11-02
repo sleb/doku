@@ -1,10 +1,8 @@
-import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { press } from "./helpers";
+import { levelById } from "./levels";
 
-const { solution } = JSON.parse(
-  readFileSync(new URL("../src/levels/demo-7.json", import.meta.url), "utf8"),
-) as { solution: number[] };
+const { solution } = levelById("demo-7");
 
 const style = (page: Page, sel: string, prop: string) =>
   page.evaluate(

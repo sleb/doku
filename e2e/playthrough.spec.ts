@@ -1,14 +1,9 @@
-import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "../src/ui/board/hold";
 import { cell, hearts, press } from "./helpers";
+import { levelById } from "./levels";
 
-type Demo = { size: number; solution: number[] };
-
-const demo = JSON.parse(
-  readFileSync(new URL("../src/levels/demo-7.json", import.meta.url), "utf8"),
-) as Demo;
-const { size, solution } = demo;
+const { size, solution } = levelById("demo-7");
 
 // Margin for "nothing happened" waits, past the hold threshold.
 const SETTLE_MS = HOLD_TOTAL_MS + 300;

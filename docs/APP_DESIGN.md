@@ -18,7 +18,7 @@ Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"
 
 | Today | Change |
 |---|---|
-| `App` renders `GameScreen level={demoLevel}`; `?level=` dev override picks demo-11 | `App` renders the player's current campaign level from stores; `?level=<id>` stays as a dev-only start override (§3.3) |
+| `App` renders `GameScreen level={LEVELS[0]}`; `?level=<id>` dev override resolves via `levelIndex` | `App` renders the player's current campaign level from stores; `?level=<id>` stays as a dev-only start override (§3.3) |
 | `GameScreen` takes a `level` prop, starts it in an effect, resets the store to idle on unmount | `GameScreen` is a view of `gameStore`; a `campaign` module owns starting, advancing and restoring (§3.2, §5.4) |
 | `GameState`: `idle \| playing \| won \| lost`, no clock, no history | Adds `paused`, `elapsedMs`, `hintsUsed`, `history`, `future` (§4) |
 | `ResultModal`: heading and one button; focus trap hand-rolled | Shared `<Dialog>`; win shows time, best, hints and "Next level" (§7.3) |
@@ -42,7 +42,7 @@ export function levelIndex(id: string): number;   // -1 if unknown
 
 Level `id`s are unique across packs (tested). The campaign order is the array order; there is no per-level metadata beyond the engine's `Level`.
 
-**Seed pack (`pack-1.json`), 8 levels, a mix of sizes in no particular order** (difficulty is not curated or rated until milestone 5), including at least one 7×7 and one 11×11. `demo-7` and `demo-11` are folded in (their JSON moves into the pack; `demoLevel.ts` and the standalone files are deleted). The other levels come from a throwaway script `tools/seed-pack.ts` (random valid placement, grow regions, keep if `countSolutions == 1`). It is a deliberately naive precursor of `tools/generate-levels.ts` (milestone 5), which replaces it and rewrites the pack. If naive rejection sampling cannot produce a unique 10×10 or 11×11 in reasonable time, ship fewer large levels rather than grow the script (§11 question 4).
+**Seed pack (`pack-1.json`), 8 levels, a mix of sizes in no particular order (implemented in M4-01: ids `demo-7`, `demo-11`, `seed-1`..`seed-6`, sizes 7, 11, 7, 7, 9, 9, 10, 8; `campaign.ts` loads packs with `import.meta.glob("./pack-*.json", { eager: true })` sorted by filename)** (difficulty is not curated or rated until milestone 5), including at least one 7×7 and one 11×11. `demo-7` and `demo-11` are folded in (their JSON moves into the pack; `demoLevel.ts` and the standalone files are deleted). The other levels come from a throwaway script `tools/seed-pack.ts` (random valid placement, grow regions, keep if `countSolutions == 1`). It is a deliberately naive precursor of `tools/generate-levels.ts` (milestone 5), which replaces it and rewrites the pack. The script found a unique 10×10 but no unique 11×11 within its 60 s budget, so `demo-11` is the only 11×11 (§11 question 4). Run it as `bun tools/seed-pack.ts [size:count ...]`; it prints Level JSON lines to append by hand.
 
 Tests (node): every level passes `validateLevel`, `countSolutions(level) === 1`, size is in 7–11, ids are unique, and the pack is non-empty.
 

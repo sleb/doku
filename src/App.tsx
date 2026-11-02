@@ -1,13 +1,12 @@
-import { demoLevel, demoLevel11 } from "./levels/demoLevel";
+import { LEVELS, levelIndex } from "./levels/campaign";
 import { GameScreen } from "./ui/screens/GameScreen";
 
-// Temporary level picker for e2e and manual checks; M4 level select replaces it.
-// Dev/test only (e2e runs against the dev server); read once at module load.
-const level =
-  import.meta.env.DEV &&
-  new URLSearchParams(window.location.search).get("level") === demoLevel11.id
-    ? demoLevel11
-    : demoLevel;
+// Dev-only start override (?level=<id>) for e2e and manual checks; read once
+// at module load. M4-07 replaces the default with the player's current level.
+const requested = import.meta.env.DEV
+  ? levelIndex(new URLSearchParams(window.location.search).get("level") ?? "")
+  : -1;
+const level = LEVELS[Math.max(requested, 0)];
 
 function App() {
   return (

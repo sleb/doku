@@ -1,13 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
-import { demoLevel, demoLevel11 } from "./levels/demoLevel";
+import { LEVELS, levelIndex } from "./levels/campaign";
 import { idleState } from "./store/game";
 import { gameStore } from "./store/gameStore";
 import { holdCell } from "./test/hold";
 import { REGION_BG } from "./ui/board/palette";
 
 beforeEach(() => gameStore.setState(idleState, false));
+
+const demoLevel = LEVELS[0];
+const demoLevel11 = LEVELS[levelIndex("demo-11")];
 
 test("renders the demo level board with its id in the top bar", () => {
   render(<App />);
