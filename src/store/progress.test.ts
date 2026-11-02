@@ -1,0 +1,105 @@
+import { describe, expect, test } from "vitest";
+import { LEVELS } from "../levels/campaign";
+import {
+  currentLevel,
+  defaultProgress,
+  parseProgress,
+  recordWin,
+  startOver,
+} from "./progress";
+
+describe("recordWin", () => {
+  test("advances next past the level and records its best", () => {
+    const p = recordWin(defaultProgress, 0, 5000);
+    expect(p).toEqual({ next: 1, bestMs: { [LEVELS[0].id]: 5000 } });
+  });
+});
+
+describe("recordWin replay", () => {
+  test("replaying an earlier level never lowers next", () => {
+    const p = recordWin(recordWin(defaultProgress, 0, 5000), 1, 6000);
+    expect(recordWin(p, 0, 4000).next).toBe(2);
+  });
+});
+
+describe("recordWin best", () => {
+  test("a slower replay keeps the lower best", () => {
+    const p = recordWin(defaultProgress, 0, 4000);
+    expect(recordWin(p, 0, 9000).bestMs[LEVELS[0].id]).toBe(4000);
+  });
+});
+
+describe("recordWin last level", () => {
+  test("winning the last level sets next to the level count", () => {
+    const p = recordWin(defaultProgress, LEVELS.length - 1, 1000);
+    expect(p.next).toBe(LEVELS.length);
+  });
+});
+
+describe("recordWin purity", () => {
+  test("does not mutate its input", () => {
+    const p = Object.freeze({
+      next: 0,
+      bestMs: Object.freeze({}) as Record<string, number>,
+    });
+    expect(() => recordWin(p, 0, 1)).not.toThrow();
+    expect(p.next).toBe(0);
+  });
+});
+
+describe("startOver", () => {
+  test("resets next but keeps best times", () => {
+    const p = recordWin(defaultProgress, 0, 4000);
+    expect(startOver(p)).toEqual({ next: 0, bestMs: { [LEVELS[0].id]: 4000 } });
+  });
+});
+
+describe("currentLevel", () => {
+  test("is the level at next", () => {
+    expect(currentLevel({ next: 2, bestMs: {} })).toBe(LEVELS[2]);
+  });
+
+  test("is null once the campaign is finished", () => {
+    expect(currentLevel({ next: LEVELS.length, bestMs: {} })).toBeNull();
+  });
+});
+
+describe("parseProgress", () => {
+  test.each([undefined, null, 42, "x", [1]])("%j gives defaults", (raw) => {
+    expect(parseProgress(raw, 8)).toEqual({ next: 0, bestMs: {} });
+  });
+});
+
+describe("parseProgress valid", () => {
+  test("a valid object round-trips", () => {
+    const raw = { next: 3, bestMs: { a: 1000, b: 2500 } };
+    expect(parseProgress(raw, 8)).toEqual(raw);
+  });
+});
+
+describe("parseProgress next", () => {
+  test("clamps a too-high next to the count", () => {
+    expect(parseProgress({ next: 99, bestMs: {} }, 8).next).toBe(8);
+  });
+});
+
+describe("parseProgress next low or fractional", () => {
+  test.each([
+    [-3, 0],
+    [2.7, 2],
+    ["3", 0],
+    [Number.NaN, 0],
+    [undefined, 0],
+  ])("next %j becomes %j", (next, expected) => {
+    expect(parseProgress({ next, bestMs: {} }, 8).next).toBe(expected);
+  });
+});
+
+describe("parseProgress bestMs", () => {
+  test("drops non-finite, negative and non-number times and non-object bestMs", () => {
+    const bestMs = { ok: 1500, neg: -1, nan: null, str: "9", inf: 1e999 };
+    expect(parseProgress({ next: 1, bestMs }, 8).bestMs).toEqual({ ok: 1500 });
+    expect(parseProgress({ next: 1, bestMs: [5] }, 8).bestMs).toEqual({});
+    expect(parseProgress({ next: 1, bestMs: 7 }, 8).bestMs).toEqual({});
+  });
+});
