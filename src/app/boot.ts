@@ -35,7 +35,12 @@ export async function boot(
 /** Restores the saved game if it is for the level progress points at. */
 async function restoreSaved(storage: Storage): Promise<boolean> {
   const level = currentLevel(progressStore.getState());
-  const restored = level && fromSaved(await storage.get("save"), level);
+  let restored = null;
+  try {
+    restored = level && fromSaved(await storage.get("save"), level);
+  } catch {
+    // Unreadable: start fresh.
+  }
   if (!restored) return false;
   gameStore.setState(restored);
   return true;
