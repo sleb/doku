@@ -1,0 +1,24 @@
+import { useEffect } from "react";
+import { gameStore } from "../../store/gameStore";
+
+/**
+ * z / Ctrl-or-Cmd+Z undo; Shift+Z / Ctrl-or-Cmd+Shift+Z / Ctrl+Y (every platform)
+ * redo. Only while playing. #80 folds this into useShortcuts.
+ */
+export function useUndoShortcuts(): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.altKey) return;
+      if (gameStore.getState().status !== "playing") return;
+      const key = e.key.toLowerCase();
+      let action: "undo" | "redo" | null = null;
+      if (key === "z") action = e.shiftKey ? "redo" : "undo";
+      else if (key === "y" && e.ctrlKey && !e.metaKey) action = "redo";
+      if (!action) return;
+      e.preventDefault();
+      gameStore.getState()[action]();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}

@@ -7,11 +7,13 @@ import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
+import { ActionBar } from "./ActionBar";
 import { GameLayout } from "./GameLayout";
 import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
+import { useUndoShortcuts } from "./useUndoShortcuts";
 
 export function GameScreen({ level }: { level: Level }) {
   const storeLevel = useGameStore((s) => s.level);
@@ -23,6 +25,7 @@ export function GameScreen({ level }: { level: Level }) {
     gameStore.getState();
   useClock();
   useAutoPause();
+  useUndoShortcuts();
 
   // The store is a singleton: reset it on unmount so a later mount never sees
   // this one's board or result.
@@ -75,6 +78,7 @@ export function GameScreen({ level }: { level: Level }) {
             />
           </div>
         }
+        controls={<ActionBar />}
       />
       <PauseDialog open={paused} onResume={resume} onRestart={restart} />
       <ResultModal status={status} onRetry={restart} />
