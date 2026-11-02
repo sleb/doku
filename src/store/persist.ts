@@ -1,5 +1,5 @@
 import { Cell, type Level } from "../engine";
-import type { GameState, Started } from "./game";
+import { type GameState, MAX_HEARTS, type Started } from "./game";
 
 export type SavedGame = {
   levelId: string;
@@ -33,6 +33,13 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
     return null;
   }
   if (!r.board.every((c) => c === Cell.Empty || c === Cell.Mark || c === Cell.Face)) {
+    return null;
+  }
+  if (
+    !Number.isInteger(r.hearts) ||
+    r.hearts < 1 ||
+    r.hearts > MAX_HEARTS
+  ) {
     return null;
   }
   if (!Array.isArray(r.wrong)) return null;

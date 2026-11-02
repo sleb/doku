@@ -114,3 +114,9 @@ describe("fromSaved wrong cells", () => {
     expect(fromSaved({ ...validSave(), wrong: wrong() }, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved hearts", () => {
+  test.each([0, 4, -1, 1.5, "2", null, Number.NaN])("%j is rejected", (hearts) => {
+    expect(fromSaved({ ...validSave(), hearts }, uniqueLevel7)).toBeNull();
+  });
+});
