@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { LEVELS } from "../levels/campaign";
 import { MemoryStorage } from "../platform/storage";
-import { idleState } from "../store/game";
+import { idleState, type Started, startLevel, toggleMark } from "../store/game";
 import { gameStore } from "../store/gameStore";
+import { toSaved } from "../store/persist";
 import { defaultProgress, progressStore } from "../store/progress";
 import { defaultSettings, settingsStore } from "../store/settings";
 import { boot, devLevelOverride } from "./boot";
@@ -111,5 +112,19 @@ describe("boot dev override", () => {
     storage.get = () => Promise.reject(new Error("boom"));
     await boot(storage);
     expect(gameStore.getState().level).toBe(LEVELS[0]);
+  });
+});
+
+describe("boot save", () => {
+  test("a valid save restores a paused game", async () => {
+    const storage = new MemoryStorage();
+    const first = LEVELS[0];
+    const played = startLevel(first) as Started;
+    await storage.set("save", toSaved(toggleMark(played, 4) as Started));
+    await boot(storage);
+    const state = gameStore.getState();
+    expect(state.status).toBe("paused");
+    expect(state.level).toBe(first);
+    expect(state.board?.[4]).toBe(1);
   });
 });

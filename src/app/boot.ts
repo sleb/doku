@@ -1,7 +1,12 @@
 import { LEVELS, levelIndex } from "../levels/campaign";
 import type { Storage } from "../platform/storage";
 import { gameStore } from "../store/gameStore";
-import { hydrateProgress, persistProgress } from "../store/progress";
+import { fromSaved } from "../store/persist";
+import {
+  currentLevel,
+  hydrateProgress,
+  persistProgress,
+} from "../store/progress";
 import { hydrateSettings, persistSettings } from "../store/settings";
 import { recordWins, startCurrent } from "./campaign";
 
@@ -23,7 +28,16 @@ export async function boot(
   }
   await hydrateProgress(storage);
   teardown.push(persistProgress(storage), recordWins());
-  startCurrent();
+  if (!(await restoreSaved(storage))) startCurrent();
+}
+
+/** Restores the saved game if it is for the level progress points at. */
+async function restoreSaved(storage: Storage): Promise<boolean> {
+  const level = currentLevel(progressStore.getState());
+  const restored = level && fromSaved(await storage.get("save"), level);
+  if (!restored) return false;
+  gameStore.setState(restored);
+  return true;
 }
 
 /** Dev-only `?level=<id>` start override as a campaign index, else null. */
