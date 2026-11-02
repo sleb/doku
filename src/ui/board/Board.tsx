@@ -68,6 +68,7 @@ export function Board({
           target = i + (row < size - 1 ? size : 0);
         else if (e.key === "ArrowUp") target = i - (row > 0 ? size : 0);
         else return;
+        e.preventDefault();
         gridRef.current
           ?.querySelector<HTMLElement>(`[data-index="${target}"]`)
           ?.focus();

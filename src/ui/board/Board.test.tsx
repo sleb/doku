@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
@@ -312,6 +312,19 @@ describe("Board", () => {
       focusAt(3);
       await userEvent.keyboard("{ArrowUp}");
       expect(activeIndex()).toBe(3);
+    });
+
+    test.each([
+      "ArrowRight",
+      "ArrowLeft",
+      "ArrowDown",
+      "ArrowUp",
+      "Home",
+      "End",
+    ])("%s is default-prevented", (key) => {
+      renderBoard();
+      focusAt(10);
+      expect(fireEvent.keyDown(buttons()[10], { key })).toBe(false);
     });
 
     test("ArrowDown stays on the last row", async () => {
