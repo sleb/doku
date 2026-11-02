@@ -167,4 +167,16 @@ describe("boot autosave", () => {
     vi.advanceTimersByTime(250);
     expect(await storage.get("save")).toMatchObject({ levelId: LEVELS[0].id });
   });
+
+  test("restoring does not write itself back or record a win", async () => {
+    const storage = new MemoryStorage();
+    const played = startLevel(LEVELS[0]) as Started;
+    const save = toSaved(toggleMark(played, 4) as Started);
+    await storage.set("save", save);
+    const set = vi.spyOn(storage, "set");
+    await boot(storage);
+    vi.advanceTimersByTime(1000);
+    expect(set).not.toHaveBeenCalledWith("save", expect.anything());
+    expect(progressStore.getState().next).toBe(0);
+  });
 });
