@@ -1,14 +1,16 @@
-# Doku Board — Low-Level Design (draft 1)
+# Doku Board — Low-Level Design
 
 Companion to `DESIGN.md` §5 and §7 for milestone 2 ("Playable desktop board", tracking issue #38). This describes the store, the board UI, the HUD and the result modal: types, state transitions, component contracts, and tests. The engine (`docs/ENGINE_DESIGN.md`) is done and is consumed as-is; nothing here changes it.
 
+**Status:** implemented in milestone 2 and extended by milestones 3 and 4. Sections describe the board as designed for M2; where M3/M4 changed the shape (`GameStatus` and `GameState` fields, `GameScreen` without props, `ResultModal`, `TopBar`, roving tabindex, `aria-disabled`) the text carries the current form and points to `docs/APP_DESIGN.md`. The M2 test plan (§7) and its landed notes are kept as history.
+
 ## 1. Goal and scope
 
-A player opens the desktop app, plays one level from start to finish, loses hearts on wrong taps, and reaches a win or lose result with a retry button.
+A player opens the desktop app, plays one level from start to finish, loses hearts on wrong taps, and reaches a win or lose result with a retry button. (From M4 the result also offers "Next level"; see `docs/APP_DESIGN.md`.)
 
 In scope: Zustand game store, `<Board>`/`<Cell>`, `<Hearts>`/top bar, `<ResultModal>`, click input plus two cell keys (`x`, `Space`), Tailwind setup, test harness (RTL + Playwright).
 
-Out of scope (milestone 3+): level select, persistence, undo/redo, hints, timer/stars, settings, right-click and drag-to-paint marks, color-blind palette, wrong-tap animation. (Mobile landed in milestone 3; arrow-key navigation landed in M4-09.)
+Out of scope for M2: level select, persistence, undo/redo, hints, timer/stars, settings, right-click and drag-to-paint marks, color-blind palette, wrong-tap animation. Since then: mobile landed in M3; persistence, undo/redo, hints, timer, settings and arrow-key navigation landed in M4; level select and stars were dropped from the design; right-click and drag-to-paint marks are dropped until someone asks; the color-blind palette and wrong-tap animation remain milestone 6.
 
 Constraints carried from the design docs:
 
@@ -24,7 +26,8 @@ src/
 │  ├─ game.ts            # pure state + transitions (no Zustand, no React)
 │  ├─ game.test.ts
 │  ├─ gameStore.ts       # thin Zustand binding: createGameStore(), useGameStore
-│  └─ selectors.ts       # derived data (conflict cells)
+│  ├─ selectors.ts       # derived data (conflict cells)
+│  └─ progress.ts, settings.ts, persist.ts   # added in M4 (docs/APP_DESIGN.md)
 ├─ ui/
 │  ├─ board/
 │  │  ├─ geometry.ts     # pure: per-cell region id + border flags from a Level
@@ -34,23 +37,26 @@ src/
 │  │  └─ palette.ts      # region class lookup + region names
 │  ├─ hud/
 │  │  ├─ Hearts.tsx
+│  │  ├─ Timer.tsx       # M4
 │  │  └─ TopBar.tsx
+│  ├─ Dialog.tsx         # M4: shared modal primitive
 │  └─ screens/
-│     ├─ GameScreen.tsx
-│     └─ ResultModal.tsx
+│     ├─ GameScreen.tsx, GameLayout.tsx, ActionBar.tsx
+│     ├─ ResultModal.tsx, PauseDialog.tsx, RulesDialog.tsx, SettingsDialog.tsx, Finale.tsx
+│     └─ useClock.ts, useAutoPause.ts, useShortcuts.ts
 ├─ levels/
 │  ├─ pack-1.json        # bundled level pack (M4-01); holds demo-7, the former M2 demo level
 │  └─ campaign.ts        # LEVELS / levelIndex
 ├─ app/
 │  └─ index.css          # @import "tailwindcss"; @theme tokens (region palette)
-└─ App.tsx               # renders <GameScreen level={LEVELS[0]}/>
+└─ App.tsx               # <GameScreen/> or <Finale/> (M4; was <GameScreen level={LEVELS[0]}/> in M2)
 e2e/
 └─ playthrough.spec.ts
 ```
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
-`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json`, loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`); they do not import the JSON module.
+`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json` (8 levels in all), loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`); they do not import the JSON module.
 
 ## 3. Store (`src/store`)
 
@@ -59,20 +65,24 @@ The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Ru
 ```ts
 export const MAX_HEARTS = 3;
 
-export type GameStatus = "idle" | "playing" | "won" | "lost";
+export type GameStatus = "idle" | "playing" | "paused" | "won" | "lost";
 
 export type GameState =
   | { status: "idle"; level: null; board: null; hearts: number }
   | {
-      status: "playing" | "won" | "lost";
+      status: "playing" | "paused" | "won" | "lost";
       level: Level;
       board: Board;      // never mutated; each change allocates a new array
       wrong: ReadonlySet<number>; // cells the player got wrong; each holds Cell.Mark in `board`, locked
       hearts: number;    // 0..MAX_HEARTS
+      hintsUsed: number; // M4
+      elapsedMs: number; // M4
+      history: readonly number[]; // M4: undo stack of ✕ toggles
+      future: readonly number[];  // M4: redo stack
     };
 ```
 
-A discriminated union means components can narrow on `level !== null` once, instead of null-checking `board` everywhere. `board` holds two kinds of `Cell.Mark`: the player's own ✕ notes (free, editable) and wrong-face penalties; `wrong` tells them apart, so the latter render red and stay locked. `conflicts` is not stored: it is derived (§3.4). `elapsedMs`, `history`, `hintsUsed` from `DESIGN.md` §5 arrive with their milestone-3 features.
+A discriminated union means components can narrow on `level !== null` once, instead of null-checking `board` everywhere. `board` holds two kinds of `Cell.Mark`: the player's own ✕ notes (free, editable) and wrong-face penalties; `wrong` tells them apart, so the latter render red and stay locked. `conflicts` is not stored: it is derived (§3.4). `elapsedMs`, `history`, `future`, `hintsUsed` and the `paused` status arrived in milestone 4 (`docs/APP_DESIGN.md` §4); the M2 transitions below are unchanged except that `toggleMark` and `placeFace` also maintain the undo stacks.
 
 ### 3.2 Pure transitions (`game.ts`)
 
@@ -83,6 +93,7 @@ export const idleState: GameState;
 export function startLevel(level: Level): GameState;   // playing, emptyBoard(level), MAX_HEARTS
 export function toggleMark(state: GameState, cell: number): GameState;  // flat row-major index
 export function placeFace(state: GameState, cell: number): GameState;
+// M4 adds tick, pause, resume, undo, redo and hint (docs/APP_DESIGN.md §4.2)
 ```
 
 `restart(state)` is `startLevel(state.level)` and is a no-op on `idle`.
@@ -128,6 +139,7 @@ export interface GameStore extends ... {
   toggleMark(cell: number): void;
   placeFace(cell: number): void;
   restart(): void;
+  // M4: tick, pause, resume, undo, redo, hint
 }
 export function createGameStore(): StoreApi<GameStore>;   // one per test
 export const gameStore: StoreApi<GameStore>;                          // app singleton (tests reset it)
@@ -185,9 +197,10 @@ interface BoardProps {
   board: Board;
   conflicts: ReadonlySet<number>;
   wrong: ReadonlySet<number>;
-  disabled: boolean;                 // status !== "playing"
+  disabled: boolean;                 // status !== "playing" (also true while paused)
   onToggleMark(cell: number): void; // stable identity
   onPlaceFace(cell: number): void;  // stable identity
+  holdOwner?: RefObject<number | null>;  // M4-09: GameScreen owns it so shortcuts can see a hold in progress
 }
 ```
 
@@ -250,12 +263,12 @@ Hex values were chosen under two requirements: the 11 colors are pairwise distin
 ## 5. HUD, result, screen
 
 - **`<Hearts remaining max>`**: renders `max` heart icons, the first `remaining` filled. Container has `role="img"` and `aria-label="{remaining} of {max} hearts"`. Loss is a CSS transition on the icon's fill/scale (no JS animation).
-- **`<TopBar level hearts>`**: level id/title on the left, `<Hearts>` on the right. Back button, timer, menu arrive in M3.
+- **`<TopBar level levelNumber levelCount hearts onPause>`**: "Level n of N" (the level id is kept as `data-level-id`), `<Timer/>`, `<Hearts>` and a Pause button (M4; the M2 bar showed the level id and hearts only).
 - **Landed in M2-09 (#48):** `src/ui/hud/Hearts.tsx` (with a private `HeartIcon`) and `src/ui/hud/TopBar.tsx`. Each icon carries `data-filled="true|false"` (filled = `fill-current`, empty = `fill-transparent` stroke only and `scale-90`, with `transition-[scale,fill,stroke]` and `motion-reduce:transition-none`; Tailwind v4 compiles `scale-90` to the standalone `scale` property, not `transform`, and `fill-none` cannot interpolate, hence both choices) and is `aria-hidden`; only the container is exposed. `Hearts` is presentational and does not clamp. `TopBar` shows `level.id` because `Level` has no title field, and takes `max` from `MAX_HEARTS` in `store/game`. `TopBarPlay.test.tsx` covers "wrong face shows 2 hearts" with a harness over a real `createGameStore()`; `GameScreen` (M2-10) reuses `TopBar` unchanged. The transition is not verifiable in jsdom (the heart transition is deliberately not tested in the browser, see §8.7).
-- **`<ResultModal status onRetry>`**: renders nothing unless `status` is `won` or `lost`. `div role="dialog" aria-modal="true" aria-labelledby`, heading "You solved it" / "Out of hearts", one **Retry** button (autofocused) calling `restart`. Plain `div`, not `<dialog>`: jsdom does not implement `showModal`, and the board is already inert via `inert`. Win has no "next" button until level select exists.
-- **`<GameScreen level>`**: on mount `startLevel(level)` in an effect (idempotent, so StrictMode's double-invoke is harmless); selects `status`, `board`, `hearts`; renders `TopBar`, `Board`, `ResultModal`. Renders nothing board-related while `idle`.
+- **`<ResultModal>`**: renders nothing unless `status` is `won` or `lost`. Heading "You solved it" / "Out of hearts". As of M4 it is built on the shared `<Dialog>` (`src/ui/Dialog.tsx`; a plain `div role="dialog" aria-modal`, not `<dialog>`, because jsdom does not implement `showModal`) and takes `elapsedMs`, `bestMs`, `hintsUsed`, `isLast`, `onRetry`, `onNext`: a win shows time, best and hints and one button, "Next level" ("Finish" on the last level); a loss shows "Retry". The M2 version had only a hand-rolled focus trap and one Retry button.
+- **`<GameScreen>`**: since M4 it takes no props and is a view of `gameStore` (`src/app/campaign.ts` starts levels); it selects `status`, `board`, `hearts` and more, and renders `TopBar`, `Board`, `ActionBar`, the dialogs and `ResultModal`. Renders nothing while `idle`. (M2: took a `level` prop and started it in a mount effect.)
 
-**Landed in M2-10 (#49):** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` is now just `<main><GameScreen level={LEVELS[0]} /></main>`.
+**Landed in M2-10 (#49), as it was in M2:** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` was just `<main><GameScreen level={LEVELS[0]} /></main>`. The bullets below describe that M2 form; M4 replaced the start/reset effect, the `level` prop and the Tab-swallowing in `ResultModal`.
 
 - `ResultModal`: Retry is focused by a `useEffect` + ref when the dialog opens (not the `autoFocus` attribute, which Biome's `noAutofocus` flags). There is no Escape handler, since Retry is the only exit. A `Tab` keydown on Retry is `preventDefault`ed so focus cannot leave the dialog.
 - `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. The start effect calls `startLevel(level)` and its cleanup resets the singleton to `idleState`, so a later mount never sees an earlier mount's board or result (StrictMode's mount/cleanup/mount ends playing). One guard remains: on the first render of a new `level` prop the store still holds the previous level's board, so `conflicts` (a `useMemo`) and the render both require `storeLevel === level`. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute; the M2-11 e2e checks the behaviour in a real browser with `disabled` stripped (§7). It renders `null` while `idle` or while the store holds another level (the first render before the start effect).
