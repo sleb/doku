@@ -93,6 +93,23 @@ describe("useShortcuts", () => {
     }
   });
 
+  describe("Escape", () => {
+    test("pauses and prevents default", () => {
+      renderHook(() => useShortcuts());
+      const e = press({ key: "Escape" });
+      expect(gameStore.getState().status).toBe("paused");
+      expect(e.defaultPrevented).toBe(true);
+    });
+
+    test("does not resume a paused game", () => {
+      renderHook(() => useShortcuts());
+      gameStore.getState().pause();
+      const e = press({ key: "Escape" });
+      expect(gameStore.getState().status).toBe("paused");
+      expect(e.defaultPrevented).toBe(false);
+    });
+  });
+
   test("removes its listener on unmount", () => {
     const { unmount } = renderHook(() => useShortcuts());
     unmount();

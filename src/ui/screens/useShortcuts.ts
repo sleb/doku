@@ -11,8 +11,9 @@ export function useShortcuts(): void {
       if (e.repeat || e.altKey) return;
       if (gameStore.getState().status !== "playing") return;
       const key = e.key.toLowerCase();
-      let action: "undo" | "redo" | "hint" | null = null;
-      if (key === "z") action = e.shiftKey ? "redo" : "undo";
+      let action: "undo" | "redo" | "hint" | "pause" | null = null;
+      if (key === "escape") action = "pause";
+      else if (key === "z") action = e.shiftKey ? "redo" : "undo";
       else if (key === "h" && !e.ctrlKey && !e.metaKey) action = "hint";
       else if (key === "y" && e.ctrlKey && !e.metaKey) action = "redo";
       if (!action) return;

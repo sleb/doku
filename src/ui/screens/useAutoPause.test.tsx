@@ -42,21 +42,12 @@ describe("useAutoPause", () => {
     expect(status()).toBe("paused");
   });
 
-  test("pauses on Escape", () => {
+  test("leaves Escape to useShortcuts", () => {
     renderHook(() => useAutoPause());
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
-    expect(status()).toBe("paused");
-  });
-
-  test("Escape does not resume", () => {
-    renderHook(() => useAutoPause());
-    gameStore.getState().pause();
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    });
-    expect(status()).toBe("paused");
+    expect(status()).toBe("playing");
   });
 
   test("has no effect when won or lost", () => {
