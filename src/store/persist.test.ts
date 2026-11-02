@@ -100,3 +100,17 @@ describe("fromSaved cell values", () => {
     expect(fromSaved({ ...save, board }, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved wrong cells", () => {
+  const w = () => validSave().wrong[0];
+  test.each([
+    ["out of range", () => [49]],
+    ["negative", () => [-1]],
+    ["fractional", () => [1.5]],
+    ["duplicate", () => [w(), w()]],
+    ["not a mark", () => [w() === 0 ? 2 : 0]],
+    ["not an array", () => "1"],
+  ])("%s is rejected", (_n, wrong) => {
+    expect(fromSaved({ ...validSave(), wrong: wrong() }, uniqueLevel7)).toBeNull();
+  });
+});

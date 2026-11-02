@@ -35,11 +35,17 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
   if (!r.board.every((c) => c === Cell.Empty || c === Cell.Mark || c === Cell.Face)) {
     return null;
   }
+  if (!Array.isArray(r.wrong)) return null;
+  const wrong = new Set<number>();
+  for (const cell of r.wrong) {
+    if (r.board[cell] !== Cell.Mark || wrong.has(cell)) return null;
+    wrong.add(cell);
+  }
   return {
     status: "paused",
     level,
     board: Uint8Array.from(r.board),
-    wrong: new Set(r.wrong),
+    wrong,
     hearts: r.hearts,
     hintsUsed: r.hintsUsed,
     elapsedMs: r.elapsedMs,
