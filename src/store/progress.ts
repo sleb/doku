@@ -1,5 +1,8 @@
+import { useStore } from "zustand";
+import { createStore } from "zustand/vanilla";
 import type { Level } from "../engine";
 import { LEVELS } from "../levels/campaign";
+import type { Storage } from "../platform/storage";
 
 export type Progress = { next: number; bestMs: Record<string, number> };
 
@@ -42,4 +45,37 @@ export function parseProgress(raw: unknown, count: number): Progress {
         : 0,
     bestMs: parseBests(r.bestMs),
   };
+}
+
+export type ProgressStore = Progress & {
+  record(index: number, ms: number): void;
+  startOver(): void;
+};
+
+export const progressStore = createStore<ProgressStore>()((set) => ({
+  ...defaultProgress,
+  record: (index, ms) => set((s) => recordWin(s, index, ms)),
+  startOver: () => set((s) => startOver(s)),
+}));
+
+const KEY = "progress";
+
+export async function hydrateProgress(storage: Storage): Promise<void> {
+  try {
+    progressStore.setState(
+      parseProgress(await storage.get(KEY), LEVELS.length),
+    );
+  } catch {
+    // Unreadable: keep the defaults.
+  }
+}
+
+export function persistProgress(storage: Storage): () => void {
+  return progressStore.subscribe(({ next, bestMs }) => {
+    storage.set(KEY, { next, bestMs }).catch(() => {});
+  });
+}
+
+export function useProgressStore<T>(selector: (s: ProgressStore) => T): T {
+  return useStore(progressStore, selector);
 }

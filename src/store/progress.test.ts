@@ -1,9 +1,13 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { LEVELS } from "../levels/campaign";
+import { MemoryStorage } from "../platform/storage";
 import {
   currentLevel,
   defaultProgress,
+  hydrateProgress,
   parseProgress,
+  persistProgress,
+  progressStore,
   recordWin,
   startOver,
 } from "./progress";
@@ -107,5 +111,91 @@ describe("parseProgress bestMs", () => {
     expect(parseProgress({ next: 1, bestMs }, 8).bestMs).toEqual({ ok: 1500 });
     expect(parseProgress({ next: 1, bestMs: [5] }, 8).bestMs).toEqual({});
     expect(parseProgress({ next: 1, bestMs: 7 }, 8).bestMs).toEqual({});
+  });
+});
+
+describe("progressStore", () => {
+  beforeEach(() => progressStore.setState(defaultProgress));
+
+  test("record applies recordWin", () => {
+    progressStore.getState().record(1, 3000);
+    const { next, bestMs } = progressStore.getState();
+    expect({ next, bestMs }).toEqual({
+      next: 2,
+      bestMs: { [LEVELS[1].id]: 3000 },
+    });
+  });
+
+  test("startOver resets next and keeps bests", () => {
+    progressStore.getState().record(1, 3000);
+    progressStore.getState().startOver();
+    const { next, bestMs } = progressStore.getState();
+    expect({ next, bestMs }).toEqual({
+      next: 0,
+      bestMs: { [LEVELS[1].id]: 3000 },
+    });
+  });
+});
+
+describe("hydrateProgress", () => {
+  beforeEach(() => progressStore.setState(defaultProgress));
+
+  test("fills the store from stored progress", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("progress", { next: 2, bestMs: { a: 900 } });
+    await hydrateProgress(storage);
+    const { next, bestMs } = progressStore.getState();
+    expect({ next, bestMs }).toEqual({ next: 2, bestMs: { a: 900 } });
+  });
+
+  test("leaves defaults when nothing is stored", async () => {
+    await hydrateProgress(new MemoryStorage());
+    const { next, bestMs } = progressStore.getState();
+    expect({ next, bestMs }).toEqual(defaultProgress);
+  });
+
+  test("a rejecting read leaves defaults and does not throw", async () => {
+    const storage = new MemoryStorage();
+    storage.get = () => Promise.reject(new Error("boom"));
+    await expect(hydrateProgress(storage)).resolves.toBeUndefined();
+    expect(progressStore.getState().next).toBe(0);
+  });
+
+  test("corrupt stored progress gives defaults", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("progress", "garbage");
+    await hydrateProgress(storage);
+    const { next, bestMs } = progressStore.getState();
+    expect({ next, bestMs }).toEqual(defaultProgress);
+  });
+});
+
+describe("persistProgress", () => {
+  beforeEach(() => progressStore.setState(defaultProgress));
+
+  test("writes progress under `progress` on change", async () => {
+    const storage = new MemoryStorage();
+    persistProgress(storage);
+    progressStore.getState().record(0, 4000);
+    expect(await storage.get("progress")).toEqual({
+      next: 1,
+      bestMs: { [LEVELS[0].id]: 4000 },
+    });
+  });
+
+  test("hydrating before persisting writes nothing", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("progress", { next: 2, bestMs: {} });
+    await hydrateProgress(storage);
+    const set = vi.spyOn(storage, "set");
+    persistProgress(storage);
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  test("unsubscribe stops writes", async () => {
+    const storage = new MemoryStorage();
+    persistProgress(storage)();
+    progressStore.getState().record(0, 4000);
+    expect(await storage.get("progress")).toBeUndefined();
   });
 });
