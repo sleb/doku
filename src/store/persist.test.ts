@@ -79,3 +79,15 @@ describe("fromSaved level id", () => {
     expect(fromSaved({ ...validSave(), levelId: "other" }, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved board", () => {
+  test.each([
+    ["short", (b: number[]) => b.slice(1)],
+    ["long", (b: number[]) => [...b, 0]],
+    ["not an array", () => "0000"],
+  ])("a %s board is rejected", (_n, mutate) => {
+    const save = validSave();
+    const bad = { ...save, board: mutate(save.board) };
+    expect(fromSaved(bad, uniqueLevel7)).toBeNull();
+  });
+});
