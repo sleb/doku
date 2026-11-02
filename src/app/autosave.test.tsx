@@ -77,16 +77,19 @@ describe("installAutosave moves", () => {
 });
 
 describe("installAutosave finish", () => {
-  test.each(["won", "lost"] as const)("%s removes the save and cancels a pending write", async (status) => {
-    gameStore.getState().toggleMark(3);
-    vi.advanceTimersByTime(250);
-    expect(await storage.get("save")).toBeDefined();
-    gameStore.getState().toggleMark(4);
-    gameStore.setState({ status });
-    expect(await storage.get("save")).toBeUndefined();
-    vi.advanceTimersByTime(1000);
-    expect(await storage.get("save")).toBeUndefined();
-  });
+  test.each(["won", "lost"] as const)(
+    "%s removes the save and cancels a pending write",
+    async (status) => {
+      gameStore.getState().toggleMark(3);
+      vi.advanceTimersByTime(250);
+      expect(await storage.get("save")).toBeDefined();
+      gameStore.getState().toggleMark(4);
+      gameStore.setState({ status });
+      expect(await storage.get("save")).toBeUndefined();
+      vi.advanceTimersByTime(1000);
+      expect(await storage.get("save")).toBeUndefined();
+    },
+  );
 });
 
 describe("installAutosave idle and pause", () => {
@@ -141,5 +144,41 @@ describe("installAutosave visible and pagehide", () => {
     window.dispatchEvent(new Event("pagehide"));
     expect(await storage.get("save")).toMatchObject({ elapsedMs: 3000 });
     expect(flush).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("installAutosave robustness", () => {
+  test("hidden after a win writes nothing", async () => {
+    gameStore.setState({ status: "won" });
+    setVisibility("hidden");
+    expect(await storage.get("save")).toBeUndefined();
+  });
+
+  test("a rejecting set is swallowed and the next change still writes", async () => {
+    const real = storage.set.bind(storage);
+    const set = vi
+      .spyOn(storage, "set")
+      .mockRejectedValueOnce(new Error("disk full"));
+    gameStore.getState().toggleMark(3);
+    vi.advanceTimersByTime(250);
+    await Promise.resolve();
+    set.mockImplementation(real);
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({
+      levelId: uniqueLevel7.id,
+    });
+  });
+
+  test("teardown stops timers, subscriptions and listeners", async () => {
+    const flush = vi.spyOn(storage, "flush");
+    gameStore.getState().toggleMark(3);
+    stop();
+    setVisibility("hidden");
+    window.dispatchEvent(new Event("pagehide"));
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(1000);
+    expect(flush).not.toHaveBeenCalled();
+    expect(await storage.get("save")).toBeUndefined();
   });
 });
