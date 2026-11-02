@@ -327,6 +327,20 @@ describe("Board", () => {
       expect(fireEvent.keyDown(buttons()[10], { key })).toBe(false);
     });
 
+    test.each(["ctrlKey", "metaKey", "altKey", "shiftKey"])(
+      "ArrowRight with %s neither moves nor is prevented",
+      (mod) => {
+        renderBoard();
+        focusAt(10);
+        const notPrevented = fireEvent.keyDown(buttons()[10], {
+          key: "ArrowRight",
+          [mod]: true,
+        });
+        expect(notPrevented).toBe(true);
+        expect(activeIndex()).toBe(10);
+      },
+    );
+
     test("ArrowDown stays on the last row", async () => {
       renderBoard();
       focusAt(n * n - 2);

@@ -56,6 +56,7 @@ export function Board({
       aria-rowcount={size}
       aria-colcount={size}
       onKeyDown={(e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
         const i = Number((e.target as HTMLElement).dataset.index);
         const row = Math.floor(i / size);
         const col = i % size;
