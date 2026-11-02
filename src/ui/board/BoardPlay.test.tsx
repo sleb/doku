@@ -220,6 +220,9 @@ describe("playing the board", () => {
 
   test("only the changed cell re-renders", async () => {
     const { cell } = setup();
+    // Focusing moves the roving tabindex (re-rendering the old and new active
+    // cell), so settle focus first and measure the mark alone.
+    act(() => cell(solution[3]).focus());
     renders.byIndex.clear();
     await act(async () => {
       await userEvent.click(cell(solution[3]));

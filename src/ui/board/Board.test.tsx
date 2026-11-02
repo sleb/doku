@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
@@ -207,6 +207,13 @@ describe("Board", () => {
       expect(buttons().filter((b) => b.tabIndex === -1)).toHaveLength(
         n * n - 1,
       );
+    });
+
+    test("focusing a cell makes it the tabbable one", () => {
+      renderBoard();
+      act(() => buttons()[7].focus());
+      const tabbable = buttons().filter((b) => b.tabIndex === 0);
+      expect(tabbable).toEqual([buttons()[7]]);
     });
   });
 });

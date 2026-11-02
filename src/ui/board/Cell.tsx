@@ -77,6 +77,7 @@ export const CellView = memo(function CellView({
       data-holding={hold.holding ? "true" : undefined}
       disabled={disabled}
       tabIndex={tabIndex}
+      data-index={index}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         // Touch pointers are implicitly captured, which would suppress

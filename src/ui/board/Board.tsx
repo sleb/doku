@@ -27,7 +27,7 @@ export function Board({
 }: BoardProps) {
   const { size } = level;
   const holdOwner = useRef<number | null>(null);
-  const [active] = useState(0);
+  const [active, setActive] = useState(0);
   const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
@@ -49,6 +49,10 @@ export function Board({
       aria-label="Puzzle board"
       aria-rowcount={size}
       aria-colcount={size}
+      onFocus={(e) => {
+        const i = (e.target as HTMLElement).dataset.index;
+        if (i !== undefined) setActive(Number(i));
+      }}
       className="relative grid w-max border-4 border-neutral-800"
       style={style}
     >
