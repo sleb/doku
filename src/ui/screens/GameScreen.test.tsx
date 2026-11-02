@@ -490,7 +490,8 @@ describe("GameScreen", () => {
         act(() => {
           vi.advanceTimersByTime(5000);
         });
-        expect(gameStore.getState().elapsedMs).toBe(0);
+        const state = gameStore.getState();
+        expect(state.status === "idle" ? -1 : state.elapsedMs).toBe(0);
       } finally {
         vi.useRealTimers();
       }

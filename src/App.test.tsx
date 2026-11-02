@@ -4,10 +4,14 @@ import App from "./App";
 import { LEVELS, levelIndex } from "./levels/campaign";
 import { idleState } from "./store/game";
 import { gameStore } from "./store/gameStore";
+import { defaultSettings, settingsStore } from "./store/settings";
 import { holdCell } from "./test/hold";
 import { REGION_BG } from "./ui/board/palette";
 
-beforeEach(() => gameStore.setState(idleState, false));
+beforeEach(() => {
+  gameStore.setState(idleState, false);
+  settingsStore.setState({ ...defaultSettings, seenRules: true });
+});
 
 const demoLevel = LEVELS[0];
 const demoLevel11 = LEVELS[levelIndex("demo-11")];
@@ -69,6 +73,10 @@ test("?level=demo-11 selects the 11x11 demo level (read once at load)", async ()
   try {
     vi.resetModules();
     const { default: FreshApp } = await import("./App");
+    // resetModules gave the app its own settings store.
+    (await import("./store/settings")).settingsStore
+      .getState()
+      .set({ seenRules: true });
     render(<FreshApp />);
     expect(
       screen.getByRole("heading", { name: demoLevel11.id }),

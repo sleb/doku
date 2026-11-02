@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"; it was "Full desktop app" before mobile was pulled forward). It turns the single-level game into an app a person can open, play through a series of levels, quit, and come back to. It covers campaign progression, persistence, timer and pause, undo/redo, hints, settings, keyboard play, and the desktop window. The engine, the board and the mobile work (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`) are consumed as-is except where stated. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§12).
 
-**Status:** M4-01 (seed pack) and M4-02 (timer and pause, `Dialog`) are implemented; the rest is design only.
+**Status:** M4-01 (seed pack) and M4-02 (timer and pause, `Dialog`), M4-04 (hints), M4-05 (storage) and M4-06 (settings and rules) are implemented; the rest is design only.
 
 ## 1. Goals and non-goals
 
@@ -184,6 +184,8 @@ Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to def
 ### 5.4 Wiring (`src/app/boot.ts`, `src/app/autosave.ts`)
 
 - `main.tsx`: `boot(storage).then(render)`. Nothing renders until boot resolves (tens of ms); no splash screen. A thrown read is logged and treated as "nothing stored".
+Implemented in M4-06: `boot(storage)` is minimal, `hydrateSettings` then `persistSettings` (hydrate first so loading does not write back; settings write immediately, no debounce). #78 and #79 extend it with progress, restore and autosave. e2e specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
+
 - **Autosave** is a `gameStore` subscription that fires `storage.set("save", toSaved(state))` when any of `board`, `wrong`, `hearts`, `hintsUsed`, `status` changed (shallow compare, so the 500 ms clock ticks do not write). Writes are coalesced with a 250 ms trailing debounce. `won` and `lost` and `idle` call `storage.remove("save")`. Progress and settings write on change (they change rarely).
 - **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save (now including `elapsedMs`, so a kill loses at most the time since the last background) and `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
 - A write that rejects is logged and dropped; the next change retries naturally.
@@ -198,6 +200,8 @@ interface Settings { haptics: boolean; seenRules: boolean }
 `src/store/settings.ts` (pure `parseSettings`, thin Zustand binding with `set(patch)`), persisted on change. Consumers:
 - The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics` (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
 - `seenRules` triggers the rules dialog on first launch (§7.3) and is set when it is dismissed.
+
+Implemented in M4-06: `Settings` is `{ haptics, seenRules }`; `parseSettings` is total with per-field fallback and drops extra keys; gating reads the store at event time. Start over ships with #78.
 
 Theme, sound and the color-blind palette are milestone 6 and add fields then. The settings dialog also has "Start over" (§7.3) because it is the one destructive action; it asks for confirmation.
 
@@ -237,11 +241,13 @@ Implemented in M4-04: Hint is the third button in the same row (same `min-h-11 m
 
 ### 7.3 Dialogs
 
-Implemented in M4-02: `PauseDialog` has Resume and Restart level only (Rules and Settings arrive in #77). `ResultModal` is built on `Dialog`; Escape closes a dialog only when `onClose` is passed, and the Pause dialog passes none.
+Implemented in M4-02: `PauseDialog` started with Resume and Restart level. `ResultModal` is built on `Dialog`; Escape closes a dialog only when `onClose` is passed, and the Pause dialog passes none.
 
 - **ResultModal (won):** "You solved it", the time, "Best: m:ss" (or "New best"), "Hints: n" if any, and one button: "Next level" (or "Finish" on the last level). Focus lands on that button. (lost): "Out of hearts" and "Retry", as today.
 - **RulesDialog:** the four rules from `DESIGN.md` §1 in plain text, the input cheat sheet (tap = ✕, hold = face; keyboard keys), and a "Got it" button. No interactive board; that is milestone 6.
-- **SettingsDialog:** a haptics switch and "Start over" with a confirm step. Opened from the Pause dialog.
+Implemented in M4-06: Pause has Resume, Restart level, Rules, Settings. `GameScreen` holds `sheet: "rules" | "settings" | null`; while a sheet is open the Pause dialog is unmounted and returns on close (Escape or the button), without resuming. `RulesDialog` ("Got it", Escape) and `SettingsDialog` (a `role="switch"` Haptics control and "Done") both pass `onClose`. On first launch (`!seenRules`, level loaded) Rules open over a game that is **paused** (clock stopped); dismissal sets `seenRules: true` and resumes straight to play. `seenRules` is derived state, not an effect, so StrictMode cannot reopen it. **Start over is deferred to #78**, since it needs `progress`.
+
+- **SettingsDialog (target):** a haptics switch and "Start over" with a confirm step. Opened from the Pause dialog.
 
 ### 7.4 Finale
 
