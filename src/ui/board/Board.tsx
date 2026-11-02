@@ -61,6 +61,7 @@ export function Board({
         const col = i % size;
         let target: number;
         if (e.key === "Home") target = row * size;
+        else if (e.key === "End") target = row * size + size - 1;
         else if (e.key === "ArrowRight") target = i + (col < size - 1 ? 1 : 0);
         else if (e.key === "ArrowLeft") target = i - (col > 0 ? 1 : 0);
         else if (e.key === "ArrowDown")

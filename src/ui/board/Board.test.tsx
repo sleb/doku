@@ -326,5 +326,12 @@ describe("Board", () => {
       await userEvent.keyboard("{Home}");
       expect(activeIndex()).toBe(2 * n);
     });
+
+    test("End focuses the last cell of the row", async () => {
+      renderBoard();
+      focusAt(2 * n + 4);
+      await userEvent.keyboard("{End}");
+      expect(activeIndex()).toBe(3 * n - 1);
+    });
   });
 });
