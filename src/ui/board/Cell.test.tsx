@@ -83,6 +83,12 @@ describe("CellView", () => {
     expect(b.className).toContain("ring-");
   });
 
+  test("shows an outline on keyboard focus, inset past the conflict ring", () => {
+    const cls = renderCell().className;
+    expect(cls).toContain("focus-visible:outline-3");
+    expect(cls).toContain("focus-visible:-outline-offset-8");
+  });
+
   test("no conflict means no ring", () => {
     const b = renderCell();
     expect(b.dataset.conflict).toBeUndefined();

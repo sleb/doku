@@ -65,6 +65,8 @@ export const CellView = memo(function CellView({
     REGION_BG[region],
     // Thin grid lines only; thick region edges are drawn by Board's overlay.
     "border-r border-b",
+    // Keyboard focus: an outline inset past the 4px conflict ring so both read.
+    "focus-visible:outline-3 focus-visible:-outline-offset-8 focus-visible:outline-blue-700",
     isConflict ? "ring-4 ring-inset ring-neutral-900" : "",
   ]
     .filter(Boolean)
