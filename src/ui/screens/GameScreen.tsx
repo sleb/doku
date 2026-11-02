@@ -5,6 +5,7 @@ import { haptics } from "../../platform/haptics";
 import { idleState } from "../../store/game";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
+import { settingsStore } from "../../store/settings";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
 import { ActionBar } from "./ActionBar";
@@ -41,7 +42,7 @@ export function GameScreen({ level }: { level: Level }) {
     () =>
       gameStore.subscribe((next, prev) => {
         const kind = feedbackFor(prev, next);
-        if (kind) void haptics.play(kind);
+        if (kind && settingsStore.getState().haptics) void haptics.play(kind);
       }),
     [],
   );

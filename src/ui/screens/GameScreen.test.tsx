@@ -10,6 +10,7 @@ import { haptics } from "../../platform/haptics";
 import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
+import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
 
@@ -37,6 +38,7 @@ const label = (i: number) =>
 
 beforeEach(() => {
   gameStore.setState(idleState, false);
+  settingsStore.setState({ ...defaultSettings, seenRules: true });
   vi.mocked(haptics.play).mockClear();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -218,6 +220,21 @@ describe("GameScreen", () => {
     test("a correct hold plays place once", () => {
       render(<GameScreen level={level} />);
       hold([solution[0]]);
+      expect(play().mock.calls).toEqual([["place"]]);
+    });
+
+    test("nothing plays for a correct or wrong hold when haptics are off", () => {
+      settingsStore.getState().set({ haptics: false });
+      render(<GameScreen level={level} />);
+      hold([solution[0], nonSolution[0]]);
+      expect(play()).not.toHaveBeenCalled();
+    });
+
+    test("turning haptics off mid-game applies to the next move", () => {
+      render(<GameScreen level={level} />);
+      hold([solution[0]]);
+      settingsStore.getState().set({ haptics: false });
+      hold([solution[1]]);
       expect(play().mock.calls).toEqual([["place"]]);
     });
 
