@@ -246,4 +246,29 @@ describe("Board", () => {
       expect(tabbable).toEqual([buttons()[0]]);
     });
   });
+
+  describe("arrow-key movement", () => {
+    const renderBoard = (board = emptyBoard(level), wrong = none) =>
+      render(
+        <Board
+          level={level}
+          board={board}
+          wrong={wrong}
+          conflicts={none}
+          disabled={false}
+          {...handlers()}
+        />,
+      );
+    const buttons = () => screen.getAllByRole("button");
+    const focusAt = (i: number) => act(() => buttons()[i].focus());
+    const activeIndex = () =>
+      buttons().indexOf(document.activeElement as HTMLElement);
+
+    test("ArrowRight moves focus one cell right", async () => {
+      renderBoard();
+      focusAt(8);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(9);
+    });
+  });
 });

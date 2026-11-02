@@ -55,6 +55,13 @@ export function Board({
       aria-label="Puzzle board"
       aria-rowcount={size}
       aria-colcount={size}
+      onKeyDown={(e) => {
+        if (e.key !== "ArrowRight") return;
+        const i = Number((e.target as HTMLElement).dataset.index);
+        gridRef.current
+          ?.querySelector<HTMLElement>(`[data-index="${i + 1}"]`)
+          ?.focus();
+      }}
       onFocus={(e) => {
         const i = (e.target as HTMLElement).dataset.index;
         if (i !== undefined) setActive(Number(i));
