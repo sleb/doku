@@ -64,11 +64,7 @@ describe("boot progress", () => {
   test("a win persists progress so a second boot starts the next level", async () => {
     const storage = new MemoryStorage();
     await boot(storage);
-    gameStore.setState({
-      ...gameStore.getState(),
-      status: "won",
-      elapsedMs: 9000,
-    });
+    gameStore.setState({ status: "won", elapsedMs: 9000 });
     const saved = await storage.get("progress");
     gameStore.setState(idleState);
     progressStore.setState(defaultProgress);
@@ -105,11 +101,7 @@ describe("boot dev override", () => {
   test("a win under the override writes no progress", async () => {
     const storage = new MemoryStorage();
     await boot(storage, { devLevel: 3 });
-    gameStore.setState({
-      ...gameStore.getState(),
-      status: "won",
-      elapsedMs: 1,
-    });
+    gameStore.setState({ status: "won", elapsedMs: 1 });
     expect(await storage.get("progress")).toBeUndefined();
     expect(progressStore.getState().next).toBe(0);
   });

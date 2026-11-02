@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { LEVELS } from "../levels/campaign";
-import { idleState, startLevel } from "../store/game";
+import { idleState } from "../store/game";
 import { gameStore } from "../store/gameStore";
 import { defaultProgress, progressStore } from "../store/progress";
 import { nextLevel, recordWins, startCurrent, startOver } from "./campaign";
 
-const win = (index: number, elapsedMs: number) =>
-  gameStore.setState({
-    ...startLevel(LEVELS[index]),
-    status: "won",
-    elapsedMs,
-  });
+const win = (index: number, elapsedMs: number) => {
+  gameStore.getState().startLevel(LEVELS[index]);
+  gameStore.setState({ status: "won", elapsedMs });
+};
 
 beforeEach(() => {
   gameStore.setState(idleState);

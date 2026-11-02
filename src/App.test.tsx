@@ -119,7 +119,7 @@ test("Finish leads to the Finale, whose Start over returns to level 1", async ()
   expect(
     screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
   ).toBeInTheDocument();
-  expect(
-    Object.keys(progressStore.getState().bestMs).length,
-  ).toBeGreaterThan(0);
+  expect(Object.keys(progressStore.getState().bestMs).length).toBeGreaterThan(
+    0,
+  );
 });
