@@ -1,9 +1,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, test } from "vitest";
+import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
-import { idleState } from "../../store/game";
+import { idleState, MAX_HEARTS } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
-import { useUndoShortcuts } from "./useUndoShortcuts";
+import { useActionShortcuts } from "./useActionShortcuts";
 
 function press(init: KeyboardEventInit): KeyboardEvent {
   const e = new KeyboardEvent("keydown", { cancelable: true, ...init });
@@ -43,9 +44,9 @@ const redoCombos: KeyboardEventInit[] = [
   { key: "y", ctrlKey: true },
 ];
 
-describe("useUndoShortcuts", () => {
+describe("useActionShortcuts", () => {
   test.each(undoCombos)("undoes on %o", (init) => {
-    renderHook(() => useUndoShortcuts());
+    renderHook(() => useActionShortcuts());
     const e = press(init);
     expect(marked()).toBe(1);
     expect(future()).toBe(1);
@@ -53,7 +54,7 @@ describe("useUndoShortcuts", () => {
   });
 
   test.each(redoCombos)("redoes on %o", (init) => {
-    renderHook(() => useUndoShortcuts());
+    renderHook(() => useActionShortcuts());
     gameStore.getState().undo();
     const e = press(init);
     expect(marked()).toBe(2);
@@ -62,28 +63,28 @@ describe("useUndoShortcuts", () => {
   });
 
   test("ignores auto-repeat", () => {
-    renderHook(() => useUndoShortcuts());
+    renderHook(() => useActionShortcuts());
     const e = press({ key: "z", repeat: true });
     expect(marked()).toBe(2);
     expect(e.defaultPrevented).toBe(false);
   });
 
   test("ignores Alt combos", () => {
-    renderHook(() => useUndoShortcuts());
+    renderHook(() => useActionShortcuts());
     press({ key: "z", altKey: true });
     press({ key: "z", ctrlKey: true, altKey: true });
     expect(marked()).toBe(2);
   });
 
   test("ignores other keys without preventing default", () => {
-    renderHook(() => useUndoShortcuts());
+    renderHook(() => useActionShortcuts());
     const e = press({ key: "x" });
     expect(marked()).toBe(2);
     expect(e.defaultPrevented).toBe(false);
   });
 
   test("does nothing when paused, won or lost", () => {
-    renderHook(() => useUndoShortcuts());
+    renderHook(() => useActionShortcuts());
     for (const status of ["paused", "won", "lost"] as const) {
       gameStore.setState({ status }, false);
       const e = press({ key: "z" });
@@ -93,9 +94,62 @@ describe("useUndoShortcuts", () => {
   });
 
   test("removes its listener on unmount", () => {
-    const { unmount } = renderHook(() => useUndoShortcuts());
+    const { unmount } = renderHook(() => useActionShortcuts());
     unmount();
     press({ key: "z" });
     expect(marked()).toBe(2);
+  });
+
+  describe("h (hint)", () => {
+    const faces = () => {
+      const st = gameStore.getState();
+      if (st.status === "idle") throw new Error("idle");
+      return st.board.filter((c) => c === Cell.Face).length;
+    };
+
+    test("hints and prevents default", () => {
+      renderHook(() => useActionShortcuts());
+      const e = press({ key: "h" });
+      expect(faces()).toBe(1);
+      expect(gameStore.getState().hearts).toBe(MAX_HEARTS - 1);
+      expect(e.defaultPrevented).toBe(true);
+    });
+
+    test("accepts a capital H", () => {
+      renderHook(() => useActionShortcuts());
+      press({ key: "H", shiftKey: true });
+      expect(faces()).toBe(1);
+    });
+
+    test.each([
+      { key: "h", repeat: true },
+      { key: "h", altKey: true },
+      { key: "h", ctrlKey: true },
+      { key: "h", metaKey: true },
+    ])("ignores %o", (init) => {
+      renderHook(() => useActionShortcuts());
+      const e = press(init);
+      expect(faces()).toBe(0);
+      expect(e.defaultPrevented).toBe(false);
+    });
+
+    test("does nothing when paused, won or lost", () => {
+      renderHook(() => useActionShortcuts());
+      for (const status of ["paused", "won", "lost"] as const) {
+        gameStore.setState({ status }, false);
+        press({ key: "h" });
+        expect(faces()).toBe(0);
+      }
+    });
+
+    test("does nothing on the last heart", () => {
+      renderHook(() => useActionShortcuts());
+      press({ key: "h" });
+      press({ key: "h" });
+      expect(gameStore.getState().hearts).toBe(1);
+      press({ key: "h" });
+      expect(faces()).toBe(2);
+      expect(gameStore.getState().hearts).toBe(1);
+    });
   });
 });

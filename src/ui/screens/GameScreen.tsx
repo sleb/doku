@@ -11,9 +11,9 @@ import { ActionBar } from "./ActionBar";
 import { GameLayout } from "./GameLayout";
 import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
+import { useActionShortcuts } from "./useActionShortcuts";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
-import { useUndoShortcuts } from "./useUndoShortcuts";
 
 export function GameScreen({ level }: { level: Level }) {
   const storeLevel = useGameStore((s) => s.level);
@@ -25,7 +25,7 @@ export function GameScreen({ level }: { level: Level }) {
     gameStore.getState();
   useClock();
   useAutoPause();
-  useUndoShortcuts();
+  useActionShortcuts();
 
   // The store is a singleton: reset it on unmount so a later mount never sees
   // this one's board or result.

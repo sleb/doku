@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { uniqueLevel7 as level } from "../engine/__fixtures__/levels";
 import {
   type GameState,
+  hint,
   idleState,
   placeFace,
   restart,
@@ -47,6 +48,25 @@ describe("feedbackFor", () => {
     const next = placeFace(prev, wrongCells[2]);
     expect(next.status).toBe("lost");
     expect(feedbackFor(prev, next)).toBe("lose");
+  });
+
+  it("is place for a hint, though it costs a heart", () => {
+    const prev = fresh();
+    const next = hint(prev);
+    expect(next).not.toBe(prev);
+    expect(feedbackFor(prev, next)).toBe("place");
+  });
+
+  it("is win, not place, for a hint that finishes the board", () => {
+    const prev = play(fresh(), solution.slice(0, -1));
+    const next = hint(prev);
+    expect(next.status).toBe("won");
+    expect(feedbackFor(prev, next)).toBe("win");
+  });
+
+  it("is null for a refused hint", () => {
+    const prev = hint(hint(fresh()));
+    expect(feedbackFor(prev, hint(prev))).toBeNull();
   });
 
   it("is null for mark toggles on and off", () => {
