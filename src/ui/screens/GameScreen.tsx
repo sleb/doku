@@ -81,7 +81,13 @@ export function GameScreen({ level }: { level: Level }) {
         }
         controls={<ActionBar />}
       />
-      <PauseDialog open={paused} onResume={resume} onRestart={restart} />
+      <PauseDialog
+        open={paused}
+        onResume={resume}
+        onRestart={restart}
+        onRules={() => {}}
+        onSettings={() => {}}
+      />
       <ResultModal status={status} onRetry={restart} />
     </>
   );
