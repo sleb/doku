@@ -14,6 +14,13 @@ export function installAutosave(
     const saved = toSaved(gameStore.getState());
     if (saved) storage.set(KEY, saved).catch(() => {});
   };
+  const onHidden = () => {
+    if (document.visibilityState !== "hidden") return;
+    clearTimeout(timer);
+    write();
+    storage.flush().catch(() => {});
+  };
+  document.addEventListener("visibilitychange", onHidden);
   const unsubscribe = gameStore.subscribe((s, prev) => {
     const changed =
       s.board !== prev.board ||
@@ -33,6 +40,7 @@ export function installAutosave(
   });
   return () => {
     unsubscribe();
+    document.removeEventListener("visibilitychange", onHidden);
     clearTimeout(timer);
   };
 }

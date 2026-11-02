@@ -88,3 +88,39 @@ describe("installAutosave finish", () => {
     expect(await storage.get("save")).toBeUndefined();
   });
 });
+
+describe("installAutosave idle and pause", () => {
+  test("going idle removes the save", async () => {
+    gameStore.getState().toggleMark(3);
+    vi.advanceTimersByTime(250);
+    gameStore.setState(idleState);
+    expect(await storage.get("save")).toBeUndefined();
+  });
+
+  test("pausing persists the elapsed time", async () => {
+    gameStore.getState().toggleMark(3);
+    gameStore.getState().tick(5000);
+    gameStore.getState().pause();
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({ elapsedMs: 5000 });
+  });
+});
+
+function setVisibility(state: "hidden" | "visible") {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => state,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+describe("installAutosave backgrounding", () => {
+  test("hidden writes immediately with the elapsed time, then flushes", async () => {
+    const flush = vi.spyOn(storage, "flush");
+    gameStore.getState().toggleMark(3);
+    gameStore.getState().tick(7000);
+    setVisibility("hidden");
+    expect(await storage.get("save")).toMatchObject({ elapsedMs: 7000 });
+    expect(flush).toHaveBeenCalledTimes(1);
+  });
+});
