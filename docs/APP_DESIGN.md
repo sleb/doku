@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"; it was "Full desktop app" before mobile was pulled forward). It turns the single-level game into an app a person can open, play through a series of levels, quit, and come back to. It covers campaign progression, persistence, timer and pause, undo/redo, hints, settings, keyboard play, and the desktop window. The engine, the board and the mobile work (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`) are consumed as-is except where stated. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§12).
 
-**Status:** design only; nothing here is implemented.
+**Status:** M4-01 (seed pack) and M4-02 (timer and pause, `Dialog`) are implemented; the rest is design only.
 
 ## 1. Goals and non-goals
 
@@ -218,11 +218,13 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
 
 - **Clock driver:** a `useClock()` hook in `GameScreen`. While `status === "playing"` it runs a 500 ms interval and calls `tick(now - last)` using `performance.now()` deltas, so a delayed interval does not lose time. The store is pure; time is injected by the hook, never read by the store.
 - **Auto-pause:** `visibilitychange → hidden` and `window blur` dispatch `pause`. This covers minimizing on desktop and backgrounding on mobile. The player returns to the Pause dialog and presses Resume.
-- **Manual pause:** the pause button and `Esc`. The paused state hides the board (the Pause dialog backdrop is opaque over the board area) so pausing is not a way to study the puzzle with the clock stopped.
+- **Manual pause:** the pause button and `Esc` (Esc only pauses; it never resumes). Implemented: the minimal Esc handler lives in `useAutoPause` until #80 folds it into `useShortcuts`. The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
 - **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick.
 - **Action bar:** Undo and Redo disabled when their stack is empty; Hint disabled unless `playing` and `hearts > 1`; it shows the remaining hearts it will leave (the cost is visible before use). All three are real buttons with accessible names, shown in the `controls` slot (side panel in the wide layout, under the board in the tall one). The button hit area is at least 44 px (`MOBILE_DESIGN.md` §4.3).
 
 ### 7.3 Dialogs
+
+Implemented in M4-02: `PauseDialog` has Resume and Restart level only (Rules and Settings arrive in #77). `ResultModal` is built on `Dialog`; Escape closes a dialog only when `onClose` is passed, and the Pause dialog passes none.
 
 - **ResultModal (won):** "You solved it", the time, "Best: m:ss" (or "New best"), "Hints: n" if any, and one button: "Next level" (or "Finish" on the last level). Focus lands on that button. (lost): "Out of hearts" and "Retry", as today.
 - **RulesDialog:** the four rules from `DESIGN.md` §1 in plain text, the input cheat sheet (tap = ✕, hold = face; keyboard keys), and a "Got it" button. No interactive board; that is milestone 6.

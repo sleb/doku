@@ -8,7 +8,10 @@ import { conflictCells } from "../../store/selectors";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
 import { GameLayout } from "./GameLayout";
+import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
+import { useAutoPause } from "./useAutoPause";
+import { useClock } from "./useClock";
 
 export function GameScreen({ level }: { level: Level }) {
   const storeLevel = useGameStore((s) => s.level);
@@ -16,7 +19,10 @@ export function GameScreen({ level }: { level: Level }) {
   const board = useGameStore((s) => s.board);
   const hearts = useGameStore((s) => s.hearts);
   const wrong = useGameStore((s) => ("wrong" in s ? s.wrong : undefined));
-  const { startLevel, restart, toggleMark, placeFace } = gameStore.getState();
+  const { startLevel, restart, toggleMark, placeFace, pause, resume } =
+    gameStore.getState();
+  useClock();
+  useAutoPause();
 
   // The store is a singleton: reset it on unmount so a later mount never sees
   // this one's board or result.
@@ -47,25 +53,30 @@ export function GameScreen({ level }: { level: Level }) {
 
   if (!fresh || status === "idle" || !board || !wrong) return null;
 
-  const finished = status !== "playing";
+  const paused = status === "paused";
+  const finished = status === "won" || status === "lost";
   return (
     <>
       <GameLayout
-        header={<TopBar level={level} hearts={hearts} />}
+        header={<TopBar level={level} hearts={hearts} onPause={pause} />}
         board={
-          <div inert={finished}>
+          <div
+            inert={finished || paused}
+            style={paused ? { visibility: "hidden" } : undefined}
+          >
             <Board
               level={level}
               board={board}
               wrong={wrong}
               conflicts={conflicts}
-              disabled={finished}
+              disabled={finished || paused}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}
             />
           </div>
         }
       />
+      <PauseDialog open={paused} onResume={resume} onRestart={restart} />
       <ResultModal status={status} onRetry={restart} />
     </>
   );

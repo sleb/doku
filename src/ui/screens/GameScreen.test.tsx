@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode, useLayoutEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -150,7 +150,9 @@ describe("GameScreen", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => render(<GameScreen level={level} />)).not.toThrow();
     expect(error).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("button")).toHaveLength(n * n);
+    expect(screen.getAllByRole("button", { name: /^Row / })).toHaveLength(
+      n * n,
+    );
   });
 
   test("three wrong taps show 'Out of hearts' with wrong marks", async () => {
@@ -287,6 +289,100 @@ describe("GameScreen", () => {
       expect(play()).not.toHaveBeenCalled();
       hold([uniqueLevel11.solution[0]]);
       expect(play().mock.calls).toHaveLength(1);
+    });
+  });
+
+  describe("timer and pause", () => {
+    const elapsed = () => {
+      const s = gameStore.getState();
+      return s.status === "idle" ? -1 : s.elapsedMs;
+    };
+
+    test("the clock advances while playing", () => {
+      render(<GameScreen level={level} />);
+      expect(screen.getByText("0:00")).toBeInTheDocument();
+      act(() => gameStore.getState().tick(2000));
+      expect(screen.getByText("0:02")).toBeInTheDocument();
+    });
+
+    test("Pause shows the dialog and hides and inerts the board", async () => {
+      const user = userEvent.setup();
+      render(<GameScreen level={level} />);
+      await user.click(screen.getByRole("button", { name: "Pause" }));
+      expect(gameStore.getState().status).toBe("paused");
+      expect(
+        screen.getByRole("dialog", { name: "Paused" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Resume" })).toHaveFocus();
+      const grid = screen.getByRole("grid", { hidden: true });
+      expect(grid.parentElement).toHaveAttribute("inert");
+      expect(grid.parentElement).toHaveStyle({ visibility: "hidden" });
+      expect(
+        screen.queryByRole("button", { name: /^Row 1, column 1,/ }),
+      ).toBeNull();
+    });
+
+    test("input is ignored while paused", () => {
+      render(<GameScreen level={level} />);
+      act(() => gameStore.getState().pause());
+      const before = gameStore.getState();
+      const cell0 = document.querySelector<HTMLElement>(
+        '[aria-label^="Row 1, column 1,"]',
+      );
+      if (!cell0) throw new Error("no cell");
+      holdCell(cell0);
+      fireEvent.keyDown(document.body, { key: "x" });
+      expect(gameStore.getState().board).toEqual(before.board);
+      expect(gameStore.getState().hearts).toBe(3);
+    });
+
+    test("Resume continues from the same elapsed time", async () => {
+      const user = userEvent.setup();
+      render(<GameScreen level={level} />);
+      act(() => gameStore.getState().tick(3000));
+      await user.click(screen.getByRole("button", { name: "Pause" }));
+      await user.click(screen.getByRole("button", { name: "Resume" }));
+      expect(gameStore.getState().status).toBe("playing");
+      expect(elapsed()).toBe(3000);
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    test("Restart level from the pause dialog resets to 0:00", async () => {
+      const user = userEvent.setup();
+      render(<GameScreen level={level} />);
+      act(() => gameStore.getState().tick(3000));
+      await user.click(screen.getByRole("button", { name: "Pause" }));
+      await user.click(screen.getByRole("button", { name: "Restart level" }));
+      expect(gameStore.getState().status).toBe("playing");
+      expect(elapsed()).toBe(0);
+    });
+
+    test("hiding the document auto-pauses; pausing buzzes nothing", () => {
+      render(<GameScreen level={level} />);
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      expect(
+        screen.getByRole("dialog", { name: "Paused" }),
+      ).toBeInTheDocument();
+      expect(haptics.play).not.toHaveBeenCalled();
+    });
+
+    test("a finished game shows the result, not the pause dialog", () => {
+      render(<GameScreen level={level} />);
+      hold(nonSolution.slice(0, 3));
+      expect(
+        screen.getByRole("dialog", { name: "Out of hearts" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
     });
   });
 });
