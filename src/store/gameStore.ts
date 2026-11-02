@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from "zustand/vanilla";
 import type { Level } from "../engine";
 import {
   type GameState,
+  hint,
   idleState,
   pause,
   placeFace,
@@ -20,6 +21,7 @@ export type GameStore = GameState & {
   restart(): void;
   toggleMark(cell: number): void;
   placeFace(cell: number): void;
+  hint(): void;
   undo(): void;
   redo(): void;
   tick(dt: number): void;
@@ -34,6 +36,7 @@ export function createGameStore(): StoreApi<GameStore> {
     restart: () => set((s) => restart(s)),
     toggleMark: (cell) => set((s) => toggleMark(s, cell)),
     placeFace: (cell) => set((s) => placeFace(s, cell)),
+    hint: () => set((s) => hint(s)),
     undo: () => set((s) => undo(s)),
     redo: () => set((s) => redo(s)),
     tick: (dt) => set((s) => tick(s, dt)),

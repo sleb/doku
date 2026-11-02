@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Fixture, fixtures } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
+import { nextHint } from "./hints";
 import { findConflicts, isSolved, judgeTap } from "./rules";
 import { countSolutions, solve } from "./solver";
 import { type Board, Cell, type Level } from "./types";
@@ -135,6 +136,7 @@ describe.each(fixtures)(
         const calls: Record<string, () => unknown> = {
           findConflicts: () => findConflicts(board, level),
           isSolved: () => isSolved(board, level),
+          nextHint: () => nextHint(board, level),
         };
 
         it.each(Object.keys(calls))("%s", (callName) => {

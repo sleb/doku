@@ -33,6 +33,21 @@ describe("createGameStore", () => {
     expect(s.board.every((c) => c === Cell.Empty)).toBe(true);
   });
 
+  it("hint places a face for a heart and restart resets hintsUsed", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().hint();
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[uniqueLevel7.solution[0]]).toBe(Cell.Face);
+    expect(s.hearts).toBe(MAX_HEARTS - 1);
+    expect(s.hintsUsed).toBe(1);
+    store.getState().restart();
+    const r = store.getState();
+    if (r.status === "idle") throw new Error("unreachable");
+    expect(r.hintsUsed).toBe(0);
+  });
+
   it("keeps stores independent", () => {
     const a = createGameStore();
     const b = createGameStore();
