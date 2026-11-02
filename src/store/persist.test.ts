@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
+import { Cell } from "../engine";
 import { idleState, placeFace, startLevel, toggleMark } from "./game";
 import { fromSaved, type SavedGame, toSaved } from "./persist";
 
@@ -130,5 +131,25 @@ describe("fromSaved elapsed", () => {
 describe("fromSaved hintsUsed", () => {
   test.each([-1, 1.5, Number.NaN, "1", null, undefined])("%j is rejected", (hintsUsed) => {
     expect(fromSaved({ ...validSave(), hintsUsed }, uniqueLevel7)).toBeNull();
+  });
+});
+
+describe("fromSaved faces", () => {
+  test("a face on a cell the solution does not use is rejected", () => {
+    const save = validSave();
+    const board = [...save.board];
+    board[0] = Cell.Face;
+    const bad = uniqueLevel7.solution[0] === 0 ? 1 : 0;
+    board[bad] = Cell.Face;
+    expect(fromSaved({ ...save, board, wrong: [] }, uniqueLevel7)).toBeNull();
+  });
+
+  test("an already-solved board is rejected", () => {
+    const n = uniqueLevel7.size;
+    const board = new Array<number>(n * n).fill(Cell.Empty);
+    uniqueLevel7.solution.forEach((c, r) => {
+      board[r * n + c] = Cell.Face;
+    });
+    expect(fromSaved({ ...validSave(), board, wrong: [] }, uniqueLevel7)).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { Cell, type Level } from "../engine";
+import { Cell, isSolved, judgeTap, type Level } from "../engine";
 import { type GameState, MAX_HEARTS, type Started } from "./game";
 
 export type SavedGame = {
@@ -56,10 +56,16 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
     if (r.board[cell] !== Cell.Mark || wrong.has(cell)) return null;
     wrong.add(cell);
   }
+  const faceWrong = r.board.some(
+    (c, cell) => c === Cell.Face && judgeTap(level, cell) === "wrong",
+  );
+  if (faceWrong) return null;
+  const board = Uint8Array.from(r.board);
+  if (isSolved(board, level)) return null;
   return {
     status: "paused",
     level,
-    board: Uint8Array.from(r.board),
+    board,
     wrong,
     hearts: r.hearts,
     hintsUsed: r.hintsUsed,
