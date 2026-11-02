@@ -308,12 +308,13 @@ Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) must 
 - Autosave: a sequence of moves writes the expected `save`; ticks do not write; win clears it; `pagehide` flushes.
 - Boot: valid save restores paused with the same hearts and board; invalid save is discarded; storage that throws on read still boots.
 
-**E2E (Playwright, desktop `chromium`; mobile projects get the resume spec)**
-- Campaign: win level 1, press "Next level", land on level 2 of N, the board size matches the pack.
-- Resume: place a face, mark a cell, lose a heart, reload the page, see the Pause dialog, Resume, and find the same board and hearts (`LocalStorageStorage` in the browser). A corrupted `doku:save` value yields a fresh level, no crash.
-- Finale: via the dev override on the last level, win it, see "Finish" then the Finale, "Start over" returns to level 1.
-- Keyboard-only level: arrows, `x`, hold `Space`, `z`, `h`.
-- Existing specs update for `aria-disabled` and the `?level=` override; each Playwright test starts with empty storage (fresh context).
+**E2E (Playwright, desktop `chromium`; the mobile projects run `mobile.spec.ts`, which includes the touch resume)**
+- `playthrough.spec.ts`: win, then "Next level" lands on level 2 of N; lose and Retry. Existing specs read `aria-disabled` where cells are locked.
+- `resume.spec.ts`: place a face, mark a cell, lose a heart, let the clock run, reload; the Pause dialog is up, the clock is stopped, and Resume shows the same board and hearts. The scenario lives in `e2e/resumeFlow.ts` and is shared with the touch variant in `mobile.spec.ts` (both mobile projects). A corrupt `doku:save` (not an object, wrong-length board, another level's id, zero hearts, unparsable JSON) boots a fresh level with no page error and no leftover save.
+- `campaign.spec.ts`: progress (`next`, `bestMs`) survives a reload and the game resumes paused on level 2. Finale: the test seeds `doku:progress` one level short of the end and boots normally, because the `?level=` override records nothing and so cannot reach the Finale. It wins the last level, sees "Finish" (no "Next level"), then the Finale with the total of best times; a reload stays on the Finale; "Start over" returns to level 1 and keeps the best times. Settings "Start over" asks first, Escape cancels only the confirm, Confirm rewinds. The override leaves `doku:progress` and `doku:save` untouched; an unknown id boots level 1.
+- `keyboard.spec.ts`: arrows, `x`, hold `Space`, `z`, `h`.
+- Helpers in `e2e/helpers.ts`: `seed`/`seedRaw` (a once-per-tab init script so a reload keeps live state), `storageValue`, `solve`. No `waitForTimeout` in the new specs: autosave is awaited with `expect.poll` and the clock is driven with `page.clock`.
+- Each Playwright test starts with empty storage (fresh context).
 - Not testable in CI and therefore manual: Tauri store file on disk, window-state restore, kill-and-relaunch on iOS.
 
 **Manual pass** (checklist in the PR, `DESIGN.md` §11): desktop and iOS simulator: play two levels, force-quit mid-level and relaunch (board, hearts, clock restored, paused), minimize and return (auto-pause), resize the window to the minimum and restore it across a relaunch, settings persist, haptics toggle takes effect.

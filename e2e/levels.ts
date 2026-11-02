@@ -16,3 +16,8 @@ export function levelById(id: string): PackLevel {
   if (!level) throw new Error(`no level ${id} in pack-1.json`);
   return level;
 }
+
+/** Number of levels in the campaign (pack order). */
+export const levelCount: number = pack.levels.length;
+
+export const levelIds: string[] = pack.levels.map((l) => l.id);

@@ -13,6 +13,7 @@ import {
   touchUp,
 } from "./helpers";
 import { levelById } from "./levels";
+import { resumeScenario } from "./resumeFlow";
 
 const { size, solution } = levelById("demo-7");
 
@@ -104,4 +105,30 @@ test("dragging off mid-hold cancels", async ({ page }) => {
   await touchUp(target);
   await expect(target).toHaveAccessibleName(/, empty$/);
   await expect(hearts(page, 3)).toBeVisible();
+});
+
+test("reload resumes the whole game, paused, with touch input", async ({
+  page,
+}) => {
+  await resumeScenario(
+    page,
+    (_, target) => touchHold(target),
+    (target) => target.tap(),
+  );
+  // The Pause dialog fits and its buttons are tappable on this viewport.
+  await page.getByRole("button", { name: "Pause" }).tap();
+  const dialog = page.getByRole("dialog", { name: "Paused" });
+  await expect(dialog).toBeVisible();
+  const { width: vw, height: vh } = page.viewportSize() ?? {
+    width: 0,
+    height: 0,
+  };
+  const b = await dialog.boundingBox();
+  if (!b) throw new Error("no dialog box");
+  expect(b.x).toBeGreaterThanOrEqual(0);
+  expect(b.y).toBeGreaterThanOrEqual(0);
+  expect(b.x + b.width).toBeLessThanOrEqual(vw + 0.5);
+  expect(b.y + b.height).toBeLessThanOrEqual(vh + 0.5);
+  await page.getByRole("button", { name: "Resume" }).tap();
+  await expect(dialog).toBeHidden();
 });
