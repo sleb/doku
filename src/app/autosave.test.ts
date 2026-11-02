@@ -54,3 +54,24 @@ describe("installAutosave ticks", () => {
     expect(await storage.get("save")).toBeUndefined();
   });
 });
+
+describe("installAutosave moves", () => {
+  test("a wrong tap saves the wrong cell and a lost heart", async () => {
+    const wrongCell = uniqueLevel7.solution[0] === 0 ? 1 : 0;
+    gameStore.getState().placeFace(wrongCell);
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({
+      wrong: [wrongCell],
+      hearts: 2,
+    });
+  });
+
+  test("a hint saves hintsUsed", async () => {
+    gameStore.getState().hint();
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({
+      hintsUsed: 1,
+      hearts: 2,
+    });
+  });
+});
