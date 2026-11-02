@@ -185,4 +185,28 @@ describe("Board", () => {
       expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(11);
     });
   });
+
+  describe("roving tabindex", () => {
+    const renderBoard = () =>
+      render(
+        <Board
+          level={level}
+          board={emptyBoard(level)}
+          wrong={none}
+          conflicts={none}
+          disabled={false}
+          {...handlers()}
+        />,
+      );
+    const buttons = () => screen.getAllByRole("button");
+
+    test("only the first cell is tabbable at first", () => {
+      renderBoard();
+      const tabbable = buttons().filter((b) => b.tabIndex === 0);
+      expect(tabbable).toEqual([buttons()[0]]);
+      expect(buttons().filter((b) => b.tabIndex === -1)).toHaveLength(
+        n * n - 1,
+      );
+    });
+  });
 });

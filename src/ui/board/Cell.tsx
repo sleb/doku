@@ -14,6 +14,8 @@ export interface CellProps {
   isWrong: boolean;
   isConflict: boolean;
   disabled: boolean;
+  /** Roving tabindex: 0 on the board's active cell, -1 elsewhere. */
+  tabIndex?: number;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
   /** Shared by a board's cells: the index of the cell being held, if any. Other cells ignore marks meanwhile. */
@@ -37,6 +39,7 @@ export const CellView = memo(function CellView({
   isWrong,
   isConflict,
   disabled,
+  tabIndex,
   onToggleMark,
   onPlaceFace,
   holdOwner,
@@ -73,6 +76,7 @@ export const CellView = memo(function CellView({
       className={className}
       data-holding={hold.holding ? "true" : undefined}
       disabled={disabled}
+      tabIndex={tabIndex}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         // Touch pointers are implicitly captured, which would suppress
