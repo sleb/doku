@@ -1,6 +1,11 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { MemoryStorage } from "../platform/storage";
-import { hydrateSettings, parseSettings, settingsStore } from "./settings";
+import {
+  hydrateSettings,
+  parseSettings,
+  persistSettings,
+  settingsStore,
+} from "./settings";
 
 const defaults = { haptics: true, seenRules: false };
 
@@ -110,11 +115,60 @@ describe("hydrateSettings", () => {
     expect({ haptics, seenRules }).toEqual(defaults);
   });
 
-  test.each(["garbage", { haptics: 5 }])("corrupt %j gives defaults", async (bad) => {
+  test.each(["garbage", { haptics: 5 }])(
+    "corrupt %j gives defaults",
+    async (bad) => {
+      const storage = new MemoryStorage();
+      await storage.set("settings", bad);
+      await hydrateSettings(storage);
+      const { haptics, seenRules } = settingsStore.getState();
+      expect({ haptics, seenRules }).toEqual(defaults);
+    },
+  );
+});
+
+describe("persistSettings", () => {
+  beforeEach(() => settingsStore.setState(defaults));
+
+  test("writes the settings under `settings` on change", async () => {
     const storage = new MemoryStorage();
-    await storage.set("settings", bad);
+    persistSettings(storage);
+    settingsStore.getState().set({ haptics: false });
+    expect(await storage.get("settings")).toEqual({
+      haptics: false,
+      seenRules: false,
+    });
+  });
+
+  test("a rejected write is swallowed", async () => {
+    const storage = new MemoryStorage();
+    storage.set = () => Promise.reject(new Error("disk full"));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    persistSettings(storage);
+    settingsStore.getState().set({ haptics: false });
+    await new Promise((r) => setTimeout(r, 10));
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  test("unsubscribe stops writes", async () => {
+    const storage = new MemoryStorage();
+    const stop = persistSettings(storage);
+    stop();
+    settingsStore.getState().set({ haptics: false });
+    expect(await storage.get("settings")).toBeUndefined();
+  });
+
+  test("persist, change, reset, hydrate round-trips", async () => {
+    const storage = new MemoryStorage();
+    const stop = persistSettings(storage);
+    settingsStore.getState().set({ haptics: false, seenRules: true });
+    await storage.flush();
+    stop();
+    settingsStore.setState(defaults);
     await hydrateSettings(storage);
     const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual(defaults);
+    expect({ haptics, seenRules }).toEqual({ haptics: false, seenRules: true });
   });
 });

@@ -35,3 +35,9 @@ export async function hydrateSettings(storage: Storage): Promise<void> {
     // Unreadable: keep the defaults.
   }
 }
+
+export function persistSettings(storage: Storage): () => void {
+  return settingsStore.subscribe(({ haptics, seenRules }) => {
+    storage.set(KEY, { haptics, seenRules }).catch(() => {});
+  });
+}
