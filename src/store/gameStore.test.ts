@@ -241,3 +241,28 @@ describe("createGameStore", () => {
     expect(s.elapsedMs).toBe(250);
   });
 });
+
+describe("undo and redo actions", () => {
+  it("undo and redo drive the state functions", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().toggleMark(4);
+    store.getState().undo();
+    let s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[4]).toBe(Cell.Empty);
+    expect(s.future).toEqual([4]);
+    store.getState().redo();
+    s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[4]).toBe(Cell.Mark);
+    expect(s.history).toEqual([4]);
+  });
+
+  it("are no-ops while idle", () => {
+    const store = createGameStore();
+    store.getState().undo();
+    store.getState().redo();
+    expect(store.getState().status).toBe("idle");
+  });
+});

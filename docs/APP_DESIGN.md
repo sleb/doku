@@ -94,6 +94,8 @@ type Started = {
 };
 ```
 
+Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arrives with Hint in #75. The stacks are not persisted until M4-08.
+
 `idle` is unchanged. State machine: `idle → playing ⇄ paused → won | lost`; `restart` and `startLevel` go to `playing` from anywhere.
 
 ### 4.2 Transitions (all pure, all return new objects; engine immutability rules apply)
@@ -107,6 +109,8 @@ type Started = {
 | `placeFace(s, cell)` | Unchanged, plus: whichever way it resolves the cell becomes locked, so `cell` is removed from every entry of `history` and `future`. This keeps the invariant below. |
 | `useHint(s)` | `playing` only. `nextHint(board, level)` (§4.4) returns a cell; the transition commits a correct face there exactly as `placeFace` does (so it can win the level), increments `hintsUsed` and costs one heart. Refused (no-op) when `hearts <= 1`, so a hint can never end the level in a loss. |
 | `restart(s)` / `startLevel(l)` | Reset to a fresh board: hearts 3, `elapsedMs` 0, `hintsUsed` 0, empty stacks. |
+
+Implemented in M4-03: `undo`/`redo` flip the cell (Mark to Empty or back) with no before/after tagging, never touch `hearts`, `wrong` or `elapsedMs`, and return the same reference when they are no-ops. A toggle on a locked cell pushes nothing and leaves `future` alone. `useHint` is #75.
 
 **Invariant (property-tested):** every cell in `history` and `future` is currently editable (not a face, not wrong). Hence `undo`/`redo` never need a guard against locked cells, and flipping a cell is always valid.
 
@@ -221,6 +225,8 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
 - **Manual pause:** the pause button and `Esc` (Esc only pauses; it never resumes). Implemented: the minimal Esc handler lives in `useAutoPause` until #80 folds it into `useShortcuts`. The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
 - **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick.
 - **Action bar:** Undo and Redo disabled when their stack is empty; Hint disabled unless `playing` and `hearts > 1`; it shows the remaining hearts it will leave (the cost is visible before use). All three are real buttons with accessible names, shown in the `controls` slot (side panel in the wide layout, under the board in the tall one). The button hit area is at least 44 px (`MOBILE_DESIGN.md` §4.3).
+
+Implemented in M4-03: `ActionBar` (`src/ui/screens/ActionBar.tsx`) has Undo and Redo only; Hint is added in #75. Both are also disabled unless `status === "playing"`, so a paused board cannot be studied. Keyboard: a minimal `useUndoShortcuts` hook (`z`, `Shift+Z`, `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Ctrl+Y` on every platform) is a stopgap until #80 folds it into `useShortcuts`; it acts only while playing and ignores auto-repeat and Alt. The layout e2e specs now account for the controls row.
 
 ### 7.3 Dialogs
 

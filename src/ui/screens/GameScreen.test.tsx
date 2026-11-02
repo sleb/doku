@@ -385,4 +385,47 @@ describe("GameScreen", () => {
       expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
     });
   });
+
+  describe("undo and redo", () => {
+    test("the controls slot holds Undo and Redo", () => {
+      render(<GameScreen level={level} />);
+      const undo = screen.getByRole("button", { name: "Undo" });
+      expect(undo.closest("[data-area]")).toHaveAttribute(
+        "data-area",
+        "controls",
+      );
+      expect(screen.getByRole("button", { name: "Redo" })).toBeInTheDocument();
+    });
+
+    test("undoes and redoes a note on the real board", async () => {
+      const user = userEvent.setup();
+      render(<GameScreen level={level} />);
+      await user.click(cell(nonSolution[0]));
+      expect(label(nonSolution[0])).toBe("marked");
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      expect(label(nonSolution[0])).toBe("empty");
+      await user.click(screen.getByRole("button", { name: "Redo" }));
+      expect(label(nonSolution[0])).toBe("marked");
+    });
+
+    test("the z key undoes a note", async () => {
+      const user = userEvent.setup();
+      render(<GameScreen level={level} />);
+      await user.click(cell(nonSolution[0]));
+      await user.keyboard("z");
+      expect(label(nonSolution[0])).toBe("empty");
+    });
+
+    test("a face placed over a note is not touched by Undo", async () => {
+      const user = userEvent.setup();
+      render(<GameScreen level={level} />);
+      await user.click(cell(solution[0]));
+      holdCell(cell(solution[0]));
+      const placed = label(solution[0]);
+      expect(placed).not.toBe("marked");
+      expect(placed).not.toBe("empty");
+      expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+      expect(label(solution[0])).toBe(placed);
+    });
+  });
 });

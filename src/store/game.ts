@@ -20,6 +20,10 @@ export type GameState =
       wrong: ReadonlySet<number>;
       hearts: number;
       elapsedMs: number;
+      /** Cells of the player's ✕ toggles, oldest first; undo pops the last. */
+      history: readonly number[];
+      /** Undone toggles, oldest first; redo pops the last. */
+      future: readonly number[];
     };
 
 export const idleState: GameState = {
@@ -37,6 +41,8 @@ export function startLevel(level: Level): GameState {
     wrong: new Set(),
     hearts: MAX_HEARTS,
     elapsedMs: 0,
+    history: [],
+    future: [],
   };
 }
 
@@ -82,12 +88,18 @@ function editable(state: GameState, cell: number): Started | null {
   return state;
 }
 
+/** Drop a now-locked cell from both stacks, keeping the order of the rest. */
+function prune(s: Started, cell: number) {
+  const keep = (c: number) => c !== cell;
+  return { history: s.history.filter(keep), future: s.future.filter(keep) };
+}
+
 export function toggleMark(state: GameState, cell: number): GameState {
   const s = editable(state, cell);
   if (!s) return state;
   const board = s.board.slice();
   board[cell] = board[cell] === Cell.Mark ? Cell.Empty : Cell.Mark;
-  return { ...s, board };
+  return { ...s, board, history: [...s.history, cell], future: [] };
 }
 
 export function placeFace(state: GameState, cell: number): GameState {
@@ -98,6 +110,7 @@ export function placeFace(state: GameState, cell: number): GameState {
     board[cell] = Cell.Face;
     return {
       ...s,
+      ...prune(s, cell),
       board,
       status: isSolved(board, s.level) ? "won" : "playing",
     };
@@ -106,9 +119,39 @@ export function placeFace(state: GameState, cell: number): GameState {
   const hearts = s.hearts - 1;
   return {
     ...s,
+    ...prune(s, cell),
     board,
     wrong: new Set(s.wrong).add(cell),
     hearts,
     status: hearts <= 0 ? "lost" : "playing",
+  };
+}
+
+function flip(board: Board, cell: number): Board {
+  const next = board.slice();
+  next[cell] = next[cell] === Cell.Mark ? Cell.Empty : Cell.Mark;
+  return next;
+}
+
+/** Undo the last note toggle. Never refunds a heart or touches locked cells. */
+export function undo(state: GameState): GameState {
+  if (state.status !== "playing" || state.history.length === 0) return state;
+  const cell = state.history[state.history.length - 1];
+  return {
+    ...state,
+    board: flip(state.board, cell),
+    history: state.history.slice(0, -1),
+    future: [...state.future, cell],
+  };
+}
+
+export function redo(state: GameState): GameState {
+  if (state.status !== "playing" || state.future.length === 0) return state;
+  const cell = state.future[state.future.length - 1];
+  return {
+    ...state,
+    board: flip(state.board, cell),
+    history: [...state.history, cell],
+    future: state.future.slice(0, -1),
   };
 }
