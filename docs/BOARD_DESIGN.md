@@ -39,17 +39,18 @@ src/
 │     ├─ GameScreen.tsx
 │     └─ ResultModal.tsx
 ├─ levels/
-│  └─ demo-7.json        # the one level M2 ships (copy of the 7×7 fixture)
+│  ├─ pack-1.json        # bundled level pack (M4-01); holds demo-7, the former M2 demo level
+│  └─ campaign.ts        # LEVELS / levelIndex
 ├─ app/
 │  └─ index.css          # @import "tailwindcss"; @theme tokens (region palette)
-└─ App.tsx               # renders <GameScreen level={demoLevel}/>
+└─ App.tsx               # renders <GameScreen level={LEVELS[0]}/>
 e2e/
 └─ playthrough.spec.ts
 ```
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
-`src/levels/demo-7.json` is a copy of `uniqueLevel7`, loaded with `loadLevel`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright spec reads it with `node:fs` and `JSON.parse` (path from `import.meta.url`); it does not import the JSON module.
+`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json`, loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`); they do not import the JSON module.
 
 ## 3. Store (`src/store`)
 
@@ -242,7 +243,7 @@ export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
 export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
 ```
 
-Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. The demo level is `src/levels/demo-7.json` (a copy of `uniqueLevel7`, id `demo-7`) exported as `demoLevel` from `src/levels/demoLevel.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
+Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. The demo level is `demo-7` (a copy of `uniqueLevel7`) in `src/levels/pack-1.json`, available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
 
 Hex values were chosen under two requirements: the 11 colors are pairwise distinguishable, and the face/mark glyph (dark stroke) reaches ≥ 3:1 contrast on every one. The color-blind variant and pattern overlay (`DESIGN.md` §7 Theming) are not part of milestone 3: the palette setting arrives with settings in milestone 4 and the accessibility pass is milestone 6 (`DESIGN.md` §12), but tokens plus a lookup keep that a one-file swap.
 
@@ -254,7 +255,7 @@ Hex values were chosen under two requirements: the 11 colors are pairwise distin
 - **`<ResultModal status onRetry>`**: renders nothing unless `status` is `won` or `lost`. `div role="dialog" aria-modal="true" aria-labelledby`, heading "You solved it" / "Out of hearts", one **Retry** button (autofocused) calling `restart`. Plain `div`, not `<dialog>`: jsdom does not implement `showModal`, and the board is already inert via `disabled`. Win has no "next" button until level select exists.
 - **`<GameScreen level>`**: on mount `startLevel(level)` in an effect (idempotent, so StrictMode's double-invoke is harmless); selects `status`, `board`, `hearts`; renders `TopBar`, `Board`, `ResultModal`. Renders nothing board-related while `idle`.
 
-**Landed in M2-10 (#49):** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` is now just `<main><GameScreen level={demoLevel} /></main>`.
+**Landed in M2-10 (#49):** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` is now just `<main><GameScreen level={LEVELS[0]} /></main>`.
 
 - `ResultModal`: Retry is focused by a `useEffect` + ref when the dialog opens (not the `autoFocus` attribute, which Biome's `noAutofocus` flags). There is no Escape handler, since Retry is the only exit. A `Tab` keydown on Retry is `preventDefault`ed so focus cannot leave the dialog.
 - `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. The start effect calls `startLevel(level)` and its cleanup resets the singleton to `idleState`, so a later mount never sees an earlier mount's board or result (StrictMode's mount/cleanup/mount ends playing). One guard remains: on the first render of a new `level` prop the store still holds the previous level's board, so `conflicts` (a `useMemo`) and the render both require `storeLevel === level`. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute; the M2-11 e2e checks the behaviour in a real browser with `disabled` stripped (§7). It renders `null` while `idle` or while the store holds another level (the first render before the start effect).
@@ -312,7 +313,7 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
 - `GameScreen` (real store): holding each solution cell shows the win dialog; three wrong holds show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; focusing a solution cell and holding `Space` places a face, `x` toggles a ✕; Retry returns to a fresh board with 3 hearts.
 
-**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7.json`, locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
+**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7` in `pack-1.json`, locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
 
 1. Win: focus each of the 7 solution cells and hold `Space` (plus a mouse hold on one cell to cover the mouse gesture) → "You solved it" → Retry → fresh board.
 2. Lose: focus three different non-solution cells and hold `Space` (one heart each) → "Out of hearts" → Retry.
