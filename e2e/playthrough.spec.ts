@@ -46,8 +46,12 @@ test("win playthrough", async ({ page }) => {
   ).toBeVisible();
   await expect(hearts(page, 3)).toBeVisible();
 
-  await retry(page).click();
-  await expectFreshBoard(page);
+  await page.getByRole("button", { name: "Next level" }).click();
+  await expect(dialog(page)).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: /^Level 2 of / }),
+  ).toBeVisible();
+  await expect(hearts(page, 3)).toBeVisible();
 });
 
 test("lose playthrough", async ({ page }) => {
