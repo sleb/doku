@@ -1,6 +1,6 @@
 # Doku — Component-Level Design (draft 2)
 
-A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first, mobile (iOS/Android via Tauri 2 mobile) second.
+A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. iOS runs on the simulator; Android is pending.
 
 ## 1. Game rules
 
@@ -19,8 +19,8 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
 
 ```
 ┌──────────────────────────── Tauri shell (Rust) ────────────────────────────┐
-│  commands: save_progress / load_progress / settings / (later) haptics      │
-│  plugins: store, fs, os; mobile: haptics, share                            │
+│  commands: none yet (persistence commands planned)                         │
+│  plugins: opener; mobile: haptics (store, fs planned)                      │
 └───────────────▲────────────────────────────────────────────────────────────┘
                 │ invoke() — thin, async, never on the hot path
 ┌───────────────┴──────────── Frontend (TypeScript + React) ─────────────────┐
@@ -38,7 +38,7 @@ Suggested stack: Tauri 2, Vite, React, TypeScript, Zustand (store), Tailwind CSS
 
 ```
 doku/
-├─ src-tauri/            # Rust shell, capabilities, mobile targets (later)
+├─ src-tauri/            # Rust shell, capabilities, mobile targets (gen/apple landed; gen/android pending #64)
 ├─ src/
 │  ├─ engine/            # pure TS, zero UI/Tauri imports
 │  ├─ store/             # game state machine + selectors
@@ -159,7 +159,7 @@ Responsive layout (landed, M3-01): `GameLayout` is a single layout driven by con
 
 Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers the opener plugin and the mobile-only haptics plugin (`capabilities/default.json`, `capabilities/mobile.json`); the scaffold's `greet` command is gone. Only add custom `#[tauri::command]`s when a native need appears.
 
-Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) registered behind `#[cfg(mobile)]`; `capabilities/mobile.json` granting the impact and notification feedback permissions on android/iOS; committed `src-tauri/gen/apple` (#63, landed) and `gen/android` (#64, pending) with build outputs in `.gitignore`; `greet` removed. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
+Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) registered behind `#[cfg(mobile)]`; `capabilities/mobile.json` granting the impact and notification feedback permissions on android/iOS; committed `src-tauri/gen/apple` (#63, landed) and `gen/android` (#64, pending) with build outputs in `src-tauri/.gitignore`; `greet` removed. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
 
 ## 10. Content pipeline
 
