@@ -305,5 +305,12 @@ describe("Board", () => {
       await userEvent.keyboard("{ArrowLeft}");
       expect(activeIndex()).toBe(n);
     });
+
+    test("ArrowUp stays on the first row", async () => {
+      renderBoard();
+      focusAt(3);
+      await userEvent.keyboard("{ArrowUp}");
+      expect(activeIndex()).toBe(3);
+    });
   });
 });
