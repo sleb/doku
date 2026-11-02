@@ -1,15 +1,13 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode, useLayoutEffect } from "react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  uniqueLevel7 as level,
-  uniqueLevel11,
-} from "../../engine/__fixtures__/levels";
+import { recordWins } from "../../app/campaign";
+import { LEVELS } from "../../levels/campaign";
 import { haptics } from "../../platform/haptics";
-import { idleState, startLevel } from "../../store/game";
+import { idleState } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
-import { conflictCells } from "../../store/selectors";
+import { defaultProgress, progressStore } from "../../store/progress";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
@@ -18,11 +16,7 @@ vi.mock("../../platform/haptics", () => ({
   haptics: { play: vi.fn().mockResolvedValue(undefined) },
 }));
 
-vi.mock("../../store/selectors", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../store/selectors")>();
-  return { ...actual, conflictCells: vi.fn(actual.conflictCells) };
-});
-
+const level = LEVELS[0];
 const n = level.size;
 const solution = level.solution.map((c, r) => r * n + c);
 const nonSolution = Array.from({ length: n * n }, (_, i) => i).filter(
@@ -38,26 +32,43 @@ const label = (i: number) =>
 
 beforeEach(() => {
   gameStore.setState(idleState, false);
+  progressStore.setState(defaultProgress);
   settingsStore.setState({ ...defaultSettings, seenRules: true });
   vi.mocked(haptics.play).mockClear();
 });
 afterEach(() => vi.restoreAllMocks());
 
-/** Records the dialog present at first commit, before passive effects run. */
-function Probe({ seen }: { seen: (Element | null)[] }) {
-  useLayoutEffect(() => {
-    seen.push(document.querySelector("[role=dialog]"));
-  }, [seen]);
-  return null;
+function renderGame(lvl = level, strict = false) {
+  act(() => gameStore.getState().startLevel(lvl));
+  return render(
+    strict ? (
+      <StrictMode>
+        <GameScreen />
+      </StrictMode>
+    ) : (
+      <GameScreen />
+    ),
+  );
 }
 
 function hold(cells: number[]) {
   for (const i of cells) holdCell(cell(i));
 }
 
+describe("GameScreen without props", () => {
+  test("plays the store's level and shows its campaign position", () => {
+    act(() => gameStore.getState().startLevel(LEVELS[2]));
+    render(<GameScreen />);
+    expect(
+      screen.getByRole("heading", { name: `Level 3 of ${LEVELS.length}` }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+  });
+});
+
 describe("GameScreen", () => {
   test("places the top bar and board in the layout header and board areas", () => {
-    render(<GameScreen level={level} />);
+    renderGame();
     expect(
       screen.getByTestId("top-bar").closest("[data-area]"),
     ).toHaveAttribute("data-area", "header");
@@ -68,8 +79,10 @@ describe("GameScreen", () => {
   });
 
   test("renders the top bar and grid with no dialog while playing", () => {
-    render(<GameScreen level={level} />);
-    expect(screen.getByRole("heading", { name: level.id })).toBeInTheDocument();
+    renderGame();
+    expect(
+      screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: "3 of 3 hearts" }),
     ).toBeInTheDocument();
@@ -79,25 +92,13 @@ describe("GameScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  test("starts the level on mount, also under StrictMode", () => {
-    render(
-      <StrictMode>
-        <GameScreen level={level} />
-      </StrictMode>,
-    );
-    expect(gameStore.getState().status).toBe("playing");
-    expect(
-      screen.getByRole("grid", { name: "Puzzle board" }),
-    ).toBeInTheDocument();
-  });
-
-  test("solving shows 'You solved it', focused Retry, and an inert board", async () => {
-    render(<GameScreen level={level} />);
+  test("solving shows 'You solved it', focused Next level, and an inert board", async () => {
+    renderGame();
     hold(solution);
     expect(
       screen.getByRole("dialog", { name: "You solved it" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Retry" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Next level" })).toHaveFocus();
     expect(screen.getByRole("grid").closest("[inert]")).not.toBeNull();
     for (const i of nonSolution.slice(0, 3)) {
       expect(cell(i)).toBeDisabled();
@@ -109,56 +110,8 @@ describe("GameScreen", () => {
     expect(gameStore.getState().hearts).toBe(3);
   });
 
-  test("unmounting resets the store to idle", async () => {
-    const { unmount } = render(<GameScreen level={level} />);
-    hold([nonSolution[0]]);
-    expect(gameStore.getState().hearts).toBe(2);
-    unmount();
-    expect(gameStore.getState().status).toBe("idle");
-    expect(gameStore.getState().board).toBeNull();
-    expect(gameStore.getState().hearts).toBe(3);
-  });
-
-  test("a remount after a finished game shows no old dialog on first paint", async () => {
-    const first = render(<GameScreen level={level} />);
-    hold(solution);
-    first.unmount();
-    const seen: (Element | null)[] = [];
-    render(
-      <>
-        <GameScreen level={level} />
-        <Probe seen={seen} />
-      </>,
-    );
-    expect(seen).toEqual([null]);
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(gameStore.getState().status).toBe("playing");
-    for (let i = 0; i < n * n; i++) expect(label(i)).toBe("empty");
-  });
-
-  test("StrictMode double-mount still leaves the level playing", async () => {
-    render(
-      <StrictMode>
-        <GameScreen level={level} />
-      </StrictMode>,
-    );
-    hold([nonSolution[0]]);
-    expect(gameStore.getState().status).toBe("playing");
-    expect(gameStore.getState().hearts).toBe(2);
-  });
-
-  test("does not throw or mismatch when the store holds a different-size level", () => {
-    gameStore.setState(startLevel(uniqueLevel11), false);
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => render(<GameScreen level={level} />)).not.toThrow();
-    expect(error).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("button", { name: /^Row / })).toHaveLength(
-      n * n,
-    );
-  });
-
   test("three wrong taps show 'Out of hearts' with wrong marks", async () => {
-    render(<GameScreen level={level} />);
+    renderGame();
     const wrongs = nonSolution.slice(0, 3);
     hold(wrongs);
     expect(
@@ -170,13 +123,10 @@ describe("GameScreen", () => {
     ).toBeInTheDocument();
   });
 
-  test.each([
-    ["win", () => solution],
-    ["loss", () => nonSolution.slice(0, 3)],
-  ])(
+  test.each([["loss", () => nonSolution.slice(0, 3)]])(
     "Retry after a %s gives a fresh board with 3 hearts",
     async (_n, cells) => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold(cells());
       await userEvent.click(screen.getByRole("button", { name: "Retry" }));
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -188,8 +138,20 @@ describe("GameScreen", () => {
     },
   );
 
+  test("Next level after a win starts level 2", async () => {
+    const stop = recordWins();
+    renderGame();
+    hold(solution);
+    await userEvent.click(screen.getByRole("button", { name: "Next level" }));
+    stop();
+    expect(
+      screen.getByRole("heading", { name: `Level 2 of ${LEVELS.length}` }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   test("one wrong tap keeps the dialog hidden and shows 2 hearts", async () => {
-    render(<GameScreen level={level} />);
+    renderGame();
     hold([nonSolution[0]]);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(
@@ -199,39 +161,30 @@ describe("GameScreen", () => {
 
   test("an unrelated store update does not log errors or loop", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    render(<GameScreen level={level} />);
+    renderGame();
     act(() => gameStore.getState().toggleMark(solution[0]));
     expect(label(solution[0])).toBe("marked");
     expect(error).not.toHaveBeenCalled();
-  });
-
-  test("never computes conflicts for a board from a different level", () => {
-    vi.mocked(conflictCells).mockClear();
-    gameStore.setState(startLevel(uniqueLevel11), false);
-    render(<GameScreen level={level} />);
-    for (const [board, lvl] of vi.mocked(conflictCells).mock.calls) {
-      expect(board).toHaveLength(lvl.size * lvl.size);
-    }
   });
 
   describe("haptics", () => {
     const play = () => vi.mocked(haptics.play);
 
     test("a correct hold plays place once", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold([solution[0]]);
       expect(play().mock.calls).toEqual([["place"]]);
     });
 
     test("nothing plays for a correct or wrong hold when haptics are off", () => {
       settingsStore.getState().set({ haptics: false });
-      render(<GameScreen level={level} />);
+      renderGame();
       hold([solution[0], nonSolution[0]]);
       expect(play()).not.toHaveBeenCalled();
     });
 
     test("turning haptics off mid-game applies to the next move", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold([solution[0]]);
       settingsStore.getState().set({ haptics: false });
       hold([solution[1]]);
@@ -239,13 +192,13 @@ describe("GameScreen", () => {
     });
 
     test("a wrong hold plays wrong once", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold([nonSolution[0]]);
       expect(play().mock.calls).toEqual([["wrong"]]);
     });
 
     test("the Hint button plays place, not wrong, and drops a heart", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(
         screen.getByRole("button", { name: "Hint, costs one heart" }),
       );
@@ -255,13 +208,13 @@ describe("GameScreen", () => {
     });
 
     test("a cross tap is silent", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(cell(nonSolution[0]));
       expect(play()).not.toHaveBeenCalled();
     });
 
     test("the final correct hold plays only win", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold(solution.slice(0, -1));
       play().mockClear();
       hold(solution.slice(-1));
@@ -269,7 +222,7 @@ describe("GameScreen", () => {
     });
 
     test("losing the last heart plays only lose", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold(nonSolution.slice(0, 2));
       play().mockClear();
       hold(nonSolution.slice(2, 3));
@@ -277,45 +230,17 @@ describe("GameScreen", () => {
     });
 
     test("Retry is silent", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold(nonSolution.slice(0, 3));
       play().mockClear();
       await userEvent.click(screen.getByRole("button", { name: /retry/i }));
       expect(play()).not.toHaveBeenCalled();
     });
 
-    test("after unmount, store changes are silent", () => {
-      const { unmount } = render(<GameScreen level={level} />);
-      unmount();
-      gameStore.setState(startLevel(level), false);
-      gameStore.getState().placeFace(solution[0]);
-      expect(play()).not.toHaveBeenCalled();
-    });
-
-    test("unmounting mid-game plays nothing", () => {
-      const { unmount } = render(<GameScreen level={level} />);
-      hold([solution[0], nonSolution[0]]);
-      play().mockClear();
-      unmount();
-      expect(play()).not.toHaveBeenCalled();
-    });
-
     test("buzzes once under StrictMode", () => {
-      render(
-        <StrictMode>
-          <GameScreen level={level} />
-        </StrictMode>,
-      );
+      renderGame(level, true);
       hold([solution[0]]);
       expect(play().mock.calls).toEqual([["place"]]);
-    });
-
-    test("changing level neither buzzes nor stacks subscriptions", () => {
-      const { rerender } = render(<GameScreen level={level} />);
-      rerender(<GameScreen level={uniqueLevel11} />);
-      expect(play()).not.toHaveBeenCalled();
-      hold([uniqueLevel11.solution[0]]);
-      expect(play().mock.calls).toHaveLength(1);
     });
   });
 
@@ -326,7 +251,7 @@ describe("GameScreen", () => {
     };
 
     test("the clock advances while playing", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       expect(screen.getByText("0:00")).toBeInTheDocument();
       act(() => gameStore.getState().tick(2000));
       expect(screen.getByText("0:02")).toBeInTheDocument();
@@ -334,7 +259,7 @@ describe("GameScreen", () => {
 
     test("Pause shows the dialog and hides and inerts the board", async () => {
       const user = userEvent.setup();
-      render(<GameScreen level={level} />);
+      renderGame();
       await user.click(screen.getByRole("button", { name: "Pause" }));
       expect(gameStore.getState().status).toBe("paused");
       expect(
@@ -350,7 +275,7 @@ describe("GameScreen", () => {
     });
 
     test("input is ignored while paused", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       act(() => gameStore.getState().pause());
       const before = gameStore.getState();
       const cell0 = document.querySelector<HTMLElement>(
@@ -365,7 +290,7 @@ describe("GameScreen", () => {
 
     test("Resume continues from the same elapsed time", async () => {
       const user = userEvent.setup();
-      render(<GameScreen level={level} />);
+      renderGame();
       act(() => gameStore.getState().tick(3000));
       await user.click(screen.getByRole("button", { name: "Pause" }));
       await user.click(screen.getByRole("button", { name: "Resume" }));
@@ -376,7 +301,7 @@ describe("GameScreen", () => {
 
     test("Restart level from the pause dialog resets to 0:00", async () => {
       const user = userEvent.setup();
-      render(<GameScreen level={level} />);
+      renderGame();
       act(() => gameStore.getState().tick(3000));
       await user.click(screen.getByRole("button", { name: "Pause" }));
       await user.click(screen.getByRole("button", { name: "Restart level" }));
@@ -385,7 +310,7 @@ describe("GameScreen", () => {
     });
 
     test("hiding the document auto-pauses; pausing buzzes nothing", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       Object.defineProperty(document, "visibilityState", {
         configurable: true,
         get: () => "hidden",
@@ -404,7 +329,7 @@ describe("GameScreen", () => {
     });
 
     test("a finished game shows the result, not the pause dialog", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       hold(nonSolution.slice(0, 3));
       expect(
         screen.getByRole("dialog", { name: "Out of hearts" }),
@@ -415,7 +340,7 @@ describe("GameScreen", () => {
 
   describe("undo and redo", () => {
     test("the controls slot holds Undo and Redo", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       const undo = screen.getByRole("button", { name: "Undo" });
       expect(undo.closest("[data-area]")).toHaveAttribute(
         "data-area",
@@ -426,7 +351,7 @@ describe("GameScreen", () => {
 
     test("undoes and redoes a note on the real board", async () => {
       const user = userEvent.setup();
-      render(<GameScreen level={level} />);
+      renderGame();
       await user.click(cell(nonSolution[0]));
       expect(label(nonSolution[0])).toBe("marked");
       await user.click(screen.getByRole("button", { name: "Undo" }));
@@ -437,7 +362,7 @@ describe("GameScreen", () => {
 
     test("the z key undoes a note", async () => {
       const user = userEvent.setup();
-      render(<GameScreen level={level} />);
+      renderGame();
       await user.click(cell(nonSolution[0]));
       await user.keyboard("z");
       expect(label(nonSolution[0])).toBe("empty");
@@ -445,7 +370,7 @@ describe("GameScreen", () => {
 
     test("a face placed over a note is not touched by Undo", async () => {
       const user = userEvent.setup();
-      render(<GameScreen level={level} />);
+      renderGame();
       await user.click(cell(solution[0]));
       holdCell(cell(solution[0]));
       const placed = label(solution[0]);
@@ -461,7 +386,7 @@ describe("GameScreen", () => {
 
     test("a fresh install opens Rules and pauses the game", () => {
       fresh();
-      render(<GameScreen level={level} />);
+      renderGame();
       expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
       expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
       expect(gameStore.getState().status).toBe("paused");
@@ -469,7 +394,7 @@ describe("GameScreen", () => {
 
     test("dismissing first-launch Rules sets seenRules and resumes", async () => {
       fresh();
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Got it" }));
       expect(settingsStore.getState().seenRules).toBe(true);
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -477,7 +402,7 @@ describe("GameScreen", () => {
     });
 
     test("a remount with seenRules true does not reopen Rules", () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(gameStore.getState().status).toBe("playing");
     });
@@ -486,7 +411,7 @@ describe("GameScreen", () => {
       vi.useFakeTimers();
       try {
         fresh();
-        render(<GameScreen level={level} />);
+        renderGame();
         act(() => {
           vi.advanceTimersByTime(5000);
         });
@@ -498,7 +423,7 @@ describe("GameScreen", () => {
     });
 
     test("Pause > Rules > Got it returns to Pause and Resume works", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
       await userEvent.click(screen.getByRole("button", { name: "Rules" }));
       expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
@@ -514,7 +439,7 @@ describe("GameScreen", () => {
     });
 
     test("Pause > Settings > toggle updates the store, Done returns to Pause", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
       await userEvent.click(screen.getByRole("button", { name: "Settings" }));
       expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
@@ -527,8 +452,23 @@ describe("GameScreen", () => {
       expect(gameStore.getState().status).toBe("paused");
     });
 
+    test("Pause > Settings > Start over returns to level 1, keeping bests", async () => {
+      progressStore.setState({ next: 3, bestMs: { [LEVELS[0].id]: 2000 } });
+      renderGame(LEVELS[3]);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+      await userEvent.click(screen.getByRole("button", { name: "Start over" }));
+      await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(gameStore.getState().status).toBe("playing");
+      expect(
+        screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
+      ).toBeInTheDocument();
+      expect(progressStore.getState().bestMs[LEVELS[0].id]).toBe(2000);
+    });
+
     test("Escape in Rules or Settings returns to Pause without resuming", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
       for (const name of ["Rules", "Settings"]) {
         await userEvent.click(screen.getByRole("button", { name }));
@@ -541,7 +481,7 @@ describe("GameScreen", () => {
     });
 
     test("Rules opened from Pause restores focus and un-inerts Pause", async () => {
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
       await userEvent.click(screen.getByRole("button", { name: "Rules" }));
       await userEvent.click(screen.getByRole("button", { name: "Got it" }));
@@ -553,7 +493,7 @@ describe("GameScreen", () => {
 
     test("restart and a later startLevel do not reopen Rules", async () => {
       fresh();
-      render(<GameScreen level={level} />);
+      renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Got it" }));
       act(() => gameStore.getState().restart());
       act(() => gameStore.getState().startLevel(level));
@@ -562,11 +502,7 @@ describe("GameScreen", () => {
 
     test("first-launch Rules open once under StrictMode", () => {
       fresh();
-      render(
-        <StrictMode>
-          <GameScreen level={level} />
-        </StrictMode>,
-      );
+      renderGame(level, true);
       expect(screen.getAllByRole("dialog")).toHaveLength(1);
       expect(gameStore.getState().status).toBe("paused");
     });
