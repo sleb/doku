@@ -14,7 +14,14 @@ export function installAutosave(
     const saved = toSaved(gameStore.getState());
     if (saved) storage.set(KEY, saved).catch(() => {});
   };
-  const unsubscribe = gameStore.subscribe(() => {
+  const unsubscribe = gameStore.subscribe((s, prev) => {
+    const changed =
+      s.board !== prev.board ||
+      s.hearts !== prev.hearts ||
+      s.status !== prev.status ||
+      ("wrong" in s && "wrong" in prev && s.wrong !== prev.wrong) ||
+      ("hintsUsed" in s && "hintsUsed" in prev && s.hintsUsed !== prev.hintsUsed);
+    if (!changed) return;
     clearTimeout(timer);
     timer = setTimeout(write, debounceMs);
   });

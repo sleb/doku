@@ -32,3 +32,25 @@ describe("installAutosave", () => {
     });
   });
 });
+
+describe("installAutosave coalescing", () => {
+  test("rapid changes write once, the latest", async () => {
+    const set = vi.spyOn(storage, "set");
+    gameStore.getState().toggleMark(3);
+    vi.advanceTimersByTime(100);
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(250);
+    expect(set).toHaveBeenCalledTimes(1);
+    const saved = await storage.get<{ board: number[] }>("save");
+    expect(saved?.board[3]).toBe(1);
+    expect(saved?.board[4]).toBe(1);
+  });
+});
+
+describe("installAutosave ticks", () => {
+  test("a clock tick writes nothing", async () => {
+    gameStore.getState().tick(1000);
+    vi.advanceTimersByTime(1000);
+    expect(await storage.get("save")).toBeUndefined();
+  });
+});
