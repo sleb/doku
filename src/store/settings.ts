@@ -1,3 +1,4 @@
+import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { Storage } from "../platform/storage";
 
@@ -40,4 +41,8 @@ export function persistSettings(storage: Storage): () => void {
   return settingsStore.subscribe(({ haptics, seenRules }) => {
     storage.set(KEY, { haptics, seenRules }).catch(() => {});
   });
+}
+
+export function useSettingsStore<T>(selector: (s: SettingsStore) => T): T {
+  return useStore(settingsStore, selector);
 }
