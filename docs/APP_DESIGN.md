@@ -89,8 +89,8 @@ type Started = {
   level: Level; board: Board; wrong: ReadonlySet<number>; hearts: number;
   elapsedMs: number;
   hintsUsed: number;
-  history: readonly (readonly number[])[];   // undo stack: groups of cells whose mark was flipped
-  future: readonly (readonly number[])[];    // redo stack
+  history: readonly number[];   // undo stack: cells whose mark was flipped, oldest first
+  future: readonly number[];    // redo stack
 };
 ```
 
@@ -102,13 +102,13 @@ type Started = {
 |---|---|
 | `tick(s, dtMs)` | `playing` only: `elapsedMs += dtMs`. Negative or non-finite `dtMs` is ignored. |
 | `pause(s)` / `resume(s)` | `playing → paused` / `paused → playing`; anything else is a no-op. While `paused` every board action is a no-op (the existing `editable` guard already requires `playing`). |
-| `applyMarks(s, cells, to)` | Sets each editable cell in `cells` to `Mark` or `Empty`; cells already in that state or locked are skipped. If any changed, pushes the changed cells as one group on `history` and clears `future`. `toggleMark(s, cell)` becomes `applyMarks([cell], opposite-of-current)`, so the existing behavior and tests are preserved. One group is one undo step; a drag stroke (§7.5) is one group. |
-| `undo(s)` / `redo(s)` | Pop a group from `history` (or `future`), flip each cell in it, push the group on the other stack. No-op on empty stacks or when not `playing`. |
-| `placeFace(s, cell)` | Unchanged, plus: whichever way it resolves the cell becomes locked, so `cell` is removed from every group in `history` and `future` (empty groups dropped). This keeps the invariant below. |
+| `toggleMark(s, cell)` | Existing behavior, plus: when it changes an editable cell, pushes `cell` on `history` and clears `future`. |
+| `undo(s)` / `redo(s)` | Pop a cell from `history` (or `future`), flip its mark, push the cell on the other stack. No-op on empty stacks or when not `playing`. |
+| `placeFace(s, cell)` | Unchanged, plus: whichever way it resolves the cell becomes locked, so `cell` is removed from every entry of `history` and `future`. This keeps the invariant below. |
 | `useHint(s)` | `playing` only. `nextHint(board, level)` (§4.4) returns a cell; the transition commits a correct face there exactly as `placeFace` does (so it can win the level), increments `hintsUsed` and costs one heart. Refused (no-op) when `hearts <= 1`, so a hint can never end the level in a loss. |
 | `restart(s)` / `startLevel(l)` | Reset to a fresh board: hearts 3, `elapsedMs` 0, `hintsUsed` 0, empty stacks. |
 
-**Invariant (property-tested):** every cell in `history` and `future` is currently editable (not a face, not wrong). Hence `undo`/`redo` never need a guard against locked cells, and flipping a group is always valid.
+**Invariant (property-tested):** every cell in `history` and `future` is currently editable (not a face, not wrong). Hence `undo`/`redo` never need a guard against locked cells, and flipping a cell is always valid.
 
 **Undo covers notes only.** Faces and wrong ✕s are locked by design (`BOARD_DESIGN.md`, decision 7), and a wrong tap spends a heart that must never come back. Making wrong taps undoable would either refund hearts or leave a heart-less undo that re-opens a cell the player now knows is wrong; neither is worth it. So undo/redo is the tool for ✕ notes, which is where mistakes actually happen. A hint's face is locked like any other face.
 
@@ -249,7 +249,7 @@ Existing per-cell keys stay: `x` toggles ✕, holding `Space` places a face. New
 - **Roving tabindex:** `Board` holds `active` (default 0) and passes `tabIndex` 0 to that cell's button and -1 to the rest, so the board is one Tab stop. A cell focus event (mouse included) sets `active`. Arrow handling lives in `Board` on the grid, using `geometry` indices; `CellView` stays presentational.
 - **Locked cells stay focusable:** a locked cell (face or wrong ✕) gets `aria-disabled="true"` and ignores input instead of `disabled`, because disabled buttons cannot take focus and the arrow walk would stall on them. The whole board is still `inert` once the game is finished or paused. E2E and unit tests that read `disabled` change to read `aria-disabled` (§9).
 - **Shortcuts** are one `useShortcuts()` window listener, active only while `status === "playing"` (so dialogs and the paused state swallow them), ignoring auto-repeat and events with modifiers other than the combos above. They never fire while a hold is in progress.
-- **Right-click** marks (`contextmenu` is prevented) and **click-drag paints marks**: a stroke applies the target state of its first cell (✕ if that cell was empty, clear if it was ✕) to every unlocked cell it crosses, as one `applyMarks` group. This is the lowest-priority story and the first to cut (§10). Touch is unchanged: a drag still cancels a hold and paints nothing.
+- **Right-click and click-drag marking are not part of this milestone.** `DESIGN.md` §8 lists them for desktop; they are dropped from the design until someone asks for them. Click and hold stay the only pointer gestures.
 
 ## 8. Desktop window and Rust shell
 
@@ -262,7 +262,7 @@ Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) must 
 ## 9. Testing (strict TDD, each row written failing first)
 
 **Node**
-- `game.ts`: `tick` (accumulates, ignores bad deltas, only while `playing`); `pause`/`resume` state machine incl. board actions no-op when paused; `applyMarks` (target state, skips locked and no-ops, one group per call, clears `future`); `undo`/`redo` round-trip; invariant "history and future cells are editable" as a property test over random action sequences; `placeFace` prunes stacks; `useHint` places a correct face, costs exactly one heart, can win, is refused at 1 heart and when not `playing`; `feedbackFor` returns `place` (not `wrong`) for a hint; `restart` resets clock, hints, stacks; frozen inputs never mutated (extends `immutability.test.ts`).
+- `game.ts`: `tick` (accumulates, ignores bad deltas, only while `playing`); `pause`/`resume` state machine incl. board actions no-op when paused; `toggleMark` pushes history and clears `future`, and a no-op on a locked cell pushes nothing; `undo`/`redo` round-trip; invariant "history and future cells are editable" as a property test over random action sequences; `placeFace` prunes stacks; `useHint` places a correct face, costs exactly one heart, can win, is refused at 1 heart and when not `playing`; `feedbackFor` returns `place` (not `wrong`) for a hint; `restart` resets clock, hints, stacks; frozen inputs never mutated (extends `immutability.test.ts`).
 - `hints.ts`: §4.4.
 - `progress.ts`: `recordWin` (advances, never regresses, keeps min best), `startOver`, clamping.
 - `persist.ts`: round-trip `toSaved`/`fromSaved`; rejection table (wrong level id, wrong length, bad cell value, wrong index not a mark, hearts 0 or 4, negative elapsed, non-integer hints); a fuzz test that `fromSaved` never throws on arbitrary JSON.
@@ -273,7 +273,7 @@ Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) must 
 **jsdom components**
 - `Dialog`: focus in, Tab cycles, Escape closes, focus restored, siblings `inert`.
 - `GameScreen` with `MemoryStorage`: undo/redo/hint buttons enable and disable correctly; the clock advances under fake timers; `visibilitychange` pauses; Pause dialog resumes; haptics are silent when `settings.haptics` is false.
-- `Board`: arrow-key focus movement and clamping; one tab stop; locked cells are focusable and `aria-disabled`; right-click marks; a drag stroke is one undo step.
+- `Board`: arrow-key focus movement and clamping; one tab stop; locked cells are focusable and `aria-disabled`.
 - `ResultModal`/`Finale`: win shows time and best; last level says "Finish".
 - Autosave: a sequence of moves writes the expected `save`; ticks do not write; win clears it; `pagehide` flushes.
 - Boot: valid save restores paused with the same hearts and board; invalid save is discarded; storage that throws on read still boots.
@@ -294,7 +294,7 @@ Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full deskto
 
 1. **M4-01 Seed pack and campaign order:** §3.1. `pack-1.json`, `campaign.ts`, `tools/seed-pack.ts`, remove `demoLevel.ts`.
 2. **M4-02 Timer and pause:** `tick`/`pause`/`resume`, `useClock`, auto-pause, `<Dialog>`, `PauseDialog`, timer in `TopBar`. §4.2, §7.1, §7.2.
-3. **M4-03 Undo and redo for notes:** `applyMarks`, stacks, pruning, `ActionBar` Undo/Redo, `z` shortcuts. [02 for the `Dialog`-free parts only; can start in parallel]
+3. **M4-03 Undo and redo for notes:** history/future stacks, pruning, `ActionBar` Undo/Redo, `z` shortcuts. [02 for the `Dialog`-free parts only; can start in parallel]
 4. **M4-04 Hints:** `engine/hints.ts`, `useHint`, Hint button, `h`. §4.4.
 5. **M4-05 Storage seam:** `Storage`, three adapters, `tauri-plugin-store` wiring and capability. §5.1, §8.
 6. **M4-06 Settings and rules:** settings store and persistence, `SettingsDialog`, `RulesDialog`, haptics gating. [05, 02]
@@ -302,9 +302,8 @@ Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full deskto
 8. **M4-08 Save and resume:** `persist.ts`, autosave, flush on hide, restore paused. [07]
 9. **M4-09 Keyboard play:** roving tabindex, arrows, `aria-disabled`, global shortcuts. [03, 04]
 10. **M4-10 Desktop window:** minimum size and remembered size. §8. Independent.
-11. **M4-11 Right-click and drag-paint marks:** §7.5. [03] First to cut.
-12. **M4-12 E2E for the full app:** §9 E2E. [07, 08, 09]
-13. **M4-13 Docs sync:** §12.
+11. **M4-11 E2E for the full app:** §9 E2E. [07, 08, 09]
+12. **M4-12 Docs sync:** §12.
 
 ## 11. Open questions
 
@@ -315,7 +314,7 @@ Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full deskto
 5. **Start over.** Default keeps `bestMs`. A full wipe (including bests) would be a second option in Settings; not planned.
 6. **Stars.** Dropped (`DESIGN.md` §5, §7 mention them as proposed). Reinstate only with a rule that is worth the UI.
 
-## 12. Doc sync checklist (M4-13)
+## 12. Doc sync checklist (M4-12)
 
 - `DESIGN.md` §12 item 4 reads "Full app" with the contents above (renamed in the same change as this document). §5: new statuses, state fields and actions; remove `dailyStore`, keep `progressStore` (`next`, `bestMs`) and `settingsStore`. §6: storage interface and keys. §7: replace the tree with §7.1 here. §8: `input` row gains arrows, `z`, `h`, `Esc`; `storage` row names `TauriStorage` and `LocalStorageStorage`; `window` row names the minimum and window-state. §9: store and window-state plugins, `capabilities/desktop.json`. §10: seed pack and `tools/seed-pack.ts`. §13: add the decisions below.
 - `BOARD_DESIGN.md`: §3 state notes the added fields; §4.2/§4.3 the roving tabindex and `aria-disabled`; the "level select, persistence, undo/redo…" out-of-scope line already describes this milestone.
