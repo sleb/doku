@@ -291,5 +291,12 @@ describe("Board", () => {
       await userEvent.keyboard("{ArrowUp}");
       expect(activeIndex()).toBe(20 - n);
     });
+
+    test("ArrowRight stays on the last column", async () => {
+      renderBoard();
+      focusAt(n - 1);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(n - 1);
+    });
   });
 });
