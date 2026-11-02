@@ -37,6 +37,17 @@ body {
   touch-action: manipulation;
 }
 
+/* A game, not a document: no selection handles, loupe or copy/paste menu. Set on every element, not
+   just body: WKWebView still starts the text loupe from a touch that lands on an unstyled wrapper
+   (e.g. a disabled cell, which does not receive the touch itself). The prefix is required there. */
+*,
+*::before,
+*::after {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 /* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS, starting HOLD_DELAY_MS after press. */
 .hold-glow rect {
   fill: none;
@@ -115,20 +126,27 @@ body {
   place-items: center;
 }
 
-/* Side column only when wide enough that it doesn't shrink the board below what stacking gives (e.g. 360x300). */
+/* Side column only when wide enough that it doesn't shrink the board below what stacking gives (e.g. 360x300).
+   The board column is sized from `main`'s units (square, as tall as the area, but leaving 12rem for the side
+   column and its gap) rather than 1fr, so board + side column form one group centered in the viewport. The
+   side column's content is stacked and vertically centered against the board. */
 @container (min-aspect-ratio: 1.2) and (min-width: 36rem) {
   .game-layout {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto 1fr auto;
+    grid-template-columns: min(100cqh, calc(100cqw - 12rem)) auto;
+    grid-template-rows: 1fr auto auto 1fr;
     grid-template-areas:
-      "board header"
       "board ."
-      "board controls";
+      "board header"
+      "board controls"
+      "board .";
+    column-gap: 2rem;
+    justify-content: center;
   }
 
   .game-layout--no-controls {
-    grid-template-rows: auto 1fr;
+    grid-template-rows: 1fr auto 1fr;
     grid-template-areas:
+      "board ."
       "board header"
       "board .";
   }
@@ -136,5 +154,15 @@ body {
   .game-header,
   .game-controls {
     min-width: 10rem;
+  }
+
+  /* The column gap supplies the spacing, so no side padding (it would unbalance the centered group). */
+  .game-header {
+    padding-inline: 0;
+  }
+
+  .game-header header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

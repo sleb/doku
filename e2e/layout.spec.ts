@@ -98,3 +98,27 @@ test("stacked layout reserves no phantom row below the board", async ({
   expect(await page.locator("[data-area=controls]").count()).toBe(0);
   expect(layout.y + layout.height - (board.y + board.height)).toBeLessThan(0.5);
 });
+
+for (const [w, h] of [
+  [667, 375],
+  [932, 430],
+] as const) {
+  test(`landscape ${w}x${h}: group is centered, header stacked and centered beside the board`, async ({
+    page,
+  }) => {
+    await open(page, w, h);
+    const board = await box(page, "[role=grid]");
+    const header = await box(page, "header");
+    const title = await box(page, "header h1");
+    const hearts = await box(page, "header [role=img]");
+    // Title above hearts, with a gap.
+    expect(hearts.y - (title.y + title.height)).toBeGreaterThanOrEqual(4);
+    // Board + header form one group centered in the viewport.
+    const left = board.x;
+    const right = w - (header.x + header.width);
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(2);
+    // Header column is vertically centered against the board.
+    const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
+    expect(Math.abs(mid(header) - mid(board))).toBeLessThanOrEqual(2);
+  });
+}

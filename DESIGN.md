@@ -149,7 +149,7 @@ Hides differences so UI code stays platform-agnostic:
 |---|---|---|
 | `storage` | tauri-plugin-store | same |
 | `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 4) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
-| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the native plugin is planned (#63/#64), see §9 |
+| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
 | `audio` | WebAudio | same (respect silent switch) |
 | `window` | min size, remembered size | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
 
@@ -157,9 +157,9 @@ Responsive layout (landed, M3-01): `GameLayout` is a single layout driven by con
 
 ## 9. Rust shell (`src-tauri`)
 
-Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers only the opener plugin, plus the scaffold's leftover `greet` command and `capabilities/default.json`. Only add custom `#[tauri::command]`s when a native need appears.
+Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers the opener plugin and the mobile-only haptics plugin (`capabilities/default.json`, `capabilities/mobile.json`); the scaffold's `greet` command is gone. Only add custom `#[tauri::command]`s when a native need appears.
 
-Planned for mobile (#63 iOS, #64 Android; not yet implemented, see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) and registered behind `#[cfg(mobile)]`; a `capabilities/mobile.json` granting `haptics:default` on android/iOS; committed `src-tauri/gen/{apple,android}` from `tauri ios init` / `android init` with build outputs in `.gitignore`; removal of `greet`. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
+Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) registered behind `#[cfg(mobile)]`; `capabilities/mobile.json` granting the impact and notification feedback permissions on android/iOS; committed `src-tauri/gen/apple` (#63, landed) and `gen/android` (#64, pending) with build outputs in `.gitignore`; `greet` removed. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
 
 ## 10. Content pipeline
 
@@ -196,8 +196,8 @@ Decided:
 8. **Mobile input is unchanged:** tap = ✕, hold (250 ms delay, 500 ms glow) = face. No tool toggle (click-only placement is #57).
 9. **One layout via container queries** for phones (both orientations) and desktop; orientation is not locked (landed).
 10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose), never for the free ✕.
-11. **Commit `src-tauri/gen`**, ignoring build outputs (decided, not yet implemented: #63/#64).
-12. **iOS first, then Android** (decided; native builds not yet implemented: #63/#64).
+11. **Commit `src-tauri/gen`**, ignoring build outputs (`gen/apple` committed in #63; `gen/android` pending #64).
+12. **iOS first, then Android** (decided; iOS builds on the simulator, #63; Android pending, #64).
 
 Still open:
 1. **Which size/tier combinations to ship:** decide after seeing what the generator can produce reliably.

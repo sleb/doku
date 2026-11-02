@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type RefObject } from "react";
 import { Cell } from "../../engine";
 import { HOLD_MS } from "./hold";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
@@ -16,6 +16,8 @@ export interface CellProps {
   disabled: boolean;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
+  /** Shared by a board's cells: the index of the cell being held, if any. Other cells ignore marks meanwhile. */
+  holdOwner?: RefObject<number | null>;
 }
 
 function stateLabel(state: Cell, isWrong: boolean): string {
@@ -37,8 +39,22 @@ export const CellView = memo(function CellView({
   disabled,
   onToggleMark,
   onPlaceFace,
+  holdOwner,
 }: CellProps) {
-  const hold = useHold(() => onPlaceFace(index), disabled);
+  const hold = useHold(
+    () => onPlaceFace(index),
+    disabled,
+    (active) => {
+      if (!holdOwner) return;
+      if (active) holdOwner.current = index;
+      else if (holdOwner.current === index) holdOwner.current = null;
+    },
+  );
+  // A second finger or palm on a neighbor must not mark it mid-hold.
+  const toggleMark = () => {
+    const owner = holdOwner?.current;
+    if (owner == null || owner === index) onToggleMark(index);
+  };
   const label = stateLabel(state, isWrong);
   const className = [
     "cell relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
@@ -87,7 +103,7 @@ export const CellView = memo(function CellView({
         // Always swallow, so Space never scrolls or synthesizes a click.
         e.preventDefault();
         if (e.repeat) return; // a held key must not flicker or restart
-        if (isX) onToggleMark(index);
+        if (isX) toggleMark();
         else hold.start("key");
       }}
       onKeyUp={(e) => {
@@ -98,7 +114,7 @@ export const CellView = memo(function CellView({
         }
       }}
       onClick={() => {
-        if (!hold.swallowClick()) onToggleMark(index);
+        if (!hold.swallowClick()) toggleMark();
       }}
     >
       {hold.holding ? (

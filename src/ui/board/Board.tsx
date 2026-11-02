@@ -1,8 +1,9 @@
-import { type CSSProperties, useMemo } from "react";
+import { type CSSProperties, useMemo, useRef } from "react";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
 import { CellView } from "./Cell";
 import { type CellGeometry, cellGeometry } from "./geometry";
+import { useNoDoubleTapLoupe } from "./useNoDoubleTapLoupe";
 
 export interface BoardProps {
   level: Level;
@@ -25,6 +26,8 @@ export function Board({
   onPlaceFace,
 }: BoardProps) {
   const { size } = level;
+  const holdOwner = useRef<number | null>(null);
+  const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
     "--n": size,
@@ -40,6 +43,7 @@ export function Board({
   return (
     // biome-ignore lint/a11y/useSemanticElements: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
     <div
+      ref={gridRef}
       role="grid"
       aria-label="Puzzle board"
       aria-rowcount={size}
@@ -64,6 +68,7 @@ export function Board({
                 disabled={disabled || isLocked(board, wrong, g.index)}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
+                holdOwner={holdOwner}
               />
             </div>
           ))}

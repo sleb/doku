@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
-**Status:** M3-01 to M3-04 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam). M3-05 (iOS) and M3-06 (Android) are pending (#63/#64), so every native item in §7 and the device pass in §8 are still planned. M3-07 (#65) is a partial doc sync; `DESIGN.md` §7 to §9 and §13 and `README.md` are synced, and the native items get recorded after #63/#64.
+**Status:** M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending, and the physical-device pass in §8 and the signing team are still to be done by hand. M3-07 (#65) is a partial doc sync; `DESIGN.md` §7 to §9 and §13 and `README.md` are synced, and the native items get recorded after #63/#64.
 
 ## 1. Goals and non-goals
 
@@ -18,7 +18,7 @@ Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers
 | `--cell` budget `100vw - 2rem`, `100dvh - 9rem` | Magic numbers; ignores safe areas and any extra bars; 11×11 on a 375 pt wide screen is about 30 pt per cell (below the 44 pt HIG and 48 dp Material targets) |
 | `<main class="w-fit px-4 py-6">`, no viewport-fit, no overscroll rules | Rubber-band scroll, pull-to-refresh, double-tap zoom, content under the notch |
 | No `src/platform/`, no native projects | No haptics seam, no `gen/android` or `gen/apple` |
-| Rust shell has only the opener plugin and a leftover `greet` command | Needs the haptics plugin and a mobile-only capability file |
+| Rust shell had only the opener plugin and a leftover `greet` command | Now: haptics plugin behind `cfg(mobile)`, `capabilities/mobile.json`, `greet` removed (M3-05) |
 
 The 30 pt cells cannot be fixed by layout alone (the grid is N columns wide on a fixed-width screen). The existing input already makes a mis-tap cheap: a tap only toggles a free ✕ (never costs a heart), and a face needs a deliberate 750 ms hold.
 
@@ -92,11 +92,11 @@ This introduces the adapter layer from `DESIGN.md` §8 for the first time. Only 
 // src/platform/haptics.ts
 export type HapticKind = "place" | "wrong" | "win" | "lose";
 export interface Haptics { play(kind: HapticKind): Promise<void> }
-export function createHaptics(deps?: { isTauri(): boolean; loadPlugin(): Promise<Plugin> }): Haptics;
+export function createHaptics(deps?: { isTauri(): boolean; isMobile(): boolean; loadPlugin(): Promise<Plugin>; log(err: unknown): void }): Haptics;
 export const haptics: Haptics;   // createHaptics() with the real deps
 ```
 
-`createHaptics` takes injectable `isTauri` and `loadPlugin` so the mapping is unit-tested with fakes. The plugin is loaded with `await import("@tauri-apps/plugin-haptics")` inside `play`, so the web build keeps it in a separate, never-fetched chunk. `play` wraps everything in try/catch and always resolves.
+`createHaptics` takes injectable `isTauri`, `isMobile` (iPhone/iPad/Android user agent, or a Macintosh user agent with `maxTouchPoints > 1` for iPadOS posing as a Mac), `loadPlugin` and `log`. The gate is `isTauri() && isMobile()`, so desktop Tauri, where the plugin is not registered, makes no doomed IPC call. Failures on mobile go to `console.warn` so they stay visible in release builds. Because every dependency is injectable, the kind-to-feedback mapping and the mobile gate are unit-tested with fakes. The plugin is loaded with `await import("@tauri-apps/plugin-haptics")` inside `play`, so the web build keeps it in a separate, never-fetched chunk. `play` wraps everything in try/catch and always resolves.
 
 Adapters, picked by `isTauri()` (`"__TAURI_INTERNALS__" in window`):
 
@@ -130,14 +130,14 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 ## 7. Rust shell and native projects
 
 - **Plugins:** `tauri-plugin-haptics` under `[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]` in `Cargo.toml`, registered in `run()` behind `#[cfg(mobile)]`. `bun add @tauri-apps/plugin-haptics`.
-- **Capabilities:** keep `capabilities/default.json` as is. Add `capabilities/mobile.json` with `"platforms": ["android", "iOS"]`, `"windows": ["main"]`, `"permissions": ["haptics:default"]`. A separate file keeps the desktop permission set unchanged and lets the capability schema be checked per platform.
+- **Capabilities:** keep `capabilities/default.json` as is. Add `capabilities/mobile.json` with `"platforms": ["android", "iOS"]`, `"windows": ["main"]`, `"permissions": ["haptics:allow-impact-feedback", "haptics:allow-notification-feedback"]` (the plugin's `default` set does not grant these; the first simulator run reported them as not allowed). A separate file keeps the desktop permission set unchanged and lets the capability schema be checked per platform.
 - **Cleanup:** remove the scaffold's `greet` command (nothing calls it). The opener plugin stays (it is the scaffold's and harmless).
 - **Native projects:** `bun tauri android init` and `bun tauri ios init` generate `src-tauri/gen/android` and `src-tauri/gen/apple`. Commit them (Tauri's guidance: they hold project config, e.g. permissions and the iOS signing team, that you edit), and add the build outputs (`gen/android/.gradle`, `gen/android/app/build`, `gen/apple/build`, `DerivedData`, `*.xcuserstate`) to `.gitignore`.
 - **Android:** `VIBRATE` permission goes in via the plugin's manifest merge; verify it appears in the merged manifest. `minSdk` stays Tauri's default.
-- **iOS:** development team through `TAURI_APPLE_DEVELOPMENT_TEAM` or `bundle.iOS.developmentTeam`; no secrets committed. A free Apple ID builds to a personal device and the simulator.
+- **iOS:** the development team comes from a gitignored `gen/apple/Local.xcconfig` (`DEVELOPMENT_TEAM = ...`), pulled in by the committed `Config.xcconfig` through `project.yml`'s `configFiles`; no team ID is committed. `TAURI_APPLE_DEVELOPMENT_TEAM` is not applied by the Tauri CLI at `ios dev` (2.12.4), and an existing generated project is not re-templated, so it did not work here. A free Apple ID builds to a personal device and the simulator.
 - **Dev loop:** `vite.config.ts` already honors `TAURI_DEV_HOST`, which is what `tauri android dev` and `tauri ios dev` set so the device can reach the dev server on port 1420. The `strictPort` and HMR ports (1420/1421) must be free and the device on the same network.
 
-**This machine today:** Xcode is installed, but only the `aarch64-apple-darwin` Rust target is present (no `aarch64-apple-ios`, `aarch64-apple-ios-sim`, or the Android triples), and `ANDROID_HOME` and `JAVA_HOME` are unset. iOS is first, so M3-05 needs only `rustup target add aarch64-apple-ios aarch64-apple-ios-sim` (plus `x86_64-apple-ios` for an Intel simulator) and a configured Xcode. The Android SDK, NDK, JDK 17 and the Android triples are set up in M3-06.
+**iOS (M3-05, landed):** `gen/apple` is committed with a 16.0 deployment target; the app builds and runs on the simulator with `bun tauri ios dev "<simulator name>"`. The Rust iOS targets are installed. The Android SDK, NDK, JDK 17 and Android triples are set up in M3-06.
 
 ## 8. Testing (strict TDD, written failing first)
 
@@ -174,7 +174,7 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 1. **Resolved:** platform order is iOS first, then Android (decision 6).
 2. **Hold tolerance on touch.** `useHold` cancels on `pointerleave` with no slack (`BOARD_DESIGN.md` §8.8), which on a 26–30 px cell may cancel a normal, slightly jittery press. Default: leave it and decide from the device pass (M3-05/06); if needed, add a small movement slop for `pointerType === "touch"` (cancel only after more than ~10 px travel) rather than widening the cell.
 3. **Zoom or magnifier for dense boards.** If 26 px cells prove too small on the smallest phones, options are a tap-and-hold magnifier or pinch-zoom of the board. Deferred; free ✕ taps and the deliberate hold are the mitigation for now.
-4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirm when `ios init` shows the generated target.
+4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirmed: `ios init` generates a 16.0 target.
 5. **Haptics setting.** Always on until M4's settings screen (§6.3); say if a mute switch is needed sooner.
 
 ## 11. Doc sync checklist (M3-07)

@@ -41,6 +41,14 @@ test("no scroll, bounce or double-tap zoom", async ({ page }) => {
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
+test("text selection, magnifier and callout menu are disabled", async ({
+  page,
+}) => {
+  await page.goto("/");
+  expect(await style(page, "body", "user-select")).toBe("none");
+  expect(await style(page, ".cell", "user-select")).toBe("none");
+});
+
 test("page background is opaque on html and body", async ({ page }) => {
   await page.goto("/");
   const html = await style(page, "html", "background-color");
