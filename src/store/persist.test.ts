@@ -126,3 +126,9 @@ describe("fromSaved elapsed", () => {
     expect(fromSaved({ ...validSave(), elapsedMs }, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved hintsUsed", () => {
+  test.each([-1, 1.5, Number.NaN, "1", null, undefined])("%j is rejected", (hintsUsed) => {
+    expect(fromSaved({ ...validSave(), hintsUsed }, uniqueLevel7)).toBeNull();
+  });
+});

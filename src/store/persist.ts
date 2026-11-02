@@ -49,6 +49,7 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
   ) {
     return null;
   }
+  if (!Number.isInteger(r.hintsUsed) || r.hintsUsed < 0) return null;
   if (!Array.isArray(r.wrong)) return null;
   const wrong = new Set<number>();
   for (const cell of r.wrong) {
