@@ -1,50 +1,51 @@
 # Doku: Milestone 4 low-level design (full app)
 
-Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"; it was "Full desktop app" before mobile was pulled forward). It turns the single-level game into an app a person can open, play through a series of levels, quit, and come back to. It covers campaign progression, persistence, timer and pause, undo/redo, hints, settings, keyboard play, and the desktop window. The engine, the board and the mobile work (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`) are consumed as-is except where stated. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§12).
+Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"). It turned the single-level game into an app a person can open, play through a series of levels, quit, and come back to: campaign progression, persistence, timer and pause, undo/redo, hints, settings, keyboard play and the desktop window. The engine, the board and the mobile work (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`) are consumed as-is except where stated. `DESIGN.md` was synced to this document in M4-12; if the two disagree, fix whichever is wrong.
 
-**Status:** M4-01 (seed pack) and M4-02 (timer and pause, `Dialog`), M4-04 (hints), M4-05 (storage) and M4-06 (settings and rules) and M4-07 (level progression) are implemented; the rest is design only.
+**Status:** implemented (M4-01 to M4-11, issues #72 to #82) and synced (M4-12). Automated coverage is unit, jsdom and Playwright (desktop Chromium plus the two mobile projects). The manual checks listed in §9 ("Remaining manual verification") have not been done; in particular window-state restore, the Tauri store file on disk and kill-and-relaunch on iOS are unverified on real runtimes.
 
 ## 1. Goals and non-goals
 
-**Goal:** launching the app drops the player straight into their current level. Winning offers "Next level"; losing offers "Retry". Levels come in a fixed order and there is no level select, no home screen and no menu of levels. Quitting at any moment (including a force-kill on a phone) and relaunching puts the player back where they were, with the same hearts and elapsed time. The same build works on desktop and iOS (Android when #64 lands).
+**Goal:** launching the app drops the player straight into their current level. Winning offers "Next level"; losing offers "Retry". Levels come in a fixed order and there is no level select, no home screen and no menu of levels. Quitting at any moment (including a force-kill on a phone) and relaunching puts the player back where they were, with the same hearts and elapsed time, paused. The same build works on desktop and iOS (Android when #64 lands).
 
 **Non-goals:**
-- Level select, home screen, daily puzzle, stars (`DESIGN.md` §7 `LevelSelectScreen`, `HomeScreen`, `DailyCard`, `ContinueCard` are dropped, not deferred).
-- A generator, difficulty rating or the technique-explained hint (milestone 5). Levels in this milestone come from a small bundled seed pack (§3).
+- Level select, home screen, daily puzzle, stars (`HomeScreen`, `LevelSelectScreen`, `DailyCard`, `ContinueCard` are dropped, not deferred).
+- A generator, difficulty rating or the technique-explained hint (milestone 5). Levels come from a small bundled seed pack (§3.1).
 - Sound, animations, color-blind palette, themes, the interactive tutorial (milestone 6). Android specifics (#64, #70).
+- Right-click and click-drag marking (dropped from the design until someone asks; click and hold are the only pointer gestures).
 - Accounts, cloud sync, leaderboards (`DESIGN.md` decision 5).
 
-## 2. What exists and what changes
+## 2. Architecture at a glance
 
-| Today | Change |
+| Piece | Where |
 |---|---|
-| `App` renders `GameScreen level={LEVELS[0]}`; `?level=<id>` dev override resolves via `levelIndex` | `App` renders the player's current campaign level from stores; `?level=<id>` stays as a dev-only start override (§3.3) |
-| `GameScreen` takes a `level` prop, starts it in an effect, resets the store to idle on unmount | `GameScreen` is a view of `gameStore`; a `campaign` module owns starting, advancing and restoring (§3.2, §5.4) |
-| `GameState`: `idle \| playing \| won \| lost`, no clock, no history | Adds `paused`, `elapsedMs`, `hintsUsed`, `history`, `future` (§4) |
-| `ResultModal`: heading and one button; focus trap hand-rolled | Shared `<Dialog>`; win shows time, best, hints and "Next level" (§7.3) |
-| `TopBar`: level id and hearts | Adds "Level n of N", timer, pause button (§7.2) |
-| `GameLayout` `controls` slot unused | `<ActionBar>`: Undo, Redo, Hint (§7.2) |
-| Every cell is a tab stop; locked cells are `disabled` | Roving tabindex with arrow-key movement; locked cells use `aria-disabled` so they stay reachable (§7.5) |
-| No persistence; `src/platform` has only haptics | `Storage` seam with Tauri-store and `localStorage` adapters; autosave and resume (§5) |
-| Haptics always on | Gated by a persisted setting (§6) |
-| Window is 800×600 with no minimum; no stored size | Minimum size and remembered size on desktop (§8) |
+| Ordered level list | `src/levels/campaign.ts` (`LEVELS`, `levelIndex`) from `src/levels/pack-*.json` |
+| Pure game transitions, thin Zustand binding | `src/store/game.ts`, `gameStore.ts` |
+| Progress, settings (pure parse + Zustand + hydrate/persist) | `src/store/progress.ts`, `settings.ts` |
+| Save format | `src/store/persist.ts` (`toSaved`, `fromSaved`) |
+| Storage seam | `src/platform/storage.ts` |
+| Wiring: boot, autosave, campaign flow | `src/app/boot.ts`, `autosave.ts`, `campaign.ts` |
+| UI | `src/App.tsx`, `src/ui/Dialog.tsx`, `src/ui/screens/*`, `src/ui/hud/*`, `src/ui/board/*` |
+| Desktop window | `src-tauri/tauri.conf.json`, `capabilities/desktop.json`, `tauri-plugin-window-state` |
+
+Note the two `campaign.ts` files: `src/levels/campaign.ts` is only the ordered level list; `src/app/campaign.ts` owns the flow between stores.
 
 ## 3. Levels and progression
 
 ### 3.1 Pack format and seed pack
 
-A pack is a JSON file `{ "levels": Level[] }` in `src/levels/` (the format `DESIGN.md` §10 already names, `pack-*.json`). `src/levels/campaign.ts` loads every pack through `loadLevel` (which already rejects malformed levels) and exports the ordered list:
+A pack is a JSON file `{ "levels": Level[] }` in `src/levels/` (`pack-*.json`, the format `DESIGN.md` §10 names). `src/levels/campaign.ts` loads every pack through `loadLevel` (which rejects malformed levels) with `import.meta.glob("./pack-*.json", { eager: true })`, sorted by filename, and exports:
 
 ```ts
-export const LEVELS: readonly Level[];   // concatenation of packs in filename order
+export const LEVELS: readonly Level[];            // concatenation of packs in filename order
 export function levelIndex(id: string): number;   // -1 if unknown
 ```
 
 Level `id`s are unique across packs (tested). The campaign order is the array order; there is no per-level metadata beyond the engine's `Level`.
 
-**Seed pack (`pack-1.json`), 8 levels, a mix of sizes in no particular order (implemented in M4-01: ids `demo-7`, `demo-11`, `seed-1`..`seed-6`, sizes 7, 11, 7, 7, 9, 9, 10, 8; `campaign.ts` loads packs with `import.meta.glob("./pack-*.json", { eager: true })` sorted by filename)** (difficulty is not curated or rated until milestone 5), including at least one 7×7 and one 11×11. `demo-7` and `demo-11` are folded in (their JSON moves into the pack; `demoLevel.ts` and the standalone files are deleted). The other levels come from a throwaway script `tools/seed-pack.ts` (random valid placement, grow regions, keep if `countSolutions == 1`). It is a deliberately naive precursor of `tools/generate-levels.ts` (milestone 5), which replaces it and rewrites the pack. The script found a unique 10×10 but no unique 11×11 within its 60 s budget, so `demo-11` is the only 11×11 (§11 question 4). Run it as `bun tools/seed-pack.ts [size:count ...]`; it prints Level JSON lines to append by hand.
+**Seed pack (`pack-1.json`)** has 8 levels in this order: `demo-7` (7), `demo-11` (11), `seed-1` (7), `seed-2` (7), `seed-3` (9), `seed-4` (9), `seed-5` (10), `seed-6` (8). Difficulty is not curated or rated until milestone 5. `demo-7` and `demo-11` were folded in from the earlier demo levels. The rest come from the throwaway script `tools/seed-pack.ts` (random valid placement, grow regions, keep if `countSolutions == 1`), a naive precursor of the milestone 5 generator. The script found a unique 10×10 but **no unique 11×11 within its 60 s budget, so `demo-11` is the only 11×11 in the pack** (§11 question 4). Run it as `bun tools/seed-pack.ts [size:count ...]`; it prints Level JSON lines to append by hand.
 
-Tests (node): every level passes `validateLevel`, `countSolutions(level) === 1`, size is in 7–11, ids are unique, and the pack is non-empty.
+Tests (node): every level passes `validateLevel`, `countSolutions(level) === 1`, size is in 7–11, ids are unique, the pack is non-empty.
 
 ### 3.2 Progress
 
@@ -57,29 +58,36 @@ interface Progress {
 
 `src/store/progress.ts` has pure transitions plus a thin Zustand binding, the same split as `game.ts` / `gameStore.ts`:
 
-- `recordWin(p, index, elapsedMs)` (the id is `LEVELS[index].id`) → `next = max(p.next, index + 1)`, `bestMs[id] = min(existing, elapsedMs)`. Replaying never moves `next` backward and never raises a best.
+- `recordWin(p, index, elapsedMs)` (the id is `LEVELS[index].id`) → `next = max(p.next, index + 1)`, `bestMs[id] = min(existing, elapsedMs)`. Replaying never moves `next` backward and never raises a best. A hinted win still sets a best. The store action wrapping it is named `record(index, ms)`.
 - `startOver(p)` → `next = 0`, keeps `bestMs`.
 - `currentLevel(p)` → `LEVELS[p.next]` or `null` when finished.
-
-Implemented in M4-07: `parseProgress(raw, count)` is total and pure; `next` is clamped to an integer in `[0, count]`, non-finite, negative or non-number `bestMs` entries are dropped. `hydrateProgress` / `persistProgress` follow the settings pattern (hydrate first, write on change, key `progress`). A hinted win still sets a best.
-
-`next` is clamped into `[0, LEVELS.length]` on load, so a pack that shrinks between versions cannot strand the player.
+- `parseProgress(raw, count)` is total and pure: `next` is clamped to an integer in `[0, count]` (so a pack that shrinks between versions cannot strand the player), and non-finite, negative or non-number `bestMs` entries are dropped.
+- `hydrateProgress` / `persistProgress` follow the settings pattern: hydrate first, then write on change under the key `progress`.
 
 ### 3.3 Flow
 
-`src/app/campaign.ts` is the only code that starts levels. It owns the wiring between stores; components call its functions.
+`src/app/campaign.ts` is the only code that starts levels. Components call its functions:
 
-- `boot(storage, { devLevel })` (§5.4): hydrate settings and progress, then restore a saved game if one matches the current level, otherwise `startCurrent()`, then install autosave. Implemented in M4-08: a save for another level, or an invalid or unreadable one, is removed from storage and a fresh level starts. The `?level=` dev override does no restore and no autosave.
-- `nextLevel()`: after a win, `gameStore.startLevel(LEVELS[progress.next])`, or idle if finished.
-- `retry()`: `gameStore.restart()` (already exists).
-- `startOver()`: progress `startOver`, then start level 0.
-- A subscription on `gameStore` calls `progress.recordWin` exactly on the transition into `won` (never on restore of an already-won state, which cannot occur: wins are never saved). The win is recorded when it happens, so quitting on the result modal and relaunching starts the next level.
+- `recordWins()`: a `gameStore` subscription that calls `progress.record` exactly on the transition into `won` (never on restore: wins are never saved). The win is recorded when it happens, so quitting on the result modal and relaunching starts the next level. Returns its unsubscribe.
+- `startCurrent()`: start `currentLevel(progress)`, or go idle when the campaign is finished.
+- `nextLevel()`: the "Next level" / "Finish" handler; the same as `startCurrent()`.
+- `startOver()`: progress `startOver`, then `startCurrent()`.
+- Retry is `gameStore.restart()`, called directly by the result modal; there is no `retry()` in the module.
 
-Win on the last level records `next === LEVELS.length`; the result modal's button reads "Finish" and leads to the finale (§7.4). Level numbers shown to the player are `index + 1` of `LEVELS.length`.
+Win on the last level records `next === LEVELS.length`; the result modal's button then reads "Finish" and `nextLevel()` goes idle, which is when `App` shows `<Finale>` (§7.4). Level numbers shown to the player are `index + 1` of `LEVELS.length`.
 
-Implemented in M4-07: `src/app/campaign.ts` exports `recordWins` (the subscription, installed once by `boot`), `startCurrent`, `nextLevel` (same as `startCurrent`; goes idle when finished) and `startOver`. Replaying an earlier level never lowers `next`. The `App` shows `<Finale>` when `progress.next === LEVELS.length` **and** `gameStore.status === "idle"`, so the last win's result modal ("Finish") is not hidden; "Finish" calls `nextLevel()`, which goes idle.
+**Boot order** (`boot(storage, { devLevel })` in `src/app/boot.ts`, called from `main.tsx`, which renders only after it resolves):
 
-**Dev override:** `?level=<id>` (only when `import.meta.env.DEV`) is parsed by the pure `devLevelOverride(search, isDev)` in `boot.ts` and passed as `boot(storage, { devLevel })`. It makes `boot` ignore saved game and progress and start that level, installing no win recording and no progress persistence, so it never writes progress. An unknown id boots normally. It does not skip the first-launch Rules. This keeps the e2e specs that need the 11×11 board deterministic. Production builds have no override.
+1. Tear down any previous boot's subscriptions (re-boot in tests and hot reload).
+2. `hydrateSettings`, then install `persistSettings`.
+3. If a dev override is set: start that level and stop here (see below).
+4. `hydrateProgress`, then install `persistProgress` and `recordWins`.
+5. Restore the saved game if `fromSaved` accepts it for the level progress points at (state comes back `paused`); otherwise remove the stale or unreadable `save` and `startCurrent()`.
+6. Install autosave **after** the restore, so restoring does not write itself back.
+
+**Dev override:** `?level=<id>` (only when `import.meta.env.DEV`) is parsed by the pure `devLevelOverride(search, isDev)` and passed as `devLevel`. Settings are still hydrated and persisted (so `seenRules` and haptics behave normally and the first-launch Rules still open), but the saved game and progress are ignored and not written: no win recording, no progress persistence, no autosave. An unknown id boots normally. It exists to keep the e2e specs that need the 11×11 board deterministic. Production builds have no override.
+
+**The Finale is not reachable through the override**, because the override records nothing. The Finale e2e seeds `doku:progress` one level short of the end and boots normally.
 
 ## 4. Game state (`src/store/game.ts`)
 
@@ -91,36 +99,32 @@ type GameStatus = "idle" | "playing" | "paused" | "won" | "lost";
 type Started = {
   status: "playing" | "paused" | "won" | "lost";
   level: Level; board: Board; wrong: ReadonlySet<number>; hearts: number;
-  elapsedMs: number;
   hintsUsed: number;
+  elapsedMs: number;
   history: readonly number[];   // undo stack: cells whose mark was flipped, oldest first
   future: readonly number[];    // redo stack
 };
 ```
 
-Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arrived with Hint in M4-04. The stacks are deliberately not persisted (M4-08).
-
-`idle` is unchanged. State machine: `idle → playing ⇄ paused → won | lost`; `restart` and `startLevel` go to `playing` from anywhere.
+The idle state is `{ status: "idle", level: null, board: null, hearts }`. `Started` is exported. State machine: `idle → playing ⇄ paused → won | lost`; `restart` and `startLevel` go to `playing` from anywhere (`restart` is a no-op on idle). The stacks are deliberately not persisted.
 
 ### 4.2 Transitions (all pure, all return new objects; engine immutability rules apply)
 
 | Transition | Behavior |
 |---|---|
 | `tick(s, dtMs)` | `playing` only: `elapsedMs += dtMs`. Negative or non-finite `dtMs` is ignored. |
-| `pause(s)` / `resume(s)` | `playing → paused` / `paused → playing`; anything else is a no-op. While `paused` every board action is a no-op (the existing `editable` guard already requires `playing`). |
-| `toggleMark(s, cell)` | Existing behavior, plus: when it changes an editable cell, pushes `cell` on `history` and clears `future`. |
-| `undo(s)` / `redo(s)` | Pop a cell from `history` (or `future`), flip its mark, push the cell on the other stack. No-op on empty stacks or when not `playing`. |
-| `placeFace(s, cell)` | Unchanged, plus: whichever way it resolves the cell becomes locked, so `cell` is removed from every entry of `history` and `future`. This keeps the invariant below. |
-| `hint(s)` | `playing` only. `nextHint(board, level)` (§4.4) returns a cell; the transition commits a correct face there exactly as `placeFace` does (so it can win the level), increments `hintsUsed` and costs one heart. Refused (no-op) when `hearts <= 1`, so a hint can never end the level in a loss. |
+| `pause(s)` / `resume(s)` | `playing → paused` / `paused → playing`; anything else is a no-op. While `paused` every board action is a no-op (the `editable` guard requires `playing`). |
+| `toggleMark(s, cell)` | Flips the player's ✕ on an editable cell, pushes `cell` on `history` and clears `future`. A toggle on a locked cell pushes nothing and leaves `future` alone. |
+| `undo(s)` / `redo(s)` | Pop a cell from `history` (or `future`), flip its mark (Mark ↔ Empty, no before/after tagging), push the cell on the other stack. Never touch `hearts`, `wrong` or `elapsedMs`. No-op (same reference) on empty stacks or when not `playing`. |
+| `placeFace(s, cell)` | Correct: face (replacing a ✕), win detection. Wrong: heart lost, locked red ✕. Whichever way it resolves, the cell becomes locked, so it is removed from every entry of `history` and `future`. |
+| `hint(s)` | `playing` only. `nextHint(board, level)` returns a cell; the transition commits a correct face there exactly as `placeFace` does (via the shared `commitFace`, so it can win the level and overwrites a ✕ note, pruning the stacks), increments `hintsUsed` and costs one heart. Same reference (no-op) when not `playing`, when `hearts <= 1` (a hint can never end the level in a loss), or when no row is open. |
 | `restart(s)` / `startLevel(l)` | Reset to a fresh board: hearts 3, `elapsedMs` 0, `hintsUsed` 0, empty stacks. |
 
-Implemented in M4-03: `undo`/`redo` flip the cell (Mark to Empty or back) with no before/after tagging, never touch `hearts`, `wrong` or `elapsedMs`, and return the same reference when they are no-ops. A toggle on a locked cell pushes nothing and leaves `future` alone. 
+The transition is named `hint`, and so is the store action `hint()`. (It was planned as `useHint`; Biome's hooks lint flags any `use*` call outside a component.)
 
-Implemented in M4-04: the transition is named `hint` (not `useHint`: Biome's hooks lint flags any `use*` call outside a component) and the store action is `hint()`. `hintsUsed` is required on `Started`, 0 from `startLevel`, so `restart` resets it. `commitFace` is shared with `placeFace` (win detection, stack pruning); a hint overwrites a ✕ note on its target cell and prunes it from the stacks. `hint` returns the same reference when not `playing`, when `hearts <= 1`, or when no row is open. `feedbackFor` maps a `hintsUsed` increase to `place` (after win/lose, before the heart-drop check).
+**Invariant (property-tested):** every cell in `history` and `future` is currently editable (not a face, not wrong). Hence `undo`/`redo` never need a guard against locked cells.
 
-**Invariant (property-tested):** every cell in `history` and `future` is currently editable (not a face, not wrong). Hence `undo`/`redo` never need a guard against locked cells, and flipping a cell is always valid.
-
-**Undo covers notes only.** Faces and wrong ✕s are locked by design (`BOARD_DESIGN.md`, decision 7), and a wrong tap spends a heart that must never come back. Making wrong taps undoable would either refund hearts or leave a heart-less undo that re-opens a cell the player now knows is wrong; neither is worth it. So undo/redo is the tool for ✕ notes, which is where mistakes actually happen. A hint's face is locked like any other face.
+**Undo covers notes only.** Faces and wrong ✕s are locked by design (`BOARD_DESIGN.md`, decision 7), and a wrong tap spends a heart that must never come back. Making wrong taps undoable would either refund hearts or leave a heart-less undo that re-opens a cell the player now knows is wrong; neither is worth it. Undo/redo is the tool for ✕ notes, which is where mistakes actually happen. A hint's face is locked like any other face.
 
 ### 4.3 Hearts, timer and the lose/win result
 
@@ -128,16 +132,15 @@ Implemented in M4-04: the transition is named `hint` (not `useHint`: Biome's hoo
 
 ### 4.4 Engine addition: `src/engine/hints.ts`
 
-`DESIGN.md` §4 plans `nextHint(board, level) → { cell, technique, explanation }`, built on the technique ladder (milestone 5). This milestone ships the stub with the stable part of that signature:
+`DESIGN.md` §4 plans `nextHint(board, level) → { cell, technique, explanation }`, built on the technique ladder (milestone 5). This milestone ships a stub:
 
 ```ts
-export function nextHint(board: Board, level: Level): { cell: number } | null;
-// Implemented in M4-04 as `number | null` (the cell index); the object form arrives with M5.
+export function nextHint(board: Board, level: Level): number | null;   // the cell index
 ```
 
-It returns the solution cell of the first row (top to bottom) that has no face yet, or `null` when every row has one. The result is always correct and always editable (a wrong ✕ can never sit on a solution cell; a player ✕ can, and `placeFace` allows it). Milestone 5 adds `technique` and `explanation` and changes which cell is chosen; callers read only `cell` until then. Tests: pure, no input mutation, returns a cell where `judgeTap === "correct"`, `null` on a complete board, and repeated hints on a growing board terminate in a solved board.
+It returns the solution cell of the first row (top to bottom) that has no face yet, or `null` when every row has one. The result is always correct and always editable (a wrong ✕ can never sit on a solution cell; a player ✕ can, and `placeFace` allows it). Milestone 5 changes the return to the object form with `technique` and `explanation` and changes which cell is chosen; callers read only the cell until then.
 
-**A hint costs one heart** (decision 2 of `DESIGN.md` §13 holds: 3 hearts, no recovery), so hints are naturally capped at two per level and trade directly against mistakes. The Hint button is disabled on the last heart. The count is recorded and shown on the result. Haptics: `feedbackFor` currently reads a heart drop as `wrong`; it must treat a `hintsUsed` increase as `place` instead (a hint is a deliberate, correct face), with a test.
+**A hint costs one heart** (`DESIGN.md` §13 decision 2 holds: 3 hearts, no recovery), so hints are naturally capped at two per level and trade directly against mistakes. The Hint button is disabled on the last heart. The count is recorded and shown on the result. `feedbackFor` reads a `hintsUsed` increase as `place` (a hint is a deliberate, correct face), checked after win/lose and before the heart-drop check so it is not mistaken for `wrong`.
 
 ## 5. Persistence
 
@@ -145,24 +148,22 @@ It returns the solution cell of the first row (top to bottom) that has no face y
 
 ```ts
 export interface Storage {
-  get<T>(key: string): Promise<T | undefined>;
+  get<T>(key: string): Promise<T | undefined>;   // undefined when missing or unreadable; does not validate
   set(key: string, value: unknown): Promise<void>;
   remove(key: string): Promise<void>;
-  /** Force pending writes to disk. */
-  flush(): Promise<void>;
+  flush(): Promise<void>;                        // force pending writes to durable storage
 }
 ```
 
-Two adapters, chosen once like the haptics adapter (`window.__TAURI_INTERNALS__` present → Tauri):
+Three adapters:
 
-- `TauriStorage`: `@tauri-apps/plugin-store`, one file `doku.json` in the app data dir, loaded lazily. `set` uses the plugin's debounced autosave; `flush` calls `save()`.
-- `LocalStorageStorage`: JSON under a `doku:` key prefix, for the browser dev server, Playwright and tests. Synchronous underneath, wrapped in promises. Any `localStorage` exception (private mode, quota) is swallowed and logged: the game must play without persistence.
+- `TauriStorage`: `@tauri-apps/plugin-store`, one file `doku.json` (`STORE_FILE`) in the app data dir, loaded lazily. `set` relies on the plugin's debounced autosave; `flush` calls `save()`.
+- `LocalStorageStorage`: JSON under a `doku:` key prefix (`doku:settings`, `doku:progress`, `doku:save`), for the browser dev server, Playwright and tests. Any `localStorage` exception (private mode, quota) is swallowed and logged: the game must play without persistence.
+- `MemoryStorage` (a `Map`) for node and component tests; also the fallback if `localStorage` is unusable.
 
-Also `MemoryStorage` (a `Map`) for node and component tests; it is also the fallback if both real adapters fail to initialize.
+`createStorage(deps)` injects `isTauri` (`"__TAURI_INTERNALS__" in window`), `loadTauri`, a `localStorage` getter and `log`; the default singleton is `storage`. Every method resolves and never rejects. The fallback is sticky per session: if the Tauri store fails to load on first use, `LocalStorageStorage` (else `MemoryStorage`) serves the rest of the session, so data is never split across adapters.
 
-`createStorage(deps)` injects `isTauri`, `loadTauri`, a `localStorage` getter and `log`; the default singleton is `storage`. Every method resolves and never rejects (failures are logged, `get` yields `undefined`). The fallback is sticky per session: if the Tauri store fails to load on first use, `LocalStorageStorage` (else `MemoryStorage`) serves the rest of the session, so data is never split across adapters. `get` does not validate; loaders do.
-
-Keys: `settings`, `progress`, `save`. Values are plain JSON. **No schema version and no migrations** until the first MVP release (CLAUDE.md): every loader validates its input and discards anything that does not fit (§5.3), so a changed shape costs a player one reset, not a crash.
+Keys: `settings`, `progress`, `save`. Values are plain JSON. **No schema version and no migrations** until the first MVP release (CLAUDE.md): every loader validates its input and discards anything that does not fit, so a changed shape costs a player one reset, not a crash.
 
 ### 5.2 Saved game
 
@@ -179,24 +180,23 @@ interface SavedGame {
 
 Not saved: `history`/`future` (undo does not survive a restart) and the status. Hearts and `wrong` are saved so that quitting cannot refund hearts or forget which cells are known wrong.
 
-`toSaved(state): SavedGame | null` (null unless `playing` or `paused`) and `fromSaved(saved, level): Started | null` are pure and live in `src/store/persist.ts`. `fromSaved` returns `null` (saved game discarded) unless: `levelId === level.id`, `board.length === size²`, every board value is a valid `Cell`, every `wrong` index is in range, unique and holds a `Mark`, `hearts` is an integer in `1..MAX_HEARTS`, `elapsedMs` is finite and ≥ 0, `hintsUsed` is an integer ≥ 0, and the board has no `Face` on a cell where `judgeTap` is `wrong` and is not already solved. A restored game comes back **`paused`**, so the clock does not run before the player is looking at it (§7.2 shows "Resume").
+`toSaved(state): SavedGame | null` (null for `idle`, `won` and `lost`) and `fromSaved(raw, level): Started | null` are pure and live in `src/store/persist.ts`. `fromSaved` is total (never throws; junk in gives `null`) and returns `null` (saved game discarded) unless: `levelId === level.id`, `board.length === size²`, every board value is a valid `Cell`, every `wrong` index holds a `Mark` and is unique, `hearts` is an integer in `1..MAX_HEARTS`, `elapsedMs` is finite and ≥ 0, `hintsUsed` is an integer ≥ 0, the board has no `Face` on a cell where `judgeTap` is `wrong`, and it is not already solved. It returns fresh copies (a new `Uint8Array` and `Set`) with empty `history` and `future`. A restored game comes back **`paused`** whether it was saved `playing` or `paused`, so the clock does not run before the player is looking at it.
 
-Implemented in M4-08: `toSaved` is also null for `idle`, `won` and `lost`; a saved `playing` or `paused` game both restore as `paused`. `fromSaved` is total (never throws, junk in gives `null`) and returns fresh copies (a new `Uint8Array` and `Set`) with empty `history` and `future`. `Started` is exported from `game.ts`.
+### 5.3 Settings and progress parsing
 
-### 5.3 Settings and progress persistence
+`parseSettings(unknown): Settings` (field-by-field fallback to defaults, extra keys dropped) and `parseProgress(unknown, count): Progress` (§3.2) are total functions: garbage in, defaults out.
 
-Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to defaults) and `parseProgress(unknown, count): Progress` (clamp `next`, drop non-finite `bestMs` entries). Both are total functions: garbage in, defaults out.
+### 5.4 Autosave (`src/app/autosave.ts`)
 
-### 5.4 Wiring (`src/app/boot.ts`, `src/app/autosave.ts`)
+`installAutosave(storage, { debounceMs = 250 })` returns its teardown (subscription, pending timer, `visibilitychange` and `pagehide` listeners).
 
-- `main.tsx`: `boot(storage).then(render)`. Nothing renders until boot resolves (tens of ms); no splash screen. A thrown read is logged and treated as "nothing stored".
-Implemented in M4-06: `boot(storage)` is minimal, `hydrateSettings` then `persistSettings` (hydrate first so loading does not write back; settings write immediately, no debounce). M4-07 added progress hydration and persistence, win recording and `startCurrent`; restore and autosave arrived in M4-08 (below). e2e specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
+- A `gameStore` subscription writes `save` when any of `board`, `wrong`, `hearts`, `hintsUsed` or `status` changed (shallow compare, so the 500 ms clock ticks do not write). Pausing therefore writes, which persists `elapsedMs`. Writes are coalesced with a 250 ms trailing debounce.
+- Entering `won`, `lost` or `idle` cancels the pending timer and removes `save`, so a late debounce cannot resurrect a finished save.
+- **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save immediately (reading the store at call time, so it includes the current `elapsedMs`; a kill loses at most the time since the last background) and call `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
+- A rejected `set`/`flush`/`remove` is swallowed; the next change retries naturally.
+- Progress and settings write immediately on change (they change rarely).
 
-- **Autosave** is a `gameStore` subscription that fires `storage.set("save", toSaved(state))` when any of `board`, `wrong`, `hearts`, `hintsUsed`, `status` changed (shallow compare, so the 500 ms clock ticks do not write). Writes are coalesced with a 250 ms trailing debounce. `won` and `lost` and `idle` call `storage.remove("save")`. Progress and settings write on change (they change rarely).
-- **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save (now including `elapsedMs`, so a kill loses at most the time since the last background) and `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
-- A write that rejects is logged and dropped; the next change retries naturally.
-
-Implemented in M4-08: `installAutosave(storage, { debounceMs = 250 })` returns its teardown (subscription, pending timer, `visibilitychange` and `pagehide` listeners); `boot` installs it **after** restore so restoring does not write itself back, and boot teardown replaces it on re-boot. Entering `won`, `lost` or `idle` cancels the pending timer and then removes `save`, so a late debounce cannot resurrect a finished save. Pausing writes (persists `elapsedMs`). Hidden and `pagehide` write immediately, reading the store at call time, then `storage.flush()`; on Tauri `flush` is the only reliable write before a mobile kill. Rejected `set`/`flush`/`remove` are swallowed. e2e specs that reload now find the game paused (Resume) rather than playing.
+Consequence for e2e: specs that reload find the game paused (Resume) rather than playing. Specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
 
 ## 6. Settings
 
@@ -205,152 +205,118 @@ interface Settings { haptics: boolean; seenRules: boolean }
 // defaults: { haptics: true, seenRules: false }
 ```
 
-`src/store/settings.ts` (pure `parseSettings`, thin Zustand binding with `set(patch)`), persisted on change. Consumers:
-- The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics` (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
+`src/store/settings.ts`: pure `parseSettings`, a thin Zustand binding with `set(patch)`, `hydrateSettings` / `persistSettings` (hydrate first so loading does not write back), persisted on every change. Consumers:
+- The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics`, read at event time (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
 - `seenRules` triggers the rules dialog on first launch (§7.3) and is set when it is dismissed.
 
-Implemented in M4-06: `Settings` is `{ haptics, seenRules }`; `parseSettings` is total with per-field fallback and drops extra keys; gating reads the store at event time. Start over shipped with M4-07 (§7.3).
-
-Theme, sound and the color-blind palette are milestone 6 and add fields then. The settings dialog also has "Start over" (§7.3) because it is the one destructive action; it asks for confirmation.
+Theme, sound and the color-blind palette are milestone 6 and add fields then. The settings dialog also hosts "Start over" (§7.3), the one destructive action.
 
 ## 7. UI
 
 ### 7.1 Component tree
 
-`DESIGN.md` §7 is replaced by this (the router goes away; there is one screen):
-
 ```
-<App>                              reads progress; finished ? <Finale/> : <GameScreen/>
+<App>                              progress.next === LEVELS.length && status idle ? <Finale/> : <GameScreen/>
  ├─ <GameScreen>                   view of gameStore; no props
  │   ├─ <GameLayout>
- │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/> · <Hearts/> · <PauseButton/>
+ │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/> · <Hearts/> · Pause button
  │   │    ├─ board    → <Board>   (roving focus, §7.5)
- │   │    └─ controls → <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/>
+ │   │    └─ controls → <ActionBar>  Undo · Redo · Hint
  │   ├─ <PauseDialog>             status === "paused": Resume · Restart level · Rules · Settings
- │   ├─ <ResultModal>             won: time/best/hints → Next level · lost: Retry
+ │   ├─ <ResultModal>             won: time/best/hints → Next level | Finish · lost: Retry
  │   ├─ <RulesDialog>             static text; auto-opens once (settings.seenRules)
- │   └─ <SettingsDialog>          haptics, Start over
+ │   └─ <SettingsDialog>          Haptics switch, Start over (with confirm)
  └─ <Finale>                      all levels done: total of best times · Start over
 ```
 
-`<Dialog>` is one new shared primitive (`src/ui/Dialog.tsx`): `div role="dialog" aria-modal`, backdrop, focus moved in on open and restored on close, Tab cycles inside it, Escape calls `onClose` when provided, the rest of the screen is `inert`. `ResultModal`'s hand-rolled trap is replaced by it (its Tab-swallowing was valid only for a single button). It stays a `div`, not `<dialog>`, for jsdom (`BOARD_DESIGN.md` decision 5).
+There is no router. `<Dialog>` (`src/ui/Dialog.tsx`) is the one shared primitive: `div role="dialog" aria-modal`, backdrop, focus moved in on open (to `[data-autofocus]` or the first focusable) and restored on close, Tab cycles inside it, Escape calls `onClose` when one is provided, and its siblings are `inert`. It stays a `div`, not `<dialog>`, for jsdom (`BOARD_DESIGN.md` decision 5). `ResultModal` is built on it.
 
 ### 7.2 Timer, pause, action bar
 
-- **Clock driver:** a `useClock()` hook in `GameScreen`. While `status === "playing"` it runs a 500 ms interval and calls `tick(now - last)` using `performance.now()` deltas, so a delayed interval does not lose time. The store is pure; time is injected by the hook, never read by the store.
-- **Auto-pause:** `visibilitychange → hidden` and `window blur` dispatch `pause`. This covers minimizing on desktop and backgrounding on mobile. The player returns to the Pause dialog and presses Resume.
-- **Manual pause:** the pause button and `Esc` (Esc only pauses; it never resumes). Implemented in M4-09: Esc is handled by `useShortcuts`; `useAutoPause` keeps only visibility and blur. The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
-- **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick.
-- **Action bar:** Undo and Redo disabled when their stack is empty; Hint disabled unless `playing` and `hearts > 1`; it shows the remaining hearts it will leave (the cost is visible before use). All three are real buttons with accessible names, shown in the `controls` slot (side panel in the wide layout, under the board in the tall one). The button hit area is at least 44 px (`MOBILE_DESIGN.md` §4.3).
-
-Implemented in M4-03: `ActionBar` (`src/ui/screens/ActionBar.tsx`) has Undo and Redo only; Hint is added in M4-04 (below). Both are also disabled unless `status === "playing"`, so a paused board cannot be studied. Keyboard (`z`, `Shift+Z`, `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Ctrl+Y` on every platform) is handled by `useShortcuts` (M4-09); it acts only while playing and ignores auto-repeat and Alt. The layout e2e specs now account for the controls row.
-
-Implemented in M4-04: Hint is the third button in the same row (same `min-h-11 min-w-11`, no extra height), labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`; disabled unless `playing` and `hearts > 1`. The shortcuts hook adds `h` (plain key only: ignores repeat, Alt, Ctrl, Meta; playing only). The layout e2e thresholds are unchanged.
+- **Clock driver:** `useClock()` (`src/ui/screens/useClock.ts`). While `status === "playing"` it runs a 500 ms interval and calls `tick(now - last)` using `performance.now()` deltas, so a delayed interval does not lose time. The store is pure; time is injected by the hook, never read by the store.
+- **Auto-pause:** `useAutoPause()` dispatches `pause` on `visibilitychange → hidden` and window `blur`. This covers minimizing on desktop and backgrounding on mobile. Resume is never automatic: the player returns to the Pause dialog and presses Resume.
+- **Manual pause:** the Pause button in `TopBar`, and `Esc` (handled by `useShortcuts`; Esc only pauses, it never resumes). The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
+- **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick. The timer is always shown; there is no setting to hide it.
+- **Action bar** (`ActionBar.tsx`): three real buttons in one row in the `controls` slot (side panel in the wide layout, under the board in the tall one), each at least 44 px (`min-h-11 min-w-11`, `MOBILE_DESIGN.md` §4.3). Undo and Redo are disabled unless `playing` and their stack is non-empty. Hint is labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`, disabled unless `playing` and `hearts > 1`. All are disabled while paused, so a paused board cannot be studied.
+- **Shortcuts:** `useShortcuts({ holdOwner })` is one window `keydown` listener, active only while `status === "playing"` (so dialogs and the paused state swallow them). See §7.5.
 
 ### 7.3 Dialogs
 
-Implemented in M4-02: `PauseDialog` started with Resume and Restart level. `ResultModal` is built on `Dialog`; Escape closes a dialog only when `onClose` is passed, and the Pause dialog passes none.
-
-- **ResultModal (won):** "You solved it", the time, "Best: m:ss" (or "New best"), "Hints: n" if any, and one button: "Next level" (or "Finish" on the last level). Focus lands on that button. (lost): "Out of hearts" and "Retry", as today.
-- **RulesDialog:** the four rules from `DESIGN.md` §1 in plain text, the input cheat sheet (tap = ✕, hold = face; keyboard keys), and a "Got it" button. No interactive board; that is milestone 6.
-Implemented in M4-06: Pause has Resume, Restart level, Rules, Settings. `GameScreen` holds `sheet: "rules" | "settings" | null`; while a sheet is open the Pause dialog is unmounted and returns on close (Escape or the button), without resuming. `RulesDialog` ("Got it", Escape) and `SettingsDialog` (a `role="switch"` Haptics control and "Done") both pass `onClose`. On first launch (`!seenRules`, level loaded) Rules open over a game that is **paused** (clock stopped); dismissal sets `seenRules: true` and resumes straight to play. `seenRules` is derived state, not an effect, so StrictMode cannot reopen it.
-
-Implemented in M4-07: `SettingsDialog` also has "Start over", which swaps to an inline confirm ("Start over? Your best times are kept." with Confirm and Cancel). Escape cancels the confirm first (a second Escape closes the dialog); Confirm calls `campaign.startOver` and closes the sheet. `ResultModal` takes `elapsedMs`, `bestMs`, `hintsUsed`, `isLast`: "New best" when `elapsedMs <= best` (the win is already recorded, so a first win or a tie shows it), otherwise "Best: m:ss"; "Hints: n" only when n > 0; Retry appears only on a loss. The `TopBar` heading reads "Level n of N" (id kept as `data-level-id`). `GameScreen` takes no props and reads its level from `gameStore`.
+- **PauseDialog:** Resume (autofocused), Restart level, Rules, Settings. It passes no `onClose`, so Escape does not close it.
+- **Sheets:** `GameScreen` holds `sheet: "rules" | "settings" | null`. While a sheet is open the Pause dialog is unmounted and returns on close (Escape or the button), without resuming.
+- **ResultModal:** won: "You solved it", "Time: m:ss", "New best" when `elapsedMs <= best` (the win is already recorded, so a first win or a tie shows it) otherwise "Best: m:ss", "Hints: n" only when n > 0, and one button: "Next level" (or "Finish" on the last level), which takes focus. Lost: "Out of hearts" and "Retry". It receives `elapsedMs`, `bestMs`, `hintsUsed` and `isLast` as props.
+- **RulesDialog:** the four rules in plain text and the input cheat sheet (tap = ✕, hold = face, arrows, `x`, Space, `z`, `h`), and a "Got it" button; Escape also closes it. No interactive board; that is milestone 6. On first launch (`!seenRules` and a level loaded) Rules open over a game that is **paused** (clock stopped); dismissal sets `seenRules: true` and resumes straight to play. `firstRules` is derived from `seenRules`, not an effect, so StrictMode cannot reopen it.
+- **SettingsDialog:** a `role="switch"` Haptics control, "Start over" and "Done". "Start over" swaps to an inline confirm ("Start over? Your best times are kept." with Confirm and Cancel); Escape cancels the confirm first (a second Escape closes the dialog); Confirm calls `campaign.startOver` and closes the sheet. Start over shipped with M4-07 (level progression), not with M4-06 (settings).
 
 ### 7.4 Finale
 
-When `progress.next === LEVELS.length` the app shows `<Finale>`: "You finished", the sum of `bestMs` over the ids in `LEVELS` as "Total of best times", and "Start over" (no confirm). It is the only screen that exists without a board. `gameStore` is idle there, and the autosave has removed `save`.
+When `progress.next === LEVELS.length` and `gameStore.status === "idle"`, `App` shows `<Finale>`: "You finished", "Total of best times" (the sum of `bestMs` over the ids in `LEVELS`) and "Start over" (no confirm). The idle check keeps the last win's result modal ("Finish") from being hidden. It is the only screen that exists without a board. The store is idle there and autosave has removed `save`; a reload stays on the Finale.
 
 ### 7.5 Keyboard and pointer input
 
-Implemented in M4-09 (#80). Differences from the first draft below: `Cmd+Y` is deliberately not bound; `Ctrl+Y` redoes everywhere. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing during a hold while `Esc` still pauses. Modified arrows (Ctrl/Meta/Alt/Shift) are neither handled nor prevented. Cells show a `focus-visible` outline inset past the conflict ring. After Resume, if focus fell to the page, `GameScreen` focuses the board's tabbable cell (a real browser cannot restore focus onto the `visibility: hidden` board from `Dialog`'s cleanup; the e2e caught this where jsdom did not).
-
-Existing per-cell keys stay: `x` toggles ✕, holding `Space` places a face. New:
+Per-cell keys (from M2): `x` toggles ✕, holding `Space` places a face. Added in M4-09:
 
 | Key | Action |
 |---|---|
 | Arrow keys | Move focus one cell (clamped at the edges, no wrap) |
 | `Home` / `End` | First / last cell of the row |
 | `z`, `Ctrl/Cmd+Z` | Undo |
-| `Shift+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl+Y` | Redo |
-| `h` | Hint |
+| `Shift+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl+Y` | Redo (`Cmd+Y` is deliberately not bound) |
+| `h` | Hint (plain key only) |
 | `Esc` | Pause |
 
-- **Roving tabindex:** `Board` holds `active` (default 0) and passes `tabIndex` 0 to that cell's button and -1 to the rest, so the board is one Tab stop. A cell focus event (mouse included) sets `active`. Arrow handling lives in `Board` on the grid, using `geometry` indices; `CellView` stays presentational.
-- **Locked cells stay focusable:** a locked cell (face or wrong ✕) gets `aria-disabled="true"` and ignores input instead of `disabled`, because disabled buttons cannot take focus and the arrow walk would stall on them. The whole board is still `inert` once the game is finished or paused. E2E and unit tests that read `disabled` change to read `aria-disabled` (§9).
-- **Shortcuts** are one `useShortcuts()` window listener, active only while `status === "playing"` (so dialogs and the paused state swallow them), ignoring auto-repeat and events with modifiers other than the combos above. They never fire while a hold is in progress.
-- **Right-click and click-drag marking are not part of this milestone.** `DESIGN.md` §8 lists them for desktop; they are dropped from the design until someone asks for them. Click and hold stay the only pointer gestures.
+- **Roving tabindex:** `Board` holds `active` (default 0, reset to 0 on a new level) and gives `tabIndex` 0 to that cell's button and -1 to the rest, so the board is one Tab stop. A cell focus event (mouse included) sets `active`. Arrow handling lives in `Board` on the grid, using `geometry` indices; handled navigation keys are default-prevented; arrows with Ctrl/Meta/Alt/Shift are neither handled nor prevented. `CellView` stays presentational.
+- **Locked cells stay focusable:** a locked cell (face or wrong ✕) gets `aria-disabled="true"` and ignores click, `x`, Enter and Space-hold, instead of `disabled`, because disabled buttons cannot take focus and the arrow walk would stall. The whole board is still `inert` once the game is finished or paused. Tests that read `disabled` read `aria-disabled`.
+- **Focus ring:** cells show a `focus-visible` outline inset past the conflict ring.
+- **Focus after Resume:** if focus fell to the page, `GameScreen` focuses the board's tabbable cell. A real browser cannot restore focus onto the `visibility: hidden` board from `Dialog`'s cleanup; the e2e caught this where jsdom did not.
+- **Shortcut guards:** `useShortcuts` ignores auto-repeat and Alt, and acts only while `playing`. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing while a cell is held, while `Esc` (without Ctrl/Meta) still pauses.
+- **Right-click and click-drag marking are not implemented** (§1).
 
 ## 8. Desktop window and Rust shell
 
-- `tauri.conf.json`: `minWidth` 420, `minHeight` 560 (an 11×11 board stays above the cell floor recorded in `MOBILE_DESIGN.md` §8; revisit with a measurement), keep the 800×600 default. The wide layout already switches at aspect ≥ 1.2 and width ≥ 36rem.
-- `tauri-plugin-window-state` for the remembered size and position, desktop only: a `[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]` entry registered behind `#[cfg(desktop)]`, with its permission in a new `capabilities/desktop.json` (`platforms: ["macOS", "windows", "linux"]`) so the mobile build never references a missing plugin. Landed (M4-10): `tauri-plugin-window-state = "2"` (resolves to 2.5.0), permission `window-state:default`, default state flags, no JS package. State is saved on close, so a force-kill may lose the last position.
-- `tauri-plugin-store` on every platform, `store:default` in `capabilities/default.json`; `@tauri-apps/plugin-store` as a JS dependency. Still no custom `#[tauri::command]`s.
+- `tauri.conf.json`: default size 800×600, `minWidth` 420, `minHeight` 560. The wide layout switches at aspect ≥ 1.2 and width ≥ 36rem. Whether an 11×11 board stays legible at the minimum has not been measured on a desktop window (§9).
+- `tauri-plugin-window-state = "2"` (desktop only) remembers size and position: a `cfg(not(any(target_os = "android", target_os = "ios")))` dependency in `Cargo.toml`, registered behind `#[cfg(desktop)]` with default state flags, no JS package. Its permission `window-state:default` is in `capabilities/desktop.json` (`platforms: ["macOS", "windows", "linux"]`) so mobile builds never reference a missing plugin. State is saved on close, so a force-kill may lose the last position.
+- `tauri-plugin-store` on every platform (`store:default` in `capabilities/default.json` with `core:default` and `opener:default`), plus `@tauri-apps/plugin-store` in `package.json`. The mobile-only haptics plugin and `capabilities/mobile.json` are unchanged (`MOBILE_DESIGN.md` §7). Still no custom `#[tauri::command]`s.
 
-Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) must stay green.
+Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) run in CI. `src/platform/desktopWindow.test.ts` and `capabilities.test.ts` assert the config and capability files from node (minimum size, default size, the window-state permission and target table, `store:default`).
 
-## 9. Testing (strict TDD, each row written failing first)
+## 9. Testing
 
-**Node**
-- `game.ts`: `tick` (accumulates, ignores bad deltas, only while `playing`); `pause`/`resume` state machine incl. board actions no-op when paused; `toggleMark` pushes history and clears `future`, and a no-op on a locked cell pushes nothing; `undo`/`redo` round-trip; invariant "history and future cells are editable" as a property test over random action sequences; `placeFace` prunes stacks; `hint` places a correct face, costs exactly one heart, can win, is refused at 1 heart and when not `playing`; `feedbackFor` returns `place` (not `wrong`) for a hint; `restart` resets clock, hints, stacks; frozen inputs never mutated (extends `immutability.test.ts`).
-- `hints.ts`: §4.4.
-- `progress.ts`: `recordWin` (advances, never regresses, keeps min best), `startOver`, clamping.
-- `persist.ts`: round-trip `toSaved`/`fromSaved`; rejection table (wrong level id, wrong length, bad cell value, wrong index not a mark, hearts 0 or 4, negative elapsed, non-integer hints); a fuzz test that `fromSaved` never throws on arbitrary JSON.
-- `parseSettings`/`parseProgress`: garbage in, defaults out.
-- Storage: `MemoryStorage` and `LocalStorageStorage` contract tests (same suite for both); a throwing `localStorage` does not throw; `TauriStorage` with the plugin mocked.
-- `campaign.ts`: §3.1. Import-boundary test (`engine/isolation.test.ts`) still passes: `engine/hints.ts` imports only engine.
+**Node:** `game.ts` (every transition above, including the history/future invariant as a property test, `hint` rules, frozen inputs never mutated), `hints.ts`, `progress.ts`, `persist.ts` (round-trip, rejection table, fuzz that `fromSaved` never throws), `parseSettings`/`parseProgress`, `storage` (`MemoryStorage` and `LocalStorageStorage` share one contract suite; a throwing `localStorage` does not throw; `TauriStorage` with the plugin mocked), `levels/campaign.ts`, `desktopWindow` and `capabilities`. The import-boundary test (`engine/isolation.test.ts`) still passes: `engine/hints.ts` imports only engine.
 
-**jsdom components**
-- `Dialog`: focus in, Tab cycles, Escape closes, focus restored, siblings `inert`.
-- `GameScreen` with `MemoryStorage`: undo/redo/hint buttons enable and disable correctly; the clock advances under fake timers; `visibilitychange` pauses; Pause dialog resumes; haptics are silent when `settings.haptics` is false.
-- `Board`: arrow-key focus movement and clamping; one tab stop; locked cells are focusable and `aria-disabled`.
-- `ResultModal`/`Finale`: win shows time and best; last level says "Finish".
-- Autosave: a sequence of moves writes the expected `save`; ticks do not write; win clears it; `pagehide` flushes.
-- Boot: valid save restores paused with the same hearts and board; invalid save is discarded; storage that throws on read still boots.
+**jsdom components:** `Dialog`, `GameScreen` with `MemoryStorage` (buttons enable/disable, fake-timer clock, auto-pause, Pause dialog, haptics silent when disabled, Tab enters on the active cell, Resume restores focus), `Board` (arrows, clamping, Home/End, one tab stop, locked cells focusable and `aria-disabled`), `ResultModal`, `Finale`, `useShortcuts`, `useAutoPause`, `useClock`, `autosave` (writes, ticks do not write, win clears, `pagehide` flushes), `boot` (valid save restores paused, invalid save discarded, throwing storage still boots, win, dev override and re-boot guards).
 
-**E2E (Playwright, desktop `chromium`; the mobile projects run `mobile.spec.ts`, which includes the touch resume)**
-- `playthrough.spec.ts`: win, then "Next level" lands on level 2 of N; lose and Retry. Existing specs read `aria-disabled` where cells are locked.
-- `resume.spec.ts`: place a face, mark a cell, lose a heart, let the clock run, reload; the Pause dialog is up, the clock is stopped, and Resume shows the same board and hearts. The scenario lives in `e2e/resumeFlow.ts` and is shared with the touch variant in `mobile.spec.ts` (both mobile projects). A corrupt `doku:save` (not an object, wrong-length board, another level's id, zero hearts, unparsable JSON) boots a fresh level with no page error and no leftover save.
-- `campaign.spec.ts`: progress (`next`, `bestMs`) survives a reload and the game resumes paused on level 2. Finale: the test seeds `doku:progress` one level short of the end and boots normally, because the `?level=` override records nothing and so cannot reach the Finale. It wins the last level, sees "Finish" (no "Next level"), then the Finale with the total of best times; a reload stays on the Finale; "Start over" returns to level 1 and keeps the best times. Settings "Start over" asks first, Escape cancels only the confirm, Confirm rewinds. The override leaves `doku:progress` and `doku:save` untouched; an unknown id boots level 1.
-- `keyboard.spec.ts`: arrows, `x`, hold `Space`, `z`, `h`.
-- Helpers in `e2e/helpers.ts`: `seed`/`seedRaw` (a once-per-tab init script so a reload keeps live state), `storageValue`, `solve`. No `waitForTimeout` in the new specs: autosave is awaited with `expect.poll` and the clock is driven with `page.clock`.
-- Each Playwright test starts with empty storage (fresh context).
-- Not testable in CI and therefore manual: Tauri store file on disk, window-state restore, kill-and-relaunch on iOS.
+**E2E (Playwright; the `chromium` project runs every spec except `mobile.spec.ts`, which runs on `mobile-chromium` and `mobile-webkit`):**
+- `playthrough.spec.ts`: win, then "Next level" lands on level 2 of N; lose and Retry; hold and click gestures.
+- `resume.spec.ts`: place a face, mark a cell, lose a heart, let the clock run, reload; the Pause dialog is up, the clock is stopped, and Resume shows the same board and hearts. The scenario lives in `e2e/resumeFlow.ts` and is shared with the touch variant in `mobile.spec.ts`. A corrupt `doku:save` (not an object, wrong-length board, another level's id, zero hearts, unparsable JSON) boots a fresh level with no page error and no leftover save.
+- `campaign.spec.ts`: progress survives a reload and the game resumes paused on level 2. Finale: the test seeds `doku:progress` one level short of the end and boots normally (the `?level=` override records nothing and cannot reach it). It wins the last level, sees "Finish" (no "Next level"), then the Finale; a reload stays on the Finale; "Start over" returns to level 1 and keeps best times. Settings "Start over" asks first, Escape cancels only the confirm, Confirm rewinds. The override leaves `doku:progress` and `doku:save` untouched; an unknown id boots level 1.
+- `keyboard.spec.ts` (a level played from the keyboard alone), `hint.spec.ts`, `pause.spec.ts`, `settings.spec.ts` (first-launch Rules, corrupt settings, haptics persists), plus the layout, webview, borders and smoke specs from earlier milestones.
+- Helpers in `e2e/helpers.ts`: `seed`/`seedRaw` (a once-per-tab init script so a reload keeps live state), `storageValue`/`storageJson`, `solve`, touch helpers. The M4-11 specs avoid `waitForTimeout`: autosave is awaited with `expect.poll` and the clock is driven with `page.clock` (`pause.spec.ts` and the gesture tests in `playthrough.spec.ts` still use fixed waits). Each test starts with empty storage apart from the `seenRules` seed.
 
-**Manual pass** (checklist in the PR, `DESIGN.md` §11): desktop and iOS simulator: play two levels, force-quit mid-level and relaunch (board, hearts, clock restored, paused), minimize and return (auto-pause), resize the window to the minimum and restore it across a relaunch, settings persist, haptics toggle takes effect.
+**Remaining manual verification (not done; none of these can run in CI):**
+- Desktop (`bun tauri dev` / a release build): the `doku.json` store file is written to the app data dir and a relaunch restores board, hearts and clock paused; window size and position are restored across a relaunch (window-state); the window cannot be resized below 420×560, and an 11×11 board is legible at that size; minimize and return auto-pauses; the haptics toggle persists.
+- iOS (simulator and device): play two levels, force-quit mid-level and relaunch (board, hearts, clock restored, paused; the `pagehide`/hidden flush actually reaches `doku.json`); background and return auto-pauses; settings persist; haptics toggle takes effect on a device.
+- Android: all of the above once #64 lands.
 
 ## 10. Issue breakdown
 
-Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full desktop app" milestone), each with Gherkin acceptance criteria as in M1 to M3. Dependencies in brackets.
-
-1. **M4-01 Seed pack and campaign order:** §3.1. `pack-1.json`, `campaign.ts`, `tools/seed-pack.ts`, remove `demoLevel.ts`.
-2. **M4-02 Timer and pause:** `tick`/`pause`/`resume`, `useClock`, auto-pause, `<Dialog>`, `PauseDialog`, timer in `TopBar`. §4.2, §7.1, §7.2.
-3. **M4-03 Undo and redo for notes:** history/future stacks, pruning, `ActionBar` Undo/Redo, `z` shortcuts. [02 for the `Dialog`-free parts only; can start in parallel]
-4. **M4-04 Hints:** `engine/hints.ts`, `hint`, Hint button, `h`. §4.4.
-5. **M4-05 Storage seam:** `Storage`, three adapters, `tauri-plugin-store` wiring and capability. §5.1, §8.
-6. **M4-06 Settings and rules:** settings store and persistence, `SettingsDialog`, `RulesDialog`, haptics gating. [05, 02]
-7. **M4-07 Level progression:** `progress.ts`, `campaign.ts` flow, `GameScreen` without props, `ResultModal` stats and "Next level", `Finale`, `?level=` override. [01, 02, 05]
-8. **M4-08 Save and resume:** `persist.ts`, autosave, flush on hide, restore paused. [07]
-9. **M4-09 Keyboard play:** roving tabindex, arrows, `aria-disabled`, global shortcuts. [03, 04]
-10. **M4-10 Desktop window:** minimum size and remembered size. §8. Independent.
-11. **M4-11 E2E for the full app:** §9 E2E. [07, 08, 09]
-12. **M4-12 Docs sync:** §12.
+All done, titled `M4-NN` in the "full-app" GitHub milestone: 01 Seed pack and campaign order (#72), 02 Timer and pause (#73), 03 Undo and redo (#74), 04 Hints (#75), 05 Storage seam (#76), 06 Settings and rules (#77), 07 Level progression (#78, includes Start over and the Finale), 08 Save and resume (#79), 09 Keyboard play (#80), 10 Desktop window (#81), 11 E2E for the full app (#82), 12 Docs sync (#83).
 
 ## 11. Open questions
 
 1. **Resolved:** the timer is always shown; there is no setting to hide it.
-2. **Hint cost.** Decided: one heart, disabled on the last heart. Open: whether a hinted win should still set `bestMs`. Default yes. Revisit with milestone 5's technique hints.
-3. **Restoring into `paused`.** Default yes (§5.2). The cost is one extra tap on relaunch.
-4. **Seed pack quality.** Levels are a mix of sizes and difficulties, in any order, until milestone 5. If the naive script cannot make large unique levels, the pack is shorter than 8 and the finale arrives early; acceptable for this milestone.
-5. **Start over.** Default keeps `bestMs`. A full wipe (including bests) would be a second option in Settings; not planned.
-6. **Stars.** Dropped (`DESIGN.md` §5, §7 mention them as proposed). Reinstate only with a rule that is worth the UI.
+2. **Hint cost.** Decided: one heart, disabled on the last heart. A hinted win sets `bestMs` like any other. Revisit with milestone 5's technique hints.
+3. **Restoring into `paused`.** Decided yes. The cost is one extra tap on relaunch.
+4. **Seed pack quality.** Levels are a mix of sizes in any order until milestone 5. The naive script found no unique 11×11, so the pack has a single 11×11 (`demo-11`) rather than several; milestone 5's generator replaces the pack.
+5. **Start over.** Keeps `bestMs`. A full wipe (including bests) would be a second option in Settings; not planned.
+6. **Stars.** Dropped. Reinstate only with a rule that is worth the UI.
 
-## 12. Doc sync checklist (M4-12)
+## 12. Doc sync (M4-12, done)
 
-- `DESIGN.md` §12 item 4 reads "Full app" with the contents above (renamed in the same change as this document). §5: new statuses, state fields and actions; remove `dailyStore`, keep `progressStore` (`next`, `bestMs`) and `settingsStore`. §6: storage interface and keys. §7: replace the tree with §7.1 here. §8: `input` row gains arrows, `z`, `h`, `Esc`; `storage` row names `TauriStorage` and `LocalStorageStorage`; `window` row names the minimum and window-state. §9: store and window-state plugins, `capabilities/desktop.json`. §10: seed pack and `tools/seed-pack.ts`. §13: add the decisions below.
-- `BOARD_DESIGN.md`: §3 state notes the added fields; §4.2/§4.3 the roving tabindex and `aria-disabled`; the "level select, persistence, undo/redo…" out-of-scope line already describes this milestone.
-- `README.md`: docs index (done with this document); nothing else.
-- `MOBILE_DESIGN.md` §6.3 (haptics setting) and §10 question 5 are resolved by §6 here.
+- `DESIGN.md` §2, §3, §5, §6, §7, §8, §9, §10, §12 and §13 updated to this document; right-click and drag marks removed from §8; `dailyStore` and stars dropped.
+- `BOARD_DESIGN.md`: state, actions, props and screens updated for the M4 additions, with a banner that the rest is the M2 design.
+- `MOBILE_DESIGN.md`: haptics setting (§6.3, §10 question 5) resolved by §6 here; the controls slot and the persistence non-goal are now delivered.
+- `README.md`: docs index and commands.
 
 ## 13. Decisions
 
@@ -360,7 +326,8 @@ Titled `M4-NN` in a "full-app" GitHub milestone (rename the pending "Full deskto
 4. **Undo/redo is for ✕ notes only.** Faces and wrong taps are locked, so hearts can never be refunded and a known-wrong cell stays known.
 5. **Hearts, wrong cells and elapsed time are persisted** so quitting cannot reset a mistake.
 6. **Restore into `paused`.** Time does not run until the player resumes.
-7. **Hints cost a heart** and are refused on the last one. They are a stub on the stable signature: the first unsolved row's solution cell; technique explanations arrive with milestone 5.
+7. **Hints cost a heart** and are refused on the last one. They are a stub on a stable call: the first unsolved row's solution cell; technique explanations arrive with milestone 5.
 8. **Pure store, injected time.** The store never reads a clock; `useClock` passes deltas.
 9. **Unversioned saves that validate or are discarded**, per the pre-MVP rule.
 10. **One screen, shared `<Dialog>`** for pause, rules, settings and results.
+11. **No right-click or drag marking.** Click (✕) and hold (face) are the only pointer gestures.

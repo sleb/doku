@@ -208,6 +208,8 @@ interface Hint {
 }
 function nextHint(p: Puzzle, board: Board): Hint | null;
 ```
+**Current state (M4-04):** `hints.ts` is a stub with signature `nextHint(board, level): number | null`, returning the solution cell of the first row without a face; the `Hint` object form and the ladder-driven behaviour below arrive with milestone 5.
+
 `nextHint` builds candidates from the player's faces (ignoring marks), runs the ladder, and returns the first deduction. If its result is only eliminations, the UI highlights those cells and explains why; a placement deduction highlights the cell. `null` means the board is complete or the ladder cannot progress (possible only on a corrupted or unrated puzzle).
 
 ## 9. Generator (generator.ts, seed.ts)
