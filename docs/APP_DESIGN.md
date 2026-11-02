@@ -156,6 +156,8 @@ Two adapters, chosen once like the haptics adapter (`window.__TAURI_INTERNALS__`
 
 Also `MemoryStorage` (a `Map`) for node and component tests; it is also the fallback if both real adapters fail to initialize.
 
+`createStorage(deps)` injects `isTauri`, `loadTauri`, a `localStorage` getter and `log`; the default singleton is `storage`. Every method resolves and never rejects (failures are logged, `get` yields `undefined`). The fallback is sticky per session: if the Tauri store fails to load on first use, `LocalStorageStorage` (else `MemoryStorage`) serves the rest of the session, so data is never split across adapters. `get` does not validate; loaders do.
+
 Keys: `settings`, `progress`, `save`. Values are plain JSON. **No schema version and no migrations** until the first MVP release (CLAUDE.md): every loader validates its input and discards anything that does not fit (§5.3), so a changed shape costs a player one reset, not a crash.
 
 ### 5.2 Saved game
