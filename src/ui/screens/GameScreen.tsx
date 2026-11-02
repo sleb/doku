@@ -1,16 +1,19 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Level } from "../../engine";
 import { feedbackFor } from "../../platform/feedback";
 import { haptics } from "../../platform/haptics";
 import { idleState } from "../../store/game";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
+import { settingsStore, useSettingsStore } from "../../store/settings";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
 import { ActionBar } from "./ActionBar";
 import { GameLayout } from "./GameLayout";
 import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
+import { RulesDialog } from "./RulesDialog";
+import { SettingsDialog } from "./SettingsDialog";
 import { useActionShortcuts } from "./useActionShortcuts";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
@@ -23,6 +26,7 @@ export function GameScreen({ level }: { level: Level }) {
   const wrong = useGameStore((s) => ("wrong" in s ? s.wrong : undefined));
   const { startLevel, restart, toggleMark, placeFace, pause, resume } =
     gameStore.getState();
+  const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
   useClock();
   useAutoPause();
   useActionShortcuts();
@@ -41,7 +45,7 @@ export function GameScreen({ level }: { level: Level }) {
     () =>
       gameStore.subscribe((next, prev) => {
         const kind = feedbackFor(prev, next);
-        if (kind) void haptics.play(kind);
+        if (kind && settingsStore.getState().haptics) void haptics.play(kind);
       }),
     [],
   );
@@ -49,6 +53,14 @@ export function GameScreen({ level }: { level: Level }) {
   // Still needed: on the first render of a new `level` prop the store holds the
   // previous level's board until the effect above has run.
   const fresh = storeLevel === level;
+
+  // First launch: Rules open over a paused game. Derived from `seenRules`
+  // (set on dismissal), so StrictMode's double effects cannot reopen it.
+  const seenRules = useSettingsStore((s) => s.seenRules);
+  const firstRules = !seenRules && fresh && status !== "idle";
+  useEffect(() => {
+    if (firstRules) gameStore.getState().pause();
+  }, [firstRules]);
   const conflicts = useMemo(
     () => (board && fresh ? conflictCells(board, level) : new Set<number>()),
     [board, level, fresh],
@@ -80,7 +92,25 @@ export function GameScreen({ level }: { level: Level }) {
         }
         controls={<ActionBar />}
       />
-      <PauseDialog open={paused} onResume={resume} onRestart={restart} />
+      {(firstRules || sheet === "rules") && (
+        <RulesDialog
+          onClose={() => {
+            settingsStore.getState().set({ seenRules: true });
+            setSheet(null);
+            if (firstRules) resume();
+          }}
+        />
+      )}
+      {sheet === "settings" && (
+        <SettingsDialog onClose={() => setSheet(null)} />
+      )}
+      <PauseDialog
+        open={paused && !firstRules && sheet === null}
+        onResume={resume}
+        onRestart={restart}
+        onRules={() => setSheet("rules")}
+        onSettings={() => setSheet("settings")}
+      />
       <ResultModal status={status} onRetry={restart} />
     </>
   );

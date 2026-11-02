@@ -4,7 +4,25 @@ export default defineConfig({
   testDir: "e2e",
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
-  use: { baseURL: "http://localhost:1420" },
+  use: {
+    baseURL: "http://localhost:1420",
+    // Rules are marked seen so first-launch Rules do not block the specs;
+    // e2e/settings.spec.ts opts out to cover the fresh install.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: "http://localhost:1420",
+          localStorage: [
+            {
+              name: "doku:settings",
+              value: JSON.stringify({ haptics: true, seenRules: true }),
+            },
+          ],
+        },
+      ],
+    },
+  },
   projects: [
     {
       name: "chromium",

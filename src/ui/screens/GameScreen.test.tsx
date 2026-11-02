@@ -10,6 +10,7 @@ import { haptics } from "../../platform/haptics";
 import { idleState, startLevel } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { conflictCells } from "../../store/selectors";
+import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
 
@@ -37,6 +38,7 @@ const label = (i: number) =>
 
 beforeEach(() => {
   gameStore.setState(idleState, false);
+  settingsStore.setState({ ...defaultSettings, seenRules: true });
   vi.mocked(haptics.play).mockClear();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -218,6 +220,21 @@ describe("GameScreen", () => {
     test("a correct hold plays place once", () => {
       render(<GameScreen level={level} />);
       hold([solution[0]]);
+      expect(play().mock.calls).toEqual([["place"]]);
+    });
+
+    test("nothing plays for a correct or wrong hold when haptics are off", () => {
+      settingsStore.getState().set({ haptics: false });
+      render(<GameScreen level={level} />);
+      hold([solution[0], nonSolution[0]]);
+      expect(play()).not.toHaveBeenCalled();
+    });
+
+    test("turning haptics off mid-game applies to the next move", () => {
+      render(<GameScreen level={level} />);
+      hold([solution[0]]);
+      settingsStore.getState().set({ haptics: false });
+      hold([solution[1]]);
       expect(play().mock.calls).toEqual([["place"]]);
     });
 
@@ -436,6 +453,122 @@ describe("GameScreen", () => {
       expect(placed).not.toBe("empty");
       expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
       expect(label(solution[0])).toBe(placed);
+    });
+  });
+
+  describe("rules and settings", () => {
+    const fresh = () => settingsStore.setState(defaultSettings);
+
+    test("a fresh install opens Rules and pauses the game", () => {
+      fresh();
+      render(<GameScreen level={level} />);
+      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
+      expect(gameStore.getState().status).toBe("paused");
+    });
+
+    test("dismissing first-launch Rules sets seenRules and resumes", async () => {
+      fresh();
+      render(<GameScreen level={level} />);
+      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+      expect(settingsStore.getState().seenRules).toBe(true);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(gameStore.getState().status).toBe("playing");
+    });
+
+    test("a remount with seenRules true does not reopen Rules", () => {
+      render(<GameScreen level={level} />);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(gameStore.getState().status).toBe("playing");
+    });
+
+    test("the clock does not advance under first-launch Rules", () => {
+      vi.useFakeTimers();
+      try {
+        fresh();
+        render(<GameScreen level={level} />);
+        act(() => {
+          vi.advanceTimersByTime(5000);
+        });
+        const state = gameStore.getState();
+        expect(state.status === "idle" ? -1 : state.elapsedMs).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test("Pause > Rules > Got it returns to Pause and Resume works", async () => {
+      render(<GameScreen level={level} />);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await userEvent.click(screen.getByRole("button", { name: "Rules" }));
+      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+      expect(
+        screen.getByRole("dialog", { name: "Paused" }),
+      ).toBeInTheDocument();
+      expect(gameStore.getState().status).toBe("paused");
+      await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+      expect(gameStore.getState().status).toBe("playing");
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    test("Pause > Settings > toggle updates the store, Done returns to Pause", async () => {
+      render(<GameScreen level={level} />);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+      expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
+      await userEvent.click(screen.getByRole("switch", { name: "Haptics" }));
+      expect(settingsStore.getState().haptics).toBe(false);
+      await userEvent.click(screen.getByRole("button", { name: "Done" }));
+      expect(
+        screen.getByRole("dialog", { name: "Paused" }),
+      ).toBeInTheDocument();
+      expect(gameStore.getState().status).toBe("paused");
+    });
+
+    test("Escape in Rules or Settings returns to Pause without resuming", async () => {
+      render(<GameScreen level={level} />);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      for (const name of ["Rules", "Settings"]) {
+        await userEvent.click(screen.getByRole("button", { name }));
+        await userEvent.keyboard("{Escape}");
+        expect(
+          screen.getByRole("dialog", { name: "Paused" }),
+        ).toBeInTheDocument();
+        expect(gameStore.getState().status).toBe("paused");
+      }
+    });
+
+    test("Rules opened from Pause restores focus and un-inerts Pause", async () => {
+      render(<GameScreen level={level} />);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await userEvent.click(screen.getByRole("button", { name: "Rules" }));
+      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+      expect(screen.getByRole("button", { name: "Resume" })).toHaveFocus();
+      expect(
+        screen.getByRole("dialog", { name: "Paused" }).closest("[inert]"),
+      ).toBeNull();
+    });
+
+    test("restart and a later startLevel do not reopen Rules", async () => {
+      fresh();
+      render(<GameScreen level={level} />);
+      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
+      act(() => gameStore.getState().restart());
+      act(() => gameStore.getState().startLevel(level));
+      expect(screen.queryByRole("dialog", { name: "Rules" })).toBeNull();
+    });
+
+    test("first-launch Rules open once under StrictMode", () => {
+      fresh();
+      render(
+        <StrictMode>
+          <GameScreen level={level} />
+        </StrictMode>,
+      );
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
+      expect(gameStore.getState().status).toBe("paused");
     });
   });
 });
