@@ -270,5 +270,12 @@ describe("Board", () => {
       await userEvent.keyboard("{ArrowRight}");
       expect(activeIndex()).toBe(9);
     });
+
+    test("ArrowLeft moves focus one cell left", async () => {
+      renderBoard();
+      focusAt(8);
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(activeIndex()).toBe(7);
+    });
   });
 });

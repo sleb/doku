@@ -56,10 +56,11 @@ export function Board({
       aria-rowcount={size}
       aria-colcount={size}
       onKeyDown={(e) => {
-        if (e.key !== "ArrowRight") return;
+        const delta = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+        if (delta === undefined) return;
         const i = Number((e.target as HTMLElement).dataset.index);
         gridRef.current
-          ?.querySelector<HTMLElement>(`[data-index="${i + 1}"]`)
+          ?.querySelector<HTMLElement>(`[data-index="${i + delta}"]`)
           ?.focus();
       }}
       onFocus={(e) => {
