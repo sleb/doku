@@ -22,7 +22,7 @@ Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"
 | `GameScreen` takes a `level` prop, starts it in an effect, resets the store to idle on unmount | `GameScreen` is a view of `gameStore`; a `campaign` module owns starting, advancing and restoring (§3.2, §5.4) |
 | `GameState`: `idle \| playing \| won \| lost`, no clock, no history | Adds `paused`, `elapsedMs`, `hintsUsed`, `history`, `future` (§4) |
 | `ResultModal`: heading and one button; focus trap hand-rolled | Shared `<Dialog>`; win shows time, best, hints and "Next level" (§7.3) |
-| `TopBar`: level id and hearts | Adds "Level n of N", timer (optional), pause button (§7.2) |
+| `TopBar`: level id and hearts | Adds "Level n of N", timer, pause button (§7.2) |
 | `GameLayout` `controls` slot unused | `<ActionBar>`: Undo, Redo, Hint (§7.2) |
 | Every cell is a tab stop; locked cells are `disabled` | Roving tabindex with arrow-key movement; locked cells use `aria-disabled` so they stay reachable (§7.5) |
 | No persistence; `src/platform` has only haptics | `Storage` seam with Tauri-store and `localStorage` adapters; autosave and resume (§5) |
@@ -202,7 +202,7 @@ Theme, sound and the color-blind palette are milestone 6 and add fields then. Th
 <App>                              reads progress; finished ? <Finale/> : <GameScreen/>
  ├─ <GameScreen>                   view of gameStore; no props
  │   ├─ <GameLayout>
- │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/>? · <Hearts/> · <PauseButton/>
+ │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/> · <Hearts/> · <PauseButton/>
  │   │    ├─ board    → <Board>   (roving focus, §7.5)
  │   │    └─ controls → <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/>
  │   ├─ <PauseDialog>             status === "paused": Resume · Restart level · Rules · Settings
