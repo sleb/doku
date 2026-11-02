@@ -32,14 +32,14 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
   if (!Array.isArray(r.board) || r.board.length !== level.size ** 2) {
     return null;
   }
-  if (!r.board.every((c) => c === Cell.Empty || c === Cell.Mark || c === Cell.Face)) {
+  if (
+    !r.board.every(
+      (c) => c === Cell.Empty || c === Cell.Mark || c === Cell.Face,
+    )
+  ) {
     return null;
   }
-  if (
-    !Number.isInteger(r.hearts) ||
-    r.hearts < 1 ||
-    r.hearts > MAX_HEARTS
-  ) {
+  if (!Number.isInteger(r.hearts) || r.hearts < 1 || r.hearts > MAX_HEARTS) {
     return null;
   }
   if (

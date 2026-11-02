@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import { Cell } from "../engine";
+import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import { idleState, placeFace, startLevel, toggleMark } from "./game";
 import { fromSaved, type SavedGame, toSaved } from "./persist";
 
@@ -18,7 +18,13 @@ describe("toSaved", () => {
   test("a playing game saves its six fields", () => {
     const s = toggleMark(startLevel(uniqueLevel7), 3);
     if (s.status === "idle") throw new Error("started");
-    const playing = { ...s, hearts: 2, hintsUsed: 1, elapsedMs: 4200, wrong: new Set([9, 5]) };
+    const playing = {
+      ...s,
+      hearts: 2,
+      hintsUsed: 1,
+      elapsedMs: 4200,
+      wrong: new Set([9, 5]),
+    };
     expect(toSaved(playing)).toEqual({
       levelId: uniqueLevel7.id,
       board: Array.from(playing.board),
@@ -34,7 +40,9 @@ describe("toSaved paused", () => {
   test("a paused game saves the same fields", () => {
     const s = startLevel(uniqueLevel7);
     if (s.status === "idle") throw new Error("started");
-    expect(toSaved({ ...s, status: "paused", elapsedMs: 7 })?.elapsedMs).toBe(7);
+    expect(toSaved({ ...s, status: "paused", elapsedMs: 7 })?.elapsedMs).toBe(
+      7,
+    );
   });
 });
 
@@ -77,7 +85,9 @@ describe("fromSaved rejects", () => {
 
 describe("fromSaved level id", () => {
   test("a save for another level is rejected", () => {
-    expect(fromSaved({ ...validSave(), levelId: "other" }, uniqueLevel7)).toBeNull();
+    expect(
+      fromSaved({ ...validSave(), levelId: "other" }, uniqueLevel7),
+    ).toBeNull();
   });
 });
 
@@ -112,26 +122,37 @@ describe("fromSaved wrong cells", () => {
     ["not a mark", () => [w() === 0 ? 2 : 0]],
     ["not an array", () => "1"],
   ])("%s is rejected", (_n, wrong) => {
-    expect(fromSaved({ ...validSave(), wrong: wrong() }, uniqueLevel7)).toBeNull();
+    expect(
+      fromSaved({ ...validSave(), wrong: wrong() }, uniqueLevel7),
+    ).toBeNull();
   });
 });
 
 describe("fromSaved hearts", () => {
-  test.each([0, 4, -1, 1.5, "2", null, Number.NaN])("%j is rejected", (hearts) => {
-    expect(fromSaved({ ...validSave(), hearts }, uniqueLevel7)).toBeNull();
-  });
+  test.each([0, 4, -1, 1.5, "2", null, Number.NaN])(
+    "%j is rejected",
+    (hearts) => {
+      expect(fromSaved({ ...validSave(), hearts }, uniqueLevel7)).toBeNull();
+    },
+  );
 });
 
 describe("fromSaved elapsed", () => {
-  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, "5", null])("%j is rejected", (elapsedMs) => {
-    expect(fromSaved({ ...validSave(), elapsedMs }, uniqueLevel7)).toBeNull();
-  });
+  test.each([-1, Number.NaN, Number.POSITIVE_INFINITY, "5", null])(
+    "%j is rejected",
+    (elapsedMs) => {
+      expect(fromSaved({ ...validSave(), elapsedMs }, uniqueLevel7)).toBeNull();
+    },
+  );
 });
 
 describe("fromSaved hintsUsed", () => {
-  test.each([-1, 1.5, Number.NaN, "1", null, undefined])("%j is rejected", (hintsUsed) => {
-    expect(fromSaved({ ...validSave(), hintsUsed }, uniqueLevel7)).toBeNull();
-  });
+  test.each([-1, 1.5, Number.NaN, "1", null, undefined])(
+    "%j is rejected",
+    (hintsUsed) => {
+      expect(fromSaved({ ...validSave(), hintsUsed }, uniqueLevel7)).toBeNull();
+    },
+  );
 });
 
 describe("fromSaved faces", () => {
@@ -150,6 +171,56 @@ describe("fromSaved faces", () => {
     uniqueLevel7.solution.forEach((c, r) => {
       board[r * n + c] = Cell.Face;
     });
-    expect(fromSaved({ ...validSave(), board, wrong: [] }, uniqueLevel7)).toBeNull();
+    expect(
+      fromSaved({ ...validSave(), board, wrong: [] }, uniqueLevel7),
+    ).toBeNull();
+  });
+});
+
+describe("fromSaved copies", () => {
+  test("never aliases the saved arrays", () => {
+    const save = validSave();
+    const got = fromSaved(save, uniqueLevel7);
+    save.board[0] = Cell.Face;
+    save.wrong.push(99);
+    expect(got?.board[0]).not.toBe(Cell.Face);
+    expect(got?.wrong.has(99)).toBe(false);
+  });
+});
+
+describe("fromSaved junk", () => {
+  test("seeded junk never throws and never yields a started game for a bad save", () => {
+    let seed = 12345;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return seed / 2 ** 31;
+    };
+    const junk = [
+      undefined,
+      null,
+      NaN,
+      -1,
+      1.5,
+      99,
+      "x",
+      [],
+      {},
+      [1, "a"],
+      true,
+    ];
+    const pick = () => junk[Math.floor(rnd() * junk.length)];
+    const keys = [
+      "levelId",
+      "board",
+      "wrong",
+      "hearts",
+      "elapsedMs",
+      "hintsUsed",
+    ];
+    for (let i = 0; i < 500; i++) {
+      const raw: Record<string, unknown> = { ...validSave() };
+      for (const k of keys) if (rnd() < 0.4) raw[k] = pick();
+      expect(() => fromSaved(raw, uniqueLevel7)).not.toThrow();
+    }
   });
 });
