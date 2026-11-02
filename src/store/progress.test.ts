@@ -97,7 +97,13 @@ describe("parseProgress next low or fractional", () => {
 
 describe("parseProgress bestMs", () => {
   test("drops non-finite, negative and non-number times and non-object bestMs", () => {
-    const bestMs = { ok: 1500, neg: -1, nan: null, str: "9", inf: Number.POSITIVE_INFINITY };
+    const bestMs = {
+      ok: 1500,
+      neg: -1,
+      nan: null,
+      str: "9",
+      inf: Number.POSITIVE_INFINITY,
+    };
     expect(parseProgress({ next: 1, bestMs }, 8).bestMs).toEqual({ ok: 1500 });
     expect(parseProgress({ next: 1, bestMs: [5] }, 8).bestMs).toEqual({});
     expect(parseProgress({ next: 1, bestMs: 7 }, 8).bestMs).toEqual({});
