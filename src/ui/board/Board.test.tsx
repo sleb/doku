@@ -284,5 +284,12 @@ describe("Board", () => {
       await userEvent.keyboard("{ArrowDown}");
       expect(activeIndex()).toBe(8 + n);
     });
+
+    test("ArrowUp moves focus one row up", async () => {
+      renderBoard();
+      focusAt(20);
+      await userEvent.keyboard("{ArrowUp}");
+      expect(activeIndex()).toBe(20 - n);
+    });
   });
 });
