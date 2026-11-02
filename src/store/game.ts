@@ -70,7 +70,7 @@ export function restart(state: GameState): GameState {
   return state.status === "idle" ? state : startLevel(state.level);
 }
 
-type Started = Exclude<GameState, { status: "idle" }>;
+export type Started = Exclude<GameState, { status: "idle" }>;
 
 /** A face or a wrong mark can no longer be edited; the player's own mark can. */
 export function isLocked(

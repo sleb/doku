@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { LEVELS } from "../levels/campaign";
 import { MemoryStorage } from "../platform/storage";
-import { idleState } from "../store/game";
+import { idleState, type Started, startLevel, toggleMark } from "../store/game";
 import { gameStore } from "../store/gameStore";
+import { toSaved } from "../store/persist";
 import { defaultProgress, progressStore } from "../store/progress";
 import { defaultSettings, settingsStore } from "../store/settings";
 import { boot, devLevelOverride } from "./boot";
@@ -111,5 +112,104 @@ describe("boot dev override", () => {
     storage.get = () => Promise.reject(new Error("boom"));
     await boot(storage);
     expect(gameStore.getState().level).toBe(LEVELS[0]);
+  });
+});
+
+describe("boot save", () => {
+  test("a valid save restores a paused game", async () => {
+    const storage = new MemoryStorage();
+    const first = LEVELS[0];
+    const played = startLevel(first) as Started;
+    await storage.set("save", toSaved(toggleMark(played, 4) as Started));
+    await boot(storage);
+    const state = gameStore.getState();
+    expect(state.status).toBe("paused");
+    expect(state.level).toBe(first);
+    expect(state.board?.[4]).toBe(1);
+  });
+});
+
+describe("boot stale save", () => {
+  test("a save for another level is removed and a fresh level starts", async () => {
+    const storage = new MemoryStorage();
+    const other = startLevel(LEVELS[1]) as Started;
+    await storage.set("save", toSaved(toggleMark(other, 4) as Started));
+    await boot(storage);
+    expect(gameStore.getState().status).toBe("playing");
+    expect(gameStore.getState().level).toBe(LEVELS[0]);
+    expect(await storage.get("save")).toBeUndefined();
+  });
+});
+
+describe("boot corrupt save", () => {
+  test("a corrupt save starts fresh, is removed and does not throw", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("save", { levelId: LEVELS[0].id, board: "junk" });
+    await expect(boot(storage)).resolves.toBeUndefined();
+    expect(gameStore.getState().status).toBe("playing");
+    expect(await storage.get("save")).toBeUndefined();
+  });
+
+  test("no save starts the level normally", async () => {
+    await boot(new MemoryStorage());
+    expect(gameStore.getState().status).toBe("playing");
+  });
+});
+
+describe("boot autosave", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  test("a move after boot is autosaved", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({ levelId: LEVELS[0].id });
+  });
+
+  test("restoring does not write itself back or record a win", async () => {
+    const storage = new MemoryStorage();
+    const played = startLevel(LEVELS[0]) as Started;
+    const save = toSaved(toggleMark(played, 4) as Started);
+    await storage.set("save", save);
+    const set = vi.spyOn(storage, "set");
+    await boot(storage);
+    vi.advanceTimersByTime(1000);
+    expect(set).not.toHaveBeenCalledWith("save", expect.anything());
+    expect(progressStore.getState().next).toBe(0);
+  });
+
+  test("a win removes the save while recording progress", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(250);
+    gameStore.setState({ status: "won", elapsedMs: 9000 });
+    expect(await storage.get("save")).toBeUndefined();
+    expect(progressStore.getState().next).toBe(1);
+    expect(await storage.get("progress")).toMatchObject({ next: 1 });
+  });
+
+  test("the dev override ignores a valid save and installs no autosave", async () => {
+    const storage = new MemoryStorage();
+    const played = startLevel(LEVELS[0]) as Started;
+    const save = toSaved(toggleMark(played, 4) as Started);
+    await storage.set("save", save);
+    await boot(storage, { devLevel: 3 });
+    expect(gameStore.getState().status).toBe("playing");
+    gameStore.getState().toggleMark(5);
+    vi.advanceTimersByTime(1000);
+    expect(await storage.get("save")).toEqual(save);
+  });
+
+  test("booting again tears down the previous autosave", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    const set = vi.spyOn(storage, "set");
+    await boot(new MemoryStorage());
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(1000);
+    expect(set).not.toHaveBeenCalledWith("save", expect.anything());
   });
 });

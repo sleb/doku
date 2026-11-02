@@ -69,7 +69,7 @@ Implemented in M4-07: `parseProgress(raw, count)` is total and pure; `next` is c
 
 `src/app/campaign.ts` is the only code that starts levels. It owns the wiring between stores; components call its functions.
 
-- `boot(storage, { devLevel })` (§5.4): hydrate settings and progress, then restore a saved game if one matches the current level (restore is #79), otherwise `startCurrent()`.
+- `boot(storage, { devLevel })` (§5.4): hydrate settings and progress, then restore a saved game if one matches the current level, otherwise `startCurrent()`, then install autosave. Implemented in M4-08: a save for another level, or an invalid or unreadable one, is removed from storage and a fresh level starts. The `?level=` dev override does no restore and no autosave.
 - `nextLevel()`: after a win, `gameStore.startLevel(LEVELS[progress.next])`, or idle if finished.
 - `retry()`: `gameStore.restart()` (already exists).
 - `startOver()`: progress `startOver`, then start level 0.
@@ -98,7 +98,7 @@ type Started = {
 };
 ```
 
-Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arrived with Hint in M4-04. The stacks are not persisted until M4-08.
+Implemented in M4-03: `history` and `future` exist on `Started`; `hintsUsed` arrived with Hint in M4-04. The stacks are deliberately not persisted (M4-08).
 
 `idle` is unchanged. State machine: `idle → playing ⇄ paused → won | lost`; `restart` and `startLevel` go to `playing` from anywhere.
 
@@ -181,6 +181,8 @@ Not saved: `history`/`future` (undo does not survive a restart) and the status. 
 
 `toSaved(state): SavedGame | null` (null unless `playing` or `paused`) and `fromSaved(saved, level): Started | null` are pure and live in `src/store/persist.ts`. `fromSaved` returns `null` (saved game discarded) unless: `levelId === level.id`, `board.length === size²`, every board value is a valid `Cell`, every `wrong` index is in range, unique and holds a `Mark`, `hearts` is an integer in `1..MAX_HEARTS`, `elapsedMs` is finite and ≥ 0, `hintsUsed` is an integer ≥ 0, and the board has no `Face` on a cell where `judgeTap` is `wrong` and is not already solved. A restored game comes back **`paused`**, so the clock does not run before the player is looking at it (§7.2 shows "Resume").
 
+Implemented in M4-08: `toSaved` is also null for `idle`, `won` and `lost`; a saved `playing` or `paused` game both restore as `paused`. `fromSaved` is total (never throws, junk in gives `null`) and returns fresh copies (a new `Uint8Array` and `Set`) with empty `history` and `future`. `Started` is exported from `game.ts`.
+
 ### 5.3 Settings and progress persistence
 
 Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to defaults) and `parseProgress(unknown, count): Progress` (clamp `next`, drop non-finite `bestMs` entries). Both are total functions: garbage in, defaults out.
@@ -188,11 +190,13 @@ Same pattern: `parseSettings(unknown): Settings` (field-by-field fallback to def
 ### 5.4 Wiring (`src/app/boot.ts`, `src/app/autosave.ts`)
 
 - `main.tsx`: `boot(storage).then(render)`. Nothing renders until boot resolves (tens of ms); no splash screen. A thrown read is logged and treated as "nothing stored".
-Implemented in M4-06: `boot(storage)` is minimal, `hydrateSettings` then `persistSettings` (hydrate first so loading does not write back; settings write immediately, no debounce). M4-07 added progress hydration and persistence, win recording and `startCurrent`; restore and autosave remain #79. e2e specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
+Implemented in M4-06: `boot(storage)` is minimal, `hydrateSettings` then `persistSettings` (hydrate first so loading does not write back; settings write immediately, no debounce). M4-07 added progress hydration and persistence, win recording and `startCurrent`; restore and autosave arrived in M4-08 (below). e2e specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
 
 - **Autosave** is a `gameStore` subscription that fires `storage.set("save", toSaved(state))` when any of `board`, `wrong`, `hearts`, `hintsUsed`, `status` changed (shallow compare, so the 500 ms clock ticks do not write). Writes are coalesced with a 250 ms trailing debounce. `won` and `lost` and `idle` call `storage.remove("save")`. Progress and settings write on change (they change rarely).
 - **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save (now including `elapsedMs`, so a kill loses at most the time since the last background) and `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
 - A write that rejects is logged and dropped; the next change retries naturally.
+
+Implemented in M4-08: `installAutosave(storage, { debounceMs = 250 })` returns its teardown (subscription, pending timer, `visibilitychange` and `pagehide` listeners); `boot` installs it **after** restore so restoring does not write itself back, and boot teardown replaces it on re-boot. Entering `won`, `lost` or `idle` cancels the pending timer and then removes `save`, so a late debounce cannot resurrect a finished save. Pausing writes (persists `elapsedMs`). Hidden and `pagehide` write immediately, reading the store at call time, then `storage.flush()`; on Tauri `flush` is the only reliable write before a mobile kill. Rejected `set`/`flush`/`remove` are swallowed. e2e specs that reload now find the game paused (Resume) rather than playing.
 
 ## 6. Settings
 
