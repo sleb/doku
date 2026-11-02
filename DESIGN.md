@@ -151,13 +151,13 @@ Hides differences so UI code stays platform-agnostic:
 | `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 4) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
 | `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
 | `audio` | WebAudio | same (respect silent switch) |
-| `window` | min size, remembered size | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
+| `window` | min size 420x560 and remembered size/position (`tauri-plugin-window-state`, desktop only; landed M4-10) | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
 
 Responsive layout (landed, M3-01): `GameLayout` is a single layout driven by container queries on `main`. Tall (default) stacks header, board, controls; at container aspect ratio >= 1.2 and width >= 36rem the header and controls move to a side column next to the board. Landscape phones and desktop windows share the wide template; there is no separate desktop path.
 
 ## 9. Rust shell (`src-tauri`)
 
-Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers the opener plugin and the mobile-only haptics plugin (`capabilities/default.json`, `capabilities/mobile.json`); the scaffold's `greet` command is gone. Only add custom `#[tauri::command]`s when a native need appears.
+Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers the opener plugin, the mobile-only haptics plugin and the desktop-only window-state plugin (`capabilities/default.json`, `capabilities/mobile.json`, `capabilities/desktop.json`); the scaffold's `greet` command is gone. Only add custom `#[tauri::command]`s when a native need appears.
 
 Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) registered behind `#[cfg(mobile)]`; `capabilities/mobile.json` granting the impact and notification feedback permissions on android/iOS; committed `src-tauri/gen/apple` (#63, landed) and `gen/android` (#64, pending) with build outputs in `src-tauri/.gitignore`; `greet` removed. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
 
