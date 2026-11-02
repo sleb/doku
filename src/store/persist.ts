@@ -1,4 +1,4 @@
-import type { Level } from "../engine";
+import { Cell, type Level } from "../engine";
 import type { GameState, Started } from "./game";
 
 export type SavedGame = {
@@ -30,6 +30,9 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
   const r = raw as SavedGame;
   if (r.levelId !== level.id) return null;
   if (!Array.isArray(r.board) || r.board.length !== level.size ** 2) {
+    return null;
+  }
+  if (!r.board.every((c) => c === Cell.Empty || c === Cell.Mark || c === Cell.Face)) {
     return null;
   }
   return {

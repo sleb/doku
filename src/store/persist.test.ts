@@ -91,3 +91,12 @@ describe("fromSaved board", () => {
     expect(fromSaved(bad, uniqueLevel7)).toBeNull();
   });
 });
+
+describe("fromSaved cell values", () => {
+  test.each([3, -1, 1.5, "1", null])("cell value %j is rejected", (v) => {
+    const save = validSave();
+    const board: unknown[] = [...save.board];
+    board[0] = v;
+    expect(fromSaved({ ...save, board }, uniqueLevel7)).toBeNull();
+  });
+});
