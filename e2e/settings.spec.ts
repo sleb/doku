@@ -13,6 +13,8 @@ test.describe("fresh install", () => {
     await page.getByRole("button", { name: "Got it" }).click();
     await expect(rules(page)).toBeHidden();
     await page.reload();
+    // The saved game comes back paused (M4-08).
+    await page.getByRole("button", { name: "Resume" }).click();
     await expect(
       page.getByRole("grid", { name: "Puzzle board" }),
     ).toBeVisible();
@@ -37,7 +39,7 @@ test("haptics off in Settings persists across reload", async ({ page }) => {
   await sw.click();
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await page.reload();
-  await page.getByRole("button", { name: "Pause" }).click();
+  // The saved game comes back paused, so the Pause dialog is already open.
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("switch", { name: "Haptics" })).toHaveAttribute(
     "aria-checked",
