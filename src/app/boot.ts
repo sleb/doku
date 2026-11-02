@@ -9,6 +9,7 @@ import {
   progressStore,
 } from "../store/progress";
 import { hydrateSettings, persistSettings } from "../store/settings";
+import { installAutosave } from "./autosave";
 import { recordWins, startCurrent } from "./campaign";
 
 /** Loads saved state, then starts saving changes. Resolves before first paint. */
@@ -30,6 +31,8 @@ export async function boot(
   await hydrateProgress(storage);
   teardown.push(persistProgress(storage), recordWins());
   if (!(await restoreSaved(storage))) startCurrent();
+  // After the restore, so restoring does not write itself back.
+  teardown.push(installAutosave(storage));
 }
 
 /** Restores the saved game if it is for the level progress points at. */

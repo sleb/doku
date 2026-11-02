@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { LEVELS } from "../levels/campaign";
 import { MemoryStorage } from "../platform/storage";
 import { idleState, type Started, startLevel, toggleMark } from "../store/game";
@@ -153,5 +153,18 @@ describe("boot corrupt save", () => {
   test("no save starts the level normally", async () => {
     await boot(new MemoryStorage());
     expect(gameStore.getState().status).toBe("playing");
+  });
+});
+
+describe("boot autosave", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  test("a move after boot is autosaved", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    gameStore.getState().toggleMark(4);
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({ levelId: LEVELS[0].id });
   });
 });
