@@ -19,3 +19,5 @@ export function levelById(id: string): PackLevel {
 
 /** Number of levels in the campaign (pack order). */
 export const levelCount: number = pack.levels.length;
+
+export const levelIds: string[] = pack.levels.map((l) => l.id);
