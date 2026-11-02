@@ -150,6 +150,20 @@ describe("GameScreen", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  test("Tab enters the board on the active cell; pause then resume returns focus to it", async () => {
+    const user = userEvent.setup();
+    renderGame();
+    act(() => cell(7).focus());
+    act(() => cell(7).blur());
+    await user.tab(); // the top bar's Pause button comes first
+    await user.tab();
+    expect(cell(7)).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(gameStore.getState().status).toBe("paused");
+    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(cell(7)).toHaveFocus();
+  });
+
   test("a focused cell that becomes a face keeps focus", () => {
     renderGame();
     const target = cell(solution[0]);
