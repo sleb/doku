@@ -1,5 +1,6 @@
-import { describe, expect, test } from "vitest";
-import { parseSettings, settingsStore } from "./settings";
+import { beforeEach, describe, expect, test } from "vitest";
+import { MemoryStorage } from "../platform/storage";
+import { hydrateSettings, parseSettings, settingsStore } from "./settings";
 
 const defaults = { haptics: true, seenRules: false };
 
@@ -81,5 +82,39 @@ describe("settingsStore.set", () => {
       haptics: false,
       seenRules: false,
     });
+  });
+});
+
+describe("hydrateSettings", () => {
+  beforeEach(() => settingsStore.setState(defaults));
+
+  test("fills the store from stored settings", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("settings", { haptics: false, seenRules: true });
+    await hydrateSettings(storage);
+    const { haptics, seenRules } = settingsStore.getState();
+    expect({ haptics, seenRules }).toEqual({ haptics: false, seenRules: true });
+  });
+
+  test("leaves defaults when nothing is stored", async () => {
+    await hydrateSettings(new MemoryStorage());
+    const { haptics, seenRules } = settingsStore.getState();
+    expect({ haptics, seenRules }).toEqual(defaults);
+  });
+
+  test("a rejecting read leaves defaults and does not throw", async () => {
+    const storage = new MemoryStorage();
+    storage.get = () => Promise.reject(new Error("boom"));
+    await expect(hydrateSettings(storage)).resolves.toBeUndefined();
+    const { haptics, seenRules } = settingsStore.getState();
+    expect({ haptics, seenRules }).toEqual(defaults);
+  });
+
+  test.each(["garbage", { haptics: 5 }])("corrupt %j gives defaults", async (bad) => {
+    const storage = new MemoryStorage();
+    await storage.set("settings", bad);
+    await hydrateSettings(storage);
+    const { haptics, seenRules } = settingsStore.getState();
+    expect({ haptics, seenRules }).toEqual(defaults);
   });
 });

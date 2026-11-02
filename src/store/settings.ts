@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import type { Storage } from "../platform/storage";
 
 export type Settings = { haptics: boolean; seenRules: boolean };
 
@@ -24,3 +25,13 @@ export const settingsStore = createStore<SettingsStore>()((set) => ({
   ...defaultSettings,
   set: (patch) => set(patch),
 }));
+
+const KEY = "settings";
+
+export async function hydrateSettings(storage: Storage): Promise<void> {
+  try {
+    settingsStore.getState().set(parseSettings(await storage.get(KEY)));
+  } catch {
+    // Unreadable: keep the defaults.
+  }
+}
