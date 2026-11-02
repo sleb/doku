@@ -22,7 +22,7 @@ export function useShortcuts({ holdOwner }: ShortcutOptions = {}): void {
       else if (key === "h" && !e.ctrlKey && !e.metaKey) action = "hint";
       else if (key === "y" && e.ctrlKey && !e.metaKey) action = "redo";
       if (!action) return;
-      if ((action === "undo" || action === "redo") && holdOwner?.current != null) return;
+      if (action !== "pause" && holdOwner?.current != null) return;
       e.preventDefault();
       gameStore.getState()[action]();
     };

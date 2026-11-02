@@ -115,6 +115,24 @@ describe("useShortcuts", () => {
     });
   });
 
+  describe("during a hold, continued", () => {
+    const held = { current: 5 as number | null };
+    const faces = () => {
+      const st = gameStore.getState();
+      if (st.status === "idle") throw new Error("idle");
+      return st.board.filter((c) => c === Cell.Face).length;
+    };
+
+    test("hint does nothing and costs no heart", () => {
+      held.current = 5;
+      renderHook(() => useShortcuts({ holdOwner: held }));
+      const e = press({ key: "h" });
+      expect(faces()).toBe(0);
+      expect(gameStore.getState().hearts).toBe(MAX_HEARTS);
+      expect(e.defaultPrevented).toBe(false);
+    });
+  });
+
   describe("Escape", () => {
     test("pauses and prevents default", () => {
       renderHook(() => useShortcuts());
