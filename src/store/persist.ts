@@ -1,4 +1,5 @@
-import type { GameState } from "./game";
+import type { Level } from "../engine";
+import type { GameState, Started } from "./game";
 
 export type SavedGame = {
   levelId: string;
@@ -19,5 +20,20 @@ export function toSaved(state: GameState): SavedGame | null {
     hearts: state.hearts,
     elapsedMs: state.elapsedMs,
     hintsUsed: state.hintsUsed,
+  };
+}
+
+export function fromSaved(raw: unknown, level: Level): Started | null {
+  const r = raw as SavedGame;
+  return {
+    status: "paused",
+    level,
+    board: Uint8Array.from(r.board),
+    wrong: new Set(r.wrong),
+    hearts: r.hearts,
+    hintsUsed: r.hintsUsed,
+    elapsedMs: r.elapsedMs,
+    history: [],
+    future: [],
   };
 }

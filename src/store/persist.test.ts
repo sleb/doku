@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
-import { idleState, startLevel, toggleMark } from "./game";
-import { toSaved } from "./persist";
+import { idleState, placeFace, startLevel, toggleMark } from "./game";
+import { fromSaved, toSaved } from "./persist";
 
 describe("toSaved", () => {
   test("is null for idle", () => {
@@ -26,5 +26,40 @@ describe("toSaved", () => {
       elapsedMs: 4200,
       hintsUsed: 1,
     });
+  });
+});
+
+describe("toSaved paused", () => {
+  test("a paused game saves the same fields", () => {
+    const s = startLevel(uniqueLevel7);
+    if (s.status === "idle") throw new Error("started");
+    expect(toSaved({ ...s, status: "paused", elapsedMs: 7 })?.elapsedMs).toBe(7);
+  });
+});
+
+/** A started game with a mark at one cell and one wrong tap. */
+function played() {
+  const n = uniqueLevel7.size;
+  const wrongCell = uniqueLevel7.solution[0] === 0 ? 1 : 0;
+  const s = placeFace(toggleMark(startLevel(uniqueLevel7), n + 3), wrongCell);
+  if (s.status === "idle") throw new Error("started");
+  return { s, wrongCell };
+}
+
+describe("fromSaved", () => {
+  test("round-trips to a paused game with a Set and empty stacks", () => {
+    const { s, wrongCell } = played();
+    const got = fromSaved(toSaved({ ...s, elapsedMs: 800 }), uniqueLevel7);
+    expect(got).toMatchObject({
+      status: "paused",
+      level: uniqueLevel7,
+      hearts: 2,
+      elapsedMs: 800,
+      hintsUsed: 0,
+      history: [],
+      future: [],
+    });
+    expect(got?.wrong).toEqual(new Set([wrongCell]));
+    expect(Array.from(got?.board ?? [])).toEqual(Array.from(s.board));
   });
 });
