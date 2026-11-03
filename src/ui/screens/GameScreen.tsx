@@ -125,7 +125,10 @@ export function GameScreen() {
       {sheet === "settings" && (
         <SettingsDialog
           onClose={() => setSheet(null)}
-          onStartOver={startOver}
+          onStartOver={() => {
+            startOver();
+            pause();
+          }}
         />
       )}
       <PauseDialog
