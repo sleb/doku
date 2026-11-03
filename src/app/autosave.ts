@@ -3,6 +3,8 @@ import { gameStore } from "../store/gameStore";
 import { toSaved } from "../store/persist";
 
 const KEY = "save";
+/** Play time between refreshes of the saved elapsed (ticks alone never write). */
+const REFRESH_MS = 5000;
 
 /** Saves the game on change (debounced); returns the teardown. */
 export function installAutosave(
@@ -10,12 +12,23 @@ export function installAutosave(
   { debounceMs = 250 }: { debounceMs?: number } = {},
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let savedElapsed = 0;
   const write = () => {
     const saved = toSaved(gameStore.getState());
-    if (saved) storage.set(KEY, saved).catch(() => {});
+    if (!saved) return;
+    savedElapsed = saved.elapsedMs;
+    storage.set(KEY, saved).catch(() => {});
+  };
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = undefined;
+      write();
+    }, debounceMs);
   };
   const flushNow = () => {
     clearTimeout(timer);
+    timer = undefined;
     write();
     storage.flush().catch(() => {});
   };
@@ -33,15 +46,26 @@ export function installAutosave(
       ("hintsUsed" in s &&
         "hintsUsed" in prev &&
         s.hintsUsed !== prev.hintsUsed);
-    if (!changed) return;
+    if (!changed) {
+      // A hard kill keeps only the last write, so refresh the elapsed while
+      // playing, at most once per REFRESH_MS of play (not on every tick).
+      if (
+        s.status === "playing" &&
+        s.elapsedMs - savedElapsed >= REFRESH_MS &&
+        timer === undefined
+      ) {
+        schedule();
+      }
+      return;
+    }
     if (toSaved(s) === null) {
       // Finished or idle: a late debounced write must not resurrect a save.
       clearTimeout(timer);
+      timer = undefined;
       storage.remove(KEY).catch(() => {});
       return;
     }
-    clearTimeout(timer);
-    timer = setTimeout(write, debounceMs);
+    schedule();
   });
   return () => {
     unsubscribe();

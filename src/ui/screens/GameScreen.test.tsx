@@ -323,6 +323,8 @@ describe("GameScreen", () => {
 
     test("Resume continues from the same elapsed time", async () => {
       const user = userEvent.setup();
+      // A frozen clock: the pause credits no real time since the last tick.
+      vi.spyOn(performance, "now").mockReturnValue(1000);
       renderGame();
       act(() => gameStore.getState().tick(3000));
       await user.click(screen.getByRole("button", { name: "Pause" }));
@@ -505,8 +507,11 @@ describe("GameScreen", () => {
       await userEvent.click(screen.getByRole("button", { name: "Settings" }));
       await userEvent.click(screen.getByRole("button", { name: "Start over" }));
       await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
-      expect(screen.queryByRole("dialog")).toBeNull();
-      expect(gameStore.getState().status).toBe("playing");
+      // Level 1 comes up paused, with the Pause dialog showing.
+      expect(
+        screen.getByRole("dialog", { name: "Paused" }),
+      ).toBeInTheDocument();
+      expect(gameStore.getState().status).toBe("paused");
       expect(
         screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
       ).toBeInTheDocument();

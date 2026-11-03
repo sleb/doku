@@ -127,6 +127,7 @@ describe("fromSaved wrong cells", () => {
     ["duplicate", () => [w(), w()]],
     ["not a mark", () => [w() === 0 ? 2 : 0]],
     ["not an array", () => "1"],
+    ["a numeric string", () => [String(w())]],
   ])("%s is rejected", (_n, wrong) => {
     expect(
       fromSaved({ ...validSave(), wrong: wrong() }, uniqueLevel7),
@@ -135,6 +136,15 @@ describe("fromSaved wrong cells", () => {
 });
 
 describe("fromSaved hearts", () => {
+  // Each wrong tap and each hint costs exactly one heart.
+  test.each([
+    ["too many for the wrong taps", { hearts: 3 }],
+    ["too many for the hints", { hearts: 3, hintsUsed: 1, wrong: [] }],
+    ["too few for the wrong taps", { hearts: 1 }],
+  ])("hearts that are %s are rejected", (_n, patch) => {
+    expect(fromSaved({ ...validSave(), ...patch }, uniqueLevel7)).toBeNull();
+  });
+
   test.each([0, 4, -1, 1.5, "2", null, Number.NaN])(
     "%j is rejected",
     (hearts) => {

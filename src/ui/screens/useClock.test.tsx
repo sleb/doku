@@ -1,14 +1,18 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { judgeTap } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { idleState } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
 import { useClock } from "./useClock";
 
 let now = 0;
+// Step in 100 ms so each interval tick sees the clock at its own time.
 const advance = (ms: number) => {
-  now += ms;
-  vi.advanceTimersByTime(ms);
+  for (let t = 0; t < ms; t += 100) {
+    now += 100;
+    vi.advanceTimersByTime(100);
+  }
 };
 const elapsed = () => {
   const s = gameStore.getState();
@@ -65,6 +69,34 @@ describe("useClock", () => {
     act(() => gameStore.getState().resume());
     act(() => advance(500));
     expect(elapsed()).toBe(1500);
+  });
+
+  test("pausing mid-interval credits the time since the last tick", () => {
+    gameStore.getState().startLevel(level);
+    renderHook(() => useClock());
+    act(() => advance(1200));
+    act(() => gameStore.getState().pause());
+    expect(elapsed()).toBe(1200);
+    act(() => gameStore.getState().resume());
+    act(() => advance(500));
+    expect(elapsed()).toBe(1700);
+  });
+
+  test("the winning move carries the time since the last tick", () => {
+    gameStore.getState().startLevel(level);
+    renderHook(() => useClock());
+    act(() => advance(1200));
+    const wins: number[] = [];
+    gameStore.subscribe((s) => {
+      if (s.status === "won") wins.push(s.elapsedMs);
+    });
+    const cells = [...Array(level.size ** 2).keys()].filter(
+      (c) => judgeTap(level, c) === "correct",
+    );
+    act(() => {
+      for (const c of cells) gameStore.getState().placeFace(c);
+    });
+    expect(wins[0]).toBe(1200);
   });
 
   test("stops on unmount", () => {

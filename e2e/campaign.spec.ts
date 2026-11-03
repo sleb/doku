@@ -95,6 +95,8 @@ test("Start over in Settings asks first, then keeps best times", async ({
 
   await page.getByRole("button", { name: "Start over" }).click();
   await page.getByRole("button", { name: "Confirm" }).click();
+  // Level 1 comes up paused, not running.
+  await expect(paused(page)).toBeVisible();
   await expect(level(page, 1)).toBeVisible();
   await expect.poll(async () => (await progress(page))?.next).toBe(0);
   expect((await progress(page))?.bestMs).toEqual(seeded.bestMs);
