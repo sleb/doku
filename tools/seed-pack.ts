@@ -2,6 +2,7 @@
 // Usage: bun tools/seed-pack.ts [size:count ...]   e.g. 7:2 9:2 10:1 11:1
 // Naive rejection sampling: random valid solution, grow one region per face,
 // keep if countSolutions == 1. Prints Level JSON objects, one per line.
+// Sizes below 4 are rejected: 2x2 and 3x3 have no valid placement.
 import { countSolutions, type Level } from "../src/engine";
 
 const rand = (n: number) => Math.floor(Math.random() * n);
@@ -67,6 +68,14 @@ const specs = (
     ? process.argv.slice(2)
     : ["7:2", "9:2", "10:1", "11:1"]
 ).map((s) => s.split(":").map(Number));
+for (const [size, count] of specs) {
+  if (!Number.isInteger(size) || !Number.isInteger(count) || size < 4) {
+    console.error(
+      `bad spec: size must be an integer >= 4 (no 2x2 or 3x3 solution), got size ${size}, count ${count}.\nUsage: bun tools/seed-pack.ts [size:count ...]`,
+    );
+    process.exit(1);
+  }
+}
 let k = 1;
 for (const [size, count] of specs) {
   for (let i = 0; i < count; i++) {

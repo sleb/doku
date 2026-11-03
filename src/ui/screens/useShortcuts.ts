@@ -14,7 +14,8 @@ export interface ShortcutOptions {
 export function useShortcuts({ holdOwner }: ShortcutOptions = {}): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.altKey) return;
+      // A dialog that already handled the key (Esc closing it) owns it.
+      if (e.defaultPrevented || e.repeat || e.altKey) return;
       if (gameStore.getState().status !== "playing") return;
       const key = e.key.toLowerCase();
       let action: "undo" | "redo" | "hint" | "pause" | null = null;

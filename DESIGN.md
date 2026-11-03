@@ -161,7 +161,7 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 
 ## 10. Content pipeline
 
-- Today: `src/levels/pack-1.json` holds 8 seed levels (sizes 7 to 11; only one 11x11), produced by the throwaway `tools/seed-pack.ts` (`bun tools/seed-pack.ts [size:count ...]`, naive rejection sampling, prints Level JSON to append by hand). `src/levels/campaign.ts` loads every `pack-*.json` in filename order into `LEVELS`.
+- Today: `src/levels/pack-1.json` holds 8 seed levels (sizes 7 to 11; only one 11x11), produced by the throwaway `tools/seed-pack.ts` (`bun tools/seed-pack.ts [size:count ...]`, naive rejection sampling, prints Level JSON to append by hand). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
 - Milestone 5: `tools/generate-levels.ts` runs the engine generator offline, verifies uniqueness, assigns difficulty, writes `src/levels/pack-*.json`, and replaces the seed script.
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 

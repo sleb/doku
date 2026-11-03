@@ -42,10 +42,30 @@ describe("useClock", () => {
     gameStore.getState().startLevel(level);
     renderHook(() => useClock());
     act(() => {
-      now += 1700;
+      now += 1400;
       vi.advanceTimersByTime(500);
     });
-    expect(elapsed()).toBe(1700);
+    expect(elapsed()).toBe(1400);
+  });
+
+  test("a suspended page does not credit the whole gap", () => {
+    gameStore.getState().startLevel(level);
+    renderHook(() => useClock());
+    act(() => {
+      now += 60_000;
+      vi.advanceTimersByTime(500);
+    });
+    expect(elapsed()).toBe(500);
+  });
+
+  test("a flush after a suspension credits at most one interval", () => {
+    gameStore.getState().startLevel(level);
+    renderHook(() => useClock());
+    act(() => {
+      now += 60_000;
+      gameStore.getState().pause();
+    });
+    expect(elapsed()).toBe(500);
   });
 
   test("does not tick while paused, won or lost, or idle", () => {
