@@ -55,6 +55,36 @@ describe("installAutosave ticks", () => {
   });
 });
 
+describe("installAutosave elapsed refresh", () => {
+  test("play refreshes the saved elapsed about every 5 s, not every tick", async () => {
+    const set = vi.spyOn(storage, "set");
+    for (let i = 0; i < 9; i++) gameStore.getState().tick(500);
+    vi.advanceTimersByTime(1000);
+    expect(set).not.toHaveBeenCalled();
+    gameStore.getState().tick(500);
+    vi.advanceTimersByTime(250);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(await storage.get("save")).toMatchObject({ elapsedMs: 5000 });
+    for (let i = 0; i < 9; i++) gameStore.getState().tick(500);
+    vi.advanceTimersByTime(1000);
+    expect(set).toHaveBeenCalledTimes(1);
+    gameStore.getState().tick(500);
+    vi.advanceTimersByTime(250);
+    expect(set).toHaveBeenCalledTimes(2);
+    expect(await storage.get("save")).toMatchObject({ elapsedMs: 10000 });
+  });
+});
+
+describe("installAutosave refresh after a flush", () => {
+  test("pagehide does not stop later refreshes", async () => {
+    gameStore.getState().toggleMark(3);
+    window.dispatchEvent(new Event("pagehide"));
+    for (let i = 0; i < 10; i++) gameStore.getState().tick(500);
+    vi.advanceTimersByTime(250);
+    expect(await storage.get("save")).toMatchObject({ elapsedMs: 5000 });
+  });
+});
+
 describe("installAutosave moves", () => {
   test("a wrong tap saves the wrong cell and a lost heart", async () => {
     const wrongCell = uniqueLevel7.solution[0] === 0 ? 1 : 0;
