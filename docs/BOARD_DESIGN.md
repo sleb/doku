@@ -56,7 +56,7 @@ e2e/
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
-`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json` (8 levels in all), loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`); they do not import the JSON module.
+`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json` (8 levels in all), loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`, `levelCount`, `levelIds`); they do not import the JSON module. That helper reads every `src/levels/pack-*.json` and orders them with the app's own `orderPackKeys` (`src/levels/packOrder.ts`, numeric suffix, so `pack-2` precedes `pack-10`), so e2e sees the same campaign as `campaign.ts`.
 
 ## 3. Store (`src/store`)
 
