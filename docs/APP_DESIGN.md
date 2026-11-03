@@ -76,7 +76,7 @@ interface Progress {
 
 Win on the last level records `next === LEVELS.length`; the result modal's button then reads "Finish" and `nextLevel()` goes idle, which is when `App` shows `<Finale>` (§7.4). Level numbers shown to the player are `index + 1` of `LEVELS.length`.
 
-**Boot order** (`boot(storage, { devLevel })` in `src/app/boot.ts`, called from `main.tsx`, which renders only after it resolves):
+**Boot order** (`boot(storage, { devLevel })` in `src/app/boot.ts`, called from `main.tsx` through `launch` (`src/app/launch.ts`), which renders only after it settles; if boot rejects, `launch` logs it with `console.error`, calls `startCurrent()` and still renders):
 
 1. Tear down any previous boot's subscriptions (re-boot in tests and hot reload).
 2. `hydrateSettings`, then install `persistSettings`.
@@ -180,7 +180,7 @@ interface SavedGame {
 
 Not saved: `history`/`future` (undo does not survive a restart) and the status. Hearts and `wrong` are saved so that quitting cannot refund hearts or forget which cells are known wrong.
 
-`toSaved(state): SavedGame | null` (null for `idle`, `won` and `lost`) and `fromSaved(raw, level): Started | null` are pure and live in `src/store/persist.ts`. `fromSaved` is total (never throws; junk in gives `null`) and returns `null` (saved game discarded) unless: `levelId === level.id`, `board.length === size²`, every board value is a valid `Cell`, every `wrong` index holds a `Mark` and is unique, `hearts` is an integer in `1..MAX_HEARTS`, `elapsedMs` is finite and ≥ 0, `hintsUsed` is an integer ≥ 0, the board has no `Face` on a cell where `judgeTap` is `wrong`, and it is not already solved. It returns fresh copies (a new `Uint8Array` and `Set`) with empty `history` and `future`. A restored game comes back **`paused`** whether it was saved `playing` or `paused`, so the clock does not run before the player is looking at it.
+`toSaved(state): SavedGame | null` (null for `idle`, `won` and `lost`) and `fromSaved(raw, level): Started | null` are pure and live in `src/store/persist.ts`. `fromSaved` is total (never throws; junk in gives `null`) and returns `null` (saved game discarded) unless: `levelId === level.id`, `board.length === size²`, every board value is a valid `Cell`, every `wrong` entry is an integer index that holds a `Mark` and is unique, `hearts` is an integer in `1..MAX_HEARTS` and equals `MAX_HEARTS - wrong.size - hintsUsed` (a wrong tap and a hint each cost exactly one heart), `elapsedMs` is finite and ≥ 0, `hintsUsed` is an integer ≥ 0, the board has no `Face` on a cell where `judgeTap` is `wrong`, and it is not already solved. It returns fresh copies (a new `Uint8Array` and `Set`) with empty `history` and `future`. A restored game comes back **`paused`** whether it was saved `playing` or `paused`, so the clock does not run before the player is looking at it.
 
 ### 5.3 Settings and progress parsing
 
@@ -190,9 +190,9 @@ Not saved: `history`/`future` (undo does not survive a restart) and the status. 
 
 `installAutosave(storage, { debounceMs = 250 })` returns its teardown (subscription, pending timer, `visibilitychange` and `pagehide` listeners).
 
-- A `gameStore` subscription writes `save` when any of `board`, `wrong`, `hearts`, `hintsUsed` or `status` changed (shallow compare, so the 500 ms clock ticks do not write). Pausing therefore writes, which persists `elapsedMs`. Writes are coalesced with a 250 ms trailing debounce.
+- A `gameStore` subscription writes `save` when any of `board`, `wrong`, `hearts`, `hintsUsed` or `status` changed (shallow compare, so the 500 ms clock ticks do not write). Pausing therefore writes, which persists `elapsedMs`. While `playing`, a tick that leaves `elapsedMs` at least 5 s past the last write also schedules a write (so a hard kill loses at most about 5 s, not everything since the last move). Writes are coalesced with a 250 ms trailing debounce.
 - Entering `won`, `lost` or `idle` cancels the pending timer and removes `save`, so a late debounce cannot resurrect a finished save.
-- **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save immediately (reading the store at call time, so it includes the current `elapsedMs`; a kill loses at most the time since the last background) and call `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
+- **Flush** on `visibilitychange → hidden` and `pagehide`: write the latest save immediately (reading the store at call time, so it includes the current `elapsedMs`; a kill loses at most the time since the last background or the 5 s refresh) and call `storage.flush()`. On mobile this is the only reliable moment before the OS kills the process; on desktop it also fires on minimize.
 - A rejected `set`/`flush`/`remove` is swallowed; the next change retries naturally.
 - Progress and settings write immediately on change (they change rarely).
 
@@ -233,10 +233,10 @@ There is no router. `<Dialog>` (`src/ui/Dialog.tsx`) is the one shared primitive
 
 ### 7.2 Timer, pause, action bar
 
-- **Clock driver:** `useClock()` (`src/ui/screens/useClock.ts`). While `status === "playing"` it runs a 500 ms interval and calls `tick(now - last)` using `performance.now()` deltas, so a delayed interval does not lose time. The store is pure; time is injected by the hook, never read by the store.
+- **Clock driver:** `useClock()` (`src/ui/screens/useClock.ts`). While `status === "playing"` it runs a 500 ms interval and calls `tick(now - last)` using `performance.now()` deltas, so a delayed interval does not lose time. `pause`, `hint` and `placeFace` first call the registered flush (`onClockFlush` in `gameStore.ts`), which credits the time since the last tick while the status is still `playing`, so pausing, winning or losing does not drop the partial 500 ms interval; auto-pause and Esc go through `pause`, so they are covered. The store is pure; time is injected by the hook, never read by the store.
 - **Auto-pause:** `useAutoPause()` dispatches `pause` on `visibilitychange → hidden` and window `blur`. This covers minimizing on desktop and backgrounding on mobile. Resume is never automatic: the player returns to the Pause dialog and presses Resume.
 - **Manual pause:** the Pause button in `TopBar`, and `Esc` (handled by `useShortcuts`; Esc only pauses, it never resumes). The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
-- **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick. The timer is always shown; there is no setting to hide it.
+- **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick. The timer is always shown; there is no setting to hide it. `GameScreen` reads `elapsedMs` only while `won` (for the result), so ticks do not re-render the screen or the board.
 - **Action bar** (`ActionBar.tsx`): three real buttons in one row in the `controls` slot (side panel in the wide layout, under the board in the tall one), each at least 44 px (`min-h-11 min-w-11`, `MOBILE_DESIGN.md` §4.3). Undo and Redo are disabled unless `playing` and their stack is non-empty. Hint is labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`, disabled unless `playing` and `hearts > 1`. All are disabled while paused, so a paused board cannot be studied.
 - **Shortcuts:** `useShortcuts({ holdOwner })` is one window `keydown` listener, active only while `status === "playing"` (so dialogs and the paused state swallow them). See §7.5.
 
