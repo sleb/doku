@@ -53,9 +53,12 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
   if (!Array.isArray(r.wrong)) return null;
   const wrong = new Set<number>();
   for (const cell of r.wrong) {
-    if (r.board[cell] !== Cell.Mark || wrong.has(cell)) return null;
+    if (!Number.isInteger(cell) || r.board[cell] !== Cell.Mark) return null;
+    if (wrong.has(cell)) return null;
     wrong.add(cell);
   }
+  // A wrong tap and a hint each cost exactly one heart (see game.ts).
+  if (r.hearts !== MAX_HEARTS - wrong.size - r.hintsUsed) return null;
   const faceWrong = r.board.some(
     (c, cell) => c === Cell.Face && judgeTap(level, cell) === "wrong",
   );
