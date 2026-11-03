@@ -25,7 +25,9 @@ export function GameScreen() {
   const board = useGameStore((s) => s.board);
   const hearts = useGameStore((s) => s.hearts);
   const wrong = useGameStore((s) => ("wrong" in s ? s.wrong : undefined));
-  const elapsedMs = useGameStore((s) => ("elapsedMs" in s ? s.elapsedMs : 0));
+  // Only the win result shows the time, and the clock is stopped by then; any
+  // other status reads 0 so clock ticks do not re-render the screen and board.
+  const elapsedMs = useGameStore((s) => (s.status === "won" ? s.elapsedMs : 0));
   const hintsUsed = useGameStore((s) => ("hintsUsed" in s ? s.hintsUsed : 0));
   const bestMs = useProgressStore((s) =>
     level ? s.bestMs[level.id] : undefined,
