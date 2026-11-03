@@ -250,7 +250,7 @@ There is no router. `<Dialog>` (`src/ui/Dialog.tsx`) is the one shared primitive
 
 ### 7.4 Finale
 
-When `progress.next === LEVELS.length` and `gameStore.status === "idle"`, `App` shows `<Finale>`: "You finished", "Total of best times" (the sum of `bestMs` over the ids in `LEVELS`) and "Start over" (no confirm; unlike Settings it starts level 1 playing, since the player has just chosen to go again). The idle check keeps the last win's result modal ("Finish") from being hidden. It is the only screen that exists without a board. The store is idle there and autosave has removed `save`; a reload stays on the Finale.
+When `progress.next === LEVELS.length` and `gameStore.status === "idle"`, `App` shows `<Finale>`: "You finished", "Total of best times" (the sum of `bestMs` over the ids in `LEVELS`; if any level has no recorded best the total is replaced by "Some best times are missing, so there is no total.", rather than counting it as 0) and "Start over" (no confirm; unlike Settings it starts level 1 playing, since the player has just chosen to go again). The idle check keeps the last win's result modal ("Finish") from being hidden. It is the only screen that exists without a board. The store is idle there and autosave has removed `save`; a reload stays on the Finale.
 
 ### 7.5 Keyboard and pointer input
 
