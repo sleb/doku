@@ -14,6 +14,8 @@ export interface CellProps {
   isWrong: boolean;
   isConflict: boolean;
   disabled: boolean;
+  /** Roving tabindex: 0 on the board's active cell, -1 elsewhere. */
+  tabIndex?: number;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
   /** Shared by a board's cells: the index of the cell being held, if any. Other cells ignore marks meanwhile. */
@@ -37,6 +39,7 @@ export const CellView = memo(function CellView({
   isWrong,
   isConflict,
   disabled,
+  tabIndex,
   onToggleMark,
   onPlaceFace,
   holdOwner,
@@ -52,6 +55,7 @@ export const CellView = memo(function CellView({
   );
   // A second finger or palm on a neighbor must not mark it mid-hold.
   const toggleMark = () => {
+    if (disabled) return;
     const owner = holdOwner?.current;
     if (owner == null || owner === index) onToggleMark(index);
   };
@@ -61,6 +65,8 @@ export const CellView = memo(function CellView({
     REGION_BG[region],
     // Thin grid lines only; thick region edges are drawn by Board's overlay.
     "border-r border-b",
+    // Keyboard focus: an outline inset past the 4px conflict ring so both read.
+    "focus-visible:outline-3 focus-visible:-outline-offset-8 focus-visible:outline-blue-700",
     isConflict ? "ring-4 ring-inset ring-neutral-900" : "",
   ]
     .filter(Boolean)
@@ -72,7 +78,9 @@ export const CellView = memo(function CellView({
       data-conflict={isConflict ? "true" : undefined}
       className={className}
       data-holding={hold.holding ? "true" : undefined}
-      disabled={disabled}
+      aria-disabled={disabled ? "true" : undefined}
+      tabIndex={tabIndex}
+      data-index={index}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         // Touch pointers are implicitly captured, which would suppress

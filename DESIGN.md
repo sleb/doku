@@ -1,6 +1,6 @@
 # Doku — Component-Level Design (draft 2)
 
-A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. iOS runs on the simulator; Android is pending.
+A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. The full app (milestones 1 to 4: engine, board, mobile, campaign with persistence) is implemented; iOS runs on the simulator; Android is pending (#64). Milestones 5 and 6 (generator, polish) are not started.
 
 ## 1. Game rules
 
@@ -19,39 +19,42 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
 
 ```
 ┌──────────────────────────── Tauri shell (Rust) ────────────────────────────┐
-│  commands: none yet (persistence commands planned)                         │
-│  plugins: opener; mobile: haptics (store, fs planned)                      │
+│  commands: none                                                            │
+│  plugins: opener, store; desktop: window-state; mobile: haptics            │
 └───────────────▲────────────────────────────────────────────────────────────┘
-                │ invoke() — thin, async, never on the hot path
+                │ plugin calls — thin, async, never on the hot path
 ┌───────────────┴──────────── Frontend (TypeScript + React) ─────────────────┐
 │  UI components  →  Game store (state machine)  →  Engine (pure TS)         │
 │                                    │                  └ Worker: generator  │
-│                                    └→ Persistence adapter → Tauri commands │
+│                                    └→ Storage adapter → plugin-store           │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Key decision: game logic lives in pure TypeScript, not Rust.** Validation, solving, hints and generation are small, need instant feedback, and must behave identically on desktop and mobile. Rust stays a thin shell for storage and native features. This avoids IPC latency on every tap and keeps the engine unit-testable with no Tauri runtime (and runnable in a browser for fast dev). Revisit only if generation proves too slow in a Worker.
 
-Suggested stack: Tauri 2, Vite, React, TypeScript, Zustand (store), Tailwind CSS, Vitest, Playwright (against the Vite build).
+Stack: Tauri 2, Vite, React, TypeScript, Zustand (store), Tailwind CSS, Vitest, Playwright (against the Vite dev server).
 
 ## 3. Repository layout
 
 ```
 doku/
-├─ src-tauri/            # Rust shell, capabilities, mobile targets (gen/apple landed; gen/android pending #64)
+├─ src-tauri/            # Rust shell, capabilities (default/desktop/mobile), gen/apple (gen/android pending #64)
 ├─ src/
 │  ├─ engine/            # pure TS, zero UI/Tauri imports
-│  ├─ store/             # game state machine + selectors
-│  ├─ platform/          # adapters: storage, haptics, input (Tauri vs web)
+│  ├─ store/             # game state machine, progress, settings, save format, selectors
+│  ├─ platform/          # adapters: storage, haptics (+ pure feedbackFor)
 │  ├─ ui/
-│  │  ├─ board/
-│  │  ├─ hud/
-│  │  ├─ screens/
-│  │  └─ common/
-│  ├─ levels/            # authored/generated level packs (JSON)
-│  └─ app/               # routing, providers, theme
-└─ tools/                # offline level generation / verification scripts
+│  │  ├─ board/          # Board, Cell, hold gesture, geometry, palette
+│  │  ├─ hud/            # TopBar, Timer, Hearts
+│  │  ├─ screens/        # GameScreen, GameLayout, ActionBar, dialogs, Finale, hooks
+│  │  └─ Dialog.tsx      # shared modal primitive
+│  ├─ levels/            # campaign.ts (ordered LEVELS) + pack-*.json
+│  └─ app/               # boot, autosave, campaign flow, index.css (theme tokens)
+├─ e2e/                  # Playwright specs
+└─ tools/                # offline level scripts (seed-pack.ts today; generate-levels.ts in M5)
 ```
+
+Engine modules marked planned in §4 (`generator`, `techniques`, `difficulty`, `seed`) do not exist yet; `hints.ts` is a stub (see `docs/APP_DESIGN.md` §4.4).
 
 ## 4. Engine (`src/engine`) — pure, no side effects
 
@@ -62,11 +65,11 @@ Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
 | `types.ts` | `Level { id, size, regions: number[][], solution: number[] }` (`solution[r]` is the column of the face in row r), `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → list of `{ reason, cells }` conflicts (`region`/`row`/`col`/`adjacent`); `isSolved(board, level)` → true iff the board holds exactly the solution's N faces; `judgeTap(level, cell)` (flat row-major `cell`; `RangeError` if out of range) → `correct`/`wrong` (the heart-cost rule below) |
 | `solver.ts` | Constraint-propagation solver; `solve(level)` and `countSolutions(level, limit=2)` share one backtracker over a `Level` (ignores `level.solution`); `countSolutions` is the uniqueness check |
-| `hints.ts` | `nextHint(board, level)` → `{ cell, technique, explanation }`; runs the same ladder from `techniques.ts` and reports the simplest applicable technique |
-| `generator.ts` | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
-| `techniques.ts` | The ordered technique ladder; each technique is a pure function `(board, level) → Deduction[]` (forced faces and eliminated cells). Shared by the hint system and difficulty rating |
-| `difficulty.ts` | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
-| `seed.ts` | Seeded PRNG so daily puzzles are deterministic across devices |
+| `hints.ts` | Target: `nextHint(board, level)` → `{ cell, technique, explanation }`, running the ladder from `techniques.ts` and reporting the simplest applicable technique. **Today (M4-04) a stub** returning only the cell index: the solution cell of the first row without a face |
+| `generator.ts` *(M5)* | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
+| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(board, level) → Deduction[]` (forced faces and eliminated cells). Shared by the hint system and difficulty rating |
+| `difficulty.ts` *(M5)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
+| `seed.ts` *(M5)* | Seeded PRNG so daily puzzles are deterministic across devices |
 
 Design notes:
 - **Wrong tap = deviation from the unique solution.** Placing a face on a cell that is not in `level.solution` costs a heart. The wrong face is not placed; the cell is auto-marked ✕ instead, so the player is never stuck in a dead-end board and a mistake is never silently carried forward. Rule conflicts (`findConflicts`, faces only; marks never conflict) are still used for optional highlighting, but cost nothing by themselves. Because correctness depends on the stored solution, the generator must guarantee uniqueness (`countSolutions == 1`) and the loader should verify `solution` against `rules.ts` in dev/test builds.
@@ -91,54 +94,49 @@ Rules of the system:
 
 ## 5. State management (`src/store`)
 
-Milestone 2 low-level design (store, board UI, HUD, tests): `docs/BOARD_DESIGN.md`.
+Milestone 2 low-level design (store, board UI, HUD, tests): `docs/BOARD_DESIGN.md`. Milestone 4 additions (clock, undo/redo, hints, progress, settings): `docs/APP_DESIGN.md`.
 
-A single game store modelled as an explicit state machine:
+A single game store modelled as an explicit state machine, with pure transitions in `game.ts` and a thin Zustand binding in `gameStore.ts`:
 
 ```
 idle → playing ⇄ paused → won | lost
 ```
 
-State: `level`, `board`, `hearts`, `history[]` (for undo/redo), `elapsedMs`, `hintsUsed`, `conflicts` (derived), `status`.
+State (when not idle): `level`, `board`, `wrong` (cells the player got wrong, locked), `hearts`, `hintsUsed`, `elapsedMs`, `history[]` / `future[]` (undo/redo stacks of ✕ toggles), `status`. `conflicts` is derived (`selectors.ts`), not stored.
 
-Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (press-and-hold or hold `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`, `redo`, `useHint`, `pause/resume`, `restart`, `reset`.
+Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (press-and-hold or hold `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`/`redo` (notes only), `hint` (a correct face in the first open row for one heart; refused on the last heart), `tick` (clock, driven by `useClock`), `pause`/`resume`, `restart`.
 
-Secondary stores: `progressStore` (completed levels, best times, stars), `settingsStore` (theme, sound, haptics, color-blind palette, input mode), `dailyStore` (*proposed*).
+Secondary stores: `progressStore` (`next`, `bestMs`) and `settingsStore` (`haptics`, `seenRules`). Theme, sound, color-blind palette and a `dailyStore` are not built (milestone 6 or later; stars and the daily puzzle are dropped from the app design).
 
-## 6. Persistence (`src/platform/storage`)
+## 6. Persistence (`src/platform/storage.ts`)
 
-Interface `Storage { get, set }` with two adapters: `TauriStore` (tauri-plugin-store, JSON file in app data dir) and `LocalStorage` (web/dev/tests). Autosave the in-progress board on every move so the app can be killed on mobile without loss. Until the first MVP release the saved schema is unversioned and may change freely (no migrations; stale saves can simply be discarded). Add schema versioning and migrations before that release ships.
+Interface `Storage { get, set, remove, flush }` with three adapters: `TauriStorage` (`@tauri-apps/plugin-store`, one JSON file `doku.json` in the app data dir), `LocalStorageStorage` (web/dev/Playwright, keys prefixed `doku:`) and `MemoryStorage` (tests, and the fallback if `localStorage` is unusable). Keys: `settings`, `progress`, `save`. The in-progress game is autosaved (debounced 250 ms, and flushed immediately on `visibilitychange → hidden` and `pagehide`) so the app can be killed on mobile without loss, and restores `paused`. Until the first MVP release the saved schema is unversioned and may change freely (no migrations; loaders validate and discard what does not fit). Add schema versioning and migrations before that release ships. Details: `docs/APP_DESIGN.md` §5.
 
 ## 7. UI component tree
 
 ```
-<App>
- ├─ <ThemeProvider> <SettingsProvider> <PlatformProvider>
- └─ <Router>
-     ├─ <HomeScreen>
-     │    ├─ <PlayButton/>  <DailyCard/>*  <ContinueCard/>
-     ├─ <LevelSelectScreen>
-     │    └─ <LevelGrid> → <LevelTile status stars/>
-     ├─ <GameScreen>
-     │    ├─ <GameLayout>  slots: header / board / controls (M3; container queries, below)
-     │    │    ├─ header   → <TopBar>  <BackButton/> <LevelTitle/> <Timer/> <Hearts/> <MenuButton/>
-     │    │    ├─ board    → <Board>
-     │    │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | <ConflictHighlight/>
-     │    │    └─ controls → <ActionBar>  <UndoButton/> <RedoButton/> <HintButton/>  (rendered only when provided; absent until M4)
-     │    ├─ <PauseOverlay/>
-     │    ├─ <HintToast/>
-     │    └─ <ResultModal>  (win: time/stars/next · lose: retry)
-     ├─ <HowToPlayScreen>   (interactive mini-board tutorial)
-     └─ <SettingsScreen>
+<App>                           finished && idle ? <Finale/> : <GameScreen/>   (no router)
+ ├─ <GameScreen>
+ │   ├─ <GameLayout>  slots: header / board / controls (container queries, below)
+ │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/> · <Hearts/> · Pause button
+ │   │    ├─ board    → <Board>
+ │   │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | conflict ring
+ │   │    └─ controls → <ActionBar>  Undo · Redo · Hint
+ │   ├─ <PauseDialog>   Resume · Restart level · Rules · Settings
+ │   ├─ <RulesDialog/>  <SettingsDialog/>
+ │   └─ <ResultModal>   (win: time/best/hints → Next level or Finish · lose: Retry)
+ └─ <Finale>            (all levels done: total of best times · Start over)
 ```
+
+There is no home screen, level select, daily card, how-to-play screen or router. A single `<Dialog>` primitive backs the pause, rules, settings and result dialogs. The interactive tutorial is milestone 6.
 
 ### Component notes
 
 - **`<Board>`**: owns layout only. CSS grid whose `--cell` is derived from the board area's own container size (`cqw`/`cqh`, capped at 4.5rem), not the viewport, so it resizes on desktop and fits phones in both orientations (`docs/BOARD_DESIGN.md` §4.2, `docs/MOBILE_DESIGN.md` §4). Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
 - **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
-- **`<HintButton>`**: calls `engine.nextHint`, highlights the cell and region and shows the technique text in `<HintToast>`. Costs a star or time penalty *(proposed)*.
-- **`<ResultModal>`**: purely driven by `status`.
+- **Hint button** (in `<ActionBar>`): commits the stub hint's face (the first open row's solution cell) and costs one heart; disabled on the last heart. The highlight-and-explain `<HintToast>` with technique text arrives with the technique ladder in milestone 5.
+- **`<ResultModal>`**: driven by `status`; a win shows time, best and hints used.
 - **Theming**: region palette is a token set with a color-blind-safe variant, plus a pattern/number overlay option, since regions are distinguished by color alone otherwise.
 
 ## 8. Platform adapter layer (`src/platform`)
@@ -147,23 +145,24 @@ Hides differences so UI code stays platform-agnostic:
 
 | Adapter | Desktop | Mobile (phase 2) |
 |---|---|---|
-| `storage` | tauri-plugin-store | same |
-| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; right-click = mark; click-drag to paint marks; keyboard on the focused cell: `x` = toggle ✕, hold `Space` = place face (milestone 2); arrows to move and `z` to undo (milestone 4) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
+| `storage` | `TauriStorage` (tauri-plugin-store) | same |
+| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; keyboard: arrows/Home/End move focus, `x` = toggle ✕, hold `Space` = place face, `z` undo, `Shift+Z` or `Ctrl+Y` redo, `h` hint, `Esc` pause. No right-click or click-drag marking (dropped from the design) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
 | `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
-| `audio` | WebAudio | same (respect silent switch) |
-| `window` | min size, remembered size | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
+| `audio` *(M6, not built)* | WebAudio | same (respect silent switch) |
+| `window` | default 800x600, min size 420x560, remembered size/position (`tauri-plugin-window-state`, desktop only) | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
 
 Responsive layout (landed, M3-01): `GameLayout` is a single layout driven by container queries on `main`. Tall (default) stacks header, board, controls; at container aspect ratio >= 1.2 and width >= 36rem the header and controls move to a side column next to the board. Landscape phones and desktop windows share the wide template; there is no separate desktop path.
 
 ## 9. Rust shell (`src-tauri`)
 
-Intentionally small for v1: plugins (store, fs), window config, capabilities file. Today the shell registers the opener plugin and the mobile-only haptics plugin (`capabilities/default.json`, `capabilities/mobile.json`); the scaffold's `greet` command is gone. Only add custom `#[tauri::command]`s when a native need appears.
+Intentionally small: plugins, window config, capability files. The shell registers the opener and store plugins everywhere (`capabilities/default.json`: `core:default`, `opener:default`, `store:default`), the mobile-only haptics plugin (`capabilities/mobile.json`) and the desktop-only window-state plugin (`capabilities/desktop.json`, `window-state:default`); there is no `fs` plugin and the scaffold's `greet` command is gone. Only add custom `#[tauri::command]`s when a native need appears.
 
 Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml` (mobile targets only) registered behind `#[cfg(mobile)]`; `capabilities/mobile.json` granting the impact and notification feedback permissions on android/iOS; committed `src-tauri/gen/apple` (#63, landed) and `gen/android` (#64, pending) with build outputs in `src-tauri/.gitignore`; `greet` removed. The JS side (`@tauri-apps/plugin-haptics`) is already installed and loaded lazily by the adapter.
 
 ## 10. Content pipeline
 
-- `tools/generate-levels.ts` runs the engine generator offline, verifies uniqueness, assigns difficulty, writes `src/levels/pack-*.json`.
+- Today: `src/levels/pack-1.json` holds 8 seed levels (sizes 7 to 11; only one 11x11), produced by the throwaway `tools/seed-pack.ts` (`bun tools/seed-pack.ts [size:count ...]`, naive rejection sampling, prints Level JSON to append by hand). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
+- Milestone 5: `tools/generate-levels.ts` runs the engine generator offline, verifies uniqueness, assigns difficulty, writes `src/levels/pack-*.json`, and replaces the seed script.
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 
 ## 11. Testing
@@ -171,15 +170,15 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 - **Engine**: unit and property tests (generated levels have exactly one solution; hint always leads to a legal move; solver agrees with `rules`).
 - **Engine immutability**: engine functions never mutate their inputs (tested with frozen inputs), so undo/redo can use plain board snapshots.
 - **Store**: state-machine transition tests.
-- **UI**: component tests for Cell/Board, Playwright for a full level playthrough.
-- Mobile: manual device pass per milestone.
+- **UI**: jsdom component tests (React Testing Library), Playwright e2e (desktop Chromium plus mobile Chromium and WebKit projects) for playthrough, resume, campaign, keyboard, layout.
+- **Manual** (not automatable): device passes per milestone. The M4 items still outstanding (window-state, Tauri store file, iOS kill-and-relaunch) are listed in `docs/APP_DESIGN.md` §9.
 
 ## 12. Milestones
 
-1. **Engine + tests** (rules, solver, a few fixture levels for tests: unique 7x7 and 11x11, multi-solution, no-solution; see `docs/ENGINE_DESIGN.md` §11).
-2. **Playable desktop board** (Board/Cell, store, hearts, win/lose).
-3. **Mobile**: touch input, responsive layout, safe areas, haptics, iOS then Android builds.
-4. **Full app** (play through a fixed series of levels with no level select; persistence, undo/redo, hints, settings, keyboard; low-level design in `docs/APP_DESIGN.md`).
+1. **Engine + tests** (done) (rules, solver, a few fixture levels for tests: unique 7x7 and 11x11, multi-solution, no-solution; see `docs/ENGINE_DESIGN.md` §11).
+2. **Playable desktop board** (Board/Cell, store, hearts, win/lose) (done).
+3. **Mobile**: touch input, responsive layout, safe areas, haptics, iOS then Android builds (done for iOS; Android #64 pending).
+4. **Full app** (done: play through a fixed series of levels with no level select; persistence, undo/redo, hints, settings, keyboard, desktop window; low-level design in `docs/APP_DESIGN.md`; manual desktop/iOS persistence and window-state checks outstanding).
 5. **Generator + level packs + difficulty tiers.**
 6. **Polish**: sound, animations, daily puzzle, accessibility pass.
 
@@ -198,6 +197,12 @@ Decided:
 10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose), never for the free ✕.
 11. **Commit `src-tauri/gen`**, ignoring build outputs (`gen/apple` committed in #63; `gen/android` pending #64).
 12. **iOS first, then Android** (decided; iOS builds on the simulator, #63; Android pending, #64).
+13. **No level select, home screen, daily puzzle or stars** in the app: levels play in a fixed order and the app opens on the current one. Progress is one integer plus best times (`next`, `bestMs`).
+14. **Undo/redo covers ✕ notes only**; faces and wrong taps are locked, so hearts are never refunded.
+15. **Hearts, wrong cells and elapsed time are persisted** and a restored game comes back paused. Saves are unversioned and validated or discarded (pre-MVP).
+16. **A hint costs one heart** and is refused on the last one; until milestone 5 it is a stub (first open row's solution cell).
+17. **No right-click or drag-to-paint marks**: click and hold are the only pointer gestures.
+18. **One screen and one shared `<Dialog>`** for pause, rules, settings and results; the store is pure and time is injected by `useClock`.
 
 Still open:
-1. **Which size/tier combinations to ship:** decide after seeing what the generator can produce reliably.
+1. **Which size/tier combinations to ship:** decide after seeing what the generator can produce reliably. (The naive seed script could not find a unique 11x11 in 60 s, a first data point.)

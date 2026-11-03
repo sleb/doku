@@ -1,18 +1,38 @@
-import { render, screen } from "@testing-library/react";
-import { beforeEach, expect, test, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, expect, test } from "vitest";
 import App from "./App";
-import { demoLevel, demoLevel11 } from "./levels/demoLevel";
-import { idleState } from "./store/game";
+import { boot } from "./app/boot";
+import { recordWins, startCurrent } from "./app/campaign";
+import { LEVELS } from "./levels/campaign";
+import { MemoryStorage } from "./platform/storage";
+import {
+  idleState,
+  type Started,
+  startLevel,
+  tick,
+  toggleMark,
+} from "./store/game";
 import { gameStore } from "./store/gameStore";
+import { toSaved } from "./store/persist";
+import { defaultProgress, progressStore } from "./store/progress";
+import { defaultSettings, settingsStore } from "./store/settings";
 import { holdCell } from "./test/hold";
 import { REGION_BG } from "./ui/board/palette";
 
-beforeEach(() => gameStore.setState(idleState, false));
+beforeEach(() => {
+  gameStore.setState(idleState, false);
+  settingsStore.setState({ ...defaultSettings, seenRules: true });
+  progressStore.setState(defaultProgress);
+  startCurrent();
+});
 
-test("renders the demo level board with its id in the top bar", () => {
+const demoLevel = LEVELS[0];
+
+test("renders the first level board with its position in the top bar", () => {
   render(<App />);
   expect(
-    screen.getByRole("heading", { name: demoLevel.id }),
+    screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("grid", { name: "Puzzle board" }),
@@ -61,17 +81,85 @@ test("renders the top bar", () => {
   expect(screen.getByTestId("top-bar")).toBeInTheDocument();
 });
 
-test("?level=demo-11 selects the 11x11 demo level (read once at load)", async () => {
-  window.history.pushState({}, "", "/?level=demo-11");
-  try {
-    vi.resetModules();
-    const { default: FreshApp } = await import("./App");
-    render(<FreshApp />);
-    expect(
-      screen.getByRole("heading", { name: demoLevel11.id }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole("button")).toHaveLength(121);
-  } finally {
-    window.history.pushState({}, "", "/");
+test("shows the Finale when the campaign is finished", () => {
+  progressStore.setState({ next: LEVELS.length, bestMs: {} });
+  startCurrent();
+  render(<App />);
+  expect(screen.getByRole("heading", { name: "You finished" })).toBeTruthy();
+  expect(screen.queryByTestId("top-bar")).toBeNull();
+});
+
+function solveCurrent() {
+  const level = gameStore.getState().level;
+  if (!level) throw new Error("no level");
+  for (let r = 0; r < level.size; r++) {
+    holdCell(
+      screen.getByRole("button", {
+        name: new RegExp(`^Row ${r + 1}, column ${level.solution[r] + 1},`),
+      }),
+    );
   }
+}
+
+test("winning the last level shows the result modal, not the Finale", () => {
+  const stop = recordWins();
+  progressStore.setState({ next: LEVELS.length - 1, bestMs: {} });
+  startCurrent();
+  render(<App />);
+  solveCurrent();
+  stop();
+  expect(
+    screen.getByRole("dialog", { name: "You solved it" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Finish" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "You finished" })).toBeNull();
+});
+
+test("Finish leads to the Finale, whose Start over returns to level 1", async () => {
+  const stop = recordWins();
+  progressStore.setState({ next: LEVELS.length - 1, bestMs: {} });
+  startCurrent();
+  render(<App />);
+  solveCurrent();
+  await userEvent.click(screen.getByRole("button", { name: "Finish" }));
+  expect(screen.getByRole("heading", { name: "You finished" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Start over" }));
+  stop();
+  expect(
+    screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
+  ).toBeInTheDocument();
+  expect(Object.keys(progressStore.getState().bestMs).length).toBeGreaterThan(
+    0,
+  );
+});
+
+test("a restored save opens paused; Resume continues the same game", async () => {
+  const storage = new MemoryStorage();
+  await storage.set("settings", { haptics: true, seenRules: true });
+  const played = tick(toggleMark(startLevel(demoLevel), 4), 0) as Started;
+  await storage.set("save", toSaved({ ...played, elapsedMs: 42000 }));
+  await boot(storage);
+  render(<App />);
+  expect(gameStore.getState().status).toBe("paused");
+  await userEvent.click(screen.getByRole("button", { name: "Resume" }));
+  expect(gameStore.getState().status).toBe("playing");
+  expect(gameStore.getState().board?.[4]).toBe(1);
+  expect(gameStore.getState()).toMatchObject({ elapsedMs: 42000 });
+});
+
+test("hiding the app pauses and the saved elapsed time lands", async () => {
+  const storage = new MemoryStorage();
+  await storage.set("settings", { haptics: true, seenRules: true });
+  await boot(storage);
+  render(<App />);
+  act(() => gameStore.getState().tick(6000));
+  act(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(gameStore.getState().status).toBe("paused");
+  expect(await storage.get("save")).toMatchObject({ elapsedMs: 6000 });
 });

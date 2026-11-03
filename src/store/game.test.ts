@@ -3,13 +3,19 @@ import { Cell, isSolved, type Level } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import {
   type GameState,
+  hint,
   idleState,
   isLocked,
   MAX_HEARTS,
+  pause,
   placeFace,
+  redo,
   restart,
+  resume,
   startLevel,
+  tick,
   toggleMark,
+  undo,
 } from "./game";
 
 describe("startLevel", () => {
@@ -23,6 +29,7 @@ describe("startLevel", () => {
     expect(state.board.every((c) => c === Cell.Empty)).toBe(true);
     expect(state.level).toBe(uniqueLevel7);
     expect(state.wrong.size).toBe(0);
+    expect(state.hintsUsed).toBe(0);
   });
 });
 
@@ -298,5 +305,392 @@ describe("isLocked", () => {
     expect(isLocked(board, wrong, 1)).toBe(false);
     expect(isLocked(board, wrong, 2)).toBe(true);
     expect(isLocked(board, wrong, 3)).toBe(true);
+  });
+});
+
+describe("clock and pause", () => {
+  type Started = Exclude<GameState, { status: "idle" }>;
+  const begin = (): Started => {
+    const s = startLevel(uniqueLevel7);
+    if (s.status === "idle") throw new Error("unreachable");
+    return s;
+  };
+  const elapsed = (s: GameState) => (s.status === "idle" ? -1 : s.elapsedMs);
+
+  it("startLevel and restart reset elapsedMs to 0", () => {
+    expect(begin().elapsedMs).toBe(0);
+    const ticked = tick(begin(), 5000);
+    expect(elapsed(restart(ticked))).toBe(0);
+  });
+
+  it("tick adds dt while playing", () => {
+    expect(elapsed(tick(tick(begin(), 400), 600))).toBe(1000);
+  });
+
+  it("tick ignores negative, NaN and infinite dt", () => {
+    const s = begin();
+    for (const dt of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(tick(s, dt)).toBe(s);
+    }
+  });
+
+  it("tick is a no-op unless playing", () => {
+    const s = begin();
+    for (const status of ["paused", "won", "lost"] as const) {
+      const state = { ...s, status };
+      expect(tick(state, 100)).toBe(state);
+    }
+    expect(tick(idleState, 100)).toBe(idleState);
+  });
+
+  it("pause and resume switch playing and paused", () => {
+    const p = pause(begin());
+    expect(p.status).toBe("paused");
+    expect(resume(p).status).toBe("playing");
+  });
+
+  it("pause and resume are no-ops in other states", () => {
+    const s = begin();
+    expect(resume(s)).toBe(s);
+    for (const status of ["won", "lost"] as const) {
+      const state = { ...s, status };
+      expect(pause(state)).toBe(state);
+      expect(resume(state)).toBe(state);
+    }
+    const p = pause(s);
+    expect(pause(p)).toBe(p);
+    expect(pause(idleState)).toBe(idleState);
+    expect(resume(idleState)).toBe(idleState);
+  });
+
+  it("toggleMark and placeFace are no-ops while paused", () => {
+    const p = pause(begin());
+    expect(toggleMark(p, 0)).toBe(p);
+    expect(placeFace(p, 0)).toBe(p);
+  });
+
+  it("restart while paused plays again from 0", () => {
+    const p = pause(tick(begin(), 3000));
+    const r = restart(p);
+    expect(r.status).toBe("playing");
+    expect(elapsed(r)).toBe(0);
+  });
+
+  it("winning and losing freeze elapsed", () => {
+    const sol = uniqueLevel7.solution.map((c, r) => r * uniqueLevel7.size + c);
+    let s: GameState = tick(begin(), 1234);
+    for (const c of sol) s = placeFace(s, c);
+    expect(s.status).toBe("won");
+    expect(tick(s, 500)).toBe(s);
+    expect(elapsed(s)).toBe(1234);
+  });
+
+  it("does not mutate the previous state", () => {
+    const s = Object.freeze(begin());
+    expect(tick(s, 10)).not.toBe(s);
+    expect(pause(s)).not.toBe(s);
+    expect(s.elapsedMs).toBe(0);
+    expect(s.status).toBe("playing");
+  });
+});
+
+describe("undo and redo", () => {
+  type Started = Exclude<GameState, { status: "idle" }>;
+  const live = (s: GameState): Started => {
+    if (s.status === "idle") throw new Error("unreachable");
+    return s;
+  };
+  const begin = (): Started => live(startLevel(uniqueLevel7));
+  const size2 = uniqueLevel7.size ** 2;
+  const sol = uniqueLevel7.solution.map((c, r) => r * uniqueLevel7.size + c);
+  const bad = Array.from({ length: size2 }, (_, i) => i).filter(
+    (i) => !sol.includes(i),
+  );
+
+  it("startLevel and restart give empty stacks", () => {
+    expect(begin().history).toEqual([]);
+    expect(begin().future).toEqual([]);
+    const r = live(restart(toggleMark(begin(), 0)));
+    expect(r.history).toEqual([]);
+    expect(r.future).toEqual([]);
+  });
+
+  it("toggling an editable cell pushes it and clears redo", () => {
+    const s1 = live(toggleMark(begin(), 4));
+    expect(s1.history).toEqual([4]);
+    expect(s1.future).toEqual([]);
+    const s2 = live(toggleMark(s1, 4));
+    expect(s2.history).toEqual([4, 4]);
+  });
+
+  it("toggling a locked cell or when not playing pushes nothing (regression)", () => {
+    const withFace = live(placeFace(begin(), sol[0]));
+    const withWrong = live(placeFace(begin(), bad[0]));
+    expect(toggleMark(withFace, sol[0])).toBe(withFace);
+    expect(toggleMark(withWrong, bad[0])).toBe(withWrong);
+    const p = pause(begin());
+    expect(toggleMark(p, 0)).toBe(p);
+    for (const status of ["won", "lost"] as const) {
+      const done = { ...begin(), status };
+      expect(toggleMark(done, 0)).toBe(done);
+    }
+  });
+
+  it("a locked toggle leaves redo alone", () => {
+    let s: GameState = placeFace(begin(), sol[0]);
+    s = undo(toggleMark(s, 5));
+    expect(live(s).future).toEqual([5]);
+    expect(live(toggleMark(s, sol[0])).future).toEqual([5]);
+  });
+
+  it("undo flips the cell back and moves it to redo", () => {
+    const s1 = live(toggleMark(begin(), 4));
+    const u = live(undo(s1));
+    expect(u.board[4]).toBe(Cell.Empty);
+    expect(u.history).toEqual([]);
+    expect(u.future).toEqual([4]);
+    expect(u.hearts).toBe(s1.hearts);
+    expect(u.wrong).toBe(s1.wrong);
+    expect(u.elapsedMs).toBe(s1.elapsedMs);
+  });
+
+  it("redo reapplies and redo(undo(s)) equals s", () => {
+    let s: GameState = begin();
+    for (const c of [1, 2, 1, 6]) s = toggleMark(s, c);
+    s = tick(s, 700);
+    expect(redo(undo(s))).toEqual(s);
+    const r = live(redo(undo(s)));
+    expect(r.board[6]).toBe(Cell.Mark);
+    expect(r.future).toEqual([]);
+    expect(r.history).toEqual([1, 2, 1, 6]);
+  });
+
+  it("undoes a removed note by restoring it", () => {
+    const s = live(toggleMark(toggleMark(begin(), 3), 3));
+    expect(s.board[3]).toBe(Cell.Empty);
+    expect(live(undo(s)).board[3]).toBe(Cell.Mark);
+  });
+
+  it("are same-reference no-ops on empty stacks and when not playing", () => {
+    const s = begin();
+    expect(undo(s)).toBe(s);
+    expect(redo(s)).toBe(s);
+    expect(undo(idleState)).toBe(idleState);
+    expect(redo(idleState)).toBe(idleState);
+    const withHistory = live(toggleMark(begin(), 0));
+    const undone = live(undo(withHistory));
+    for (const status of ["paused", "won", "lost"] as const) {
+      const a = { ...withHistory, status };
+      expect(undo(a)).toBe(a);
+      const b = { ...undone, status };
+      expect(redo(b)).toBe(b);
+    }
+  });
+
+  it("a new toggle after undo empties redo", () => {
+    let s: GameState = toggleMark(toggleMark(begin(), 1), 2);
+    s = undo(s);
+    expect(live(s).future).toEqual([2]);
+    s = toggleMark(s, 5);
+    expect(live(s).future).toEqual([]);
+    expect(live(s).history).toEqual([1, 5]);
+  });
+
+  it("placeFace prunes the cell from both stacks, correct face", () => {
+    let s: GameState = begin();
+    for (const c of [sol[0], 7, sol[0], 8]) s = toggleMark(s, c);
+    s = undo(undo(s)); // history [sol0, 7], future [8, sol0]
+    const placed = live(placeFace(s, sol[0]));
+    expect(placed.history).toEqual([7]);
+    expect(placed.future).toEqual([8]);
+    expect(placed.hearts).toBe(MAX_HEARTS);
+  });
+
+  it("placeFace prunes on a wrong tap and does not refund the heart", () => {
+    let s: GameState = begin();
+    for (const c of [bad[0], bad[1], bad[0]]) s = toggleMark(s, c);
+    s = undo(s);
+    const placed = live(placeFace(s, bad[0]));
+    expect(placed.history).toEqual([bad[1]]);
+    expect(placed.future).toEqual([]);
+    expect(placed.hearts).toBe(MAX_HEARTS - 1);
+    const u = live(undo(placed));
+    expect(u.hearts).toBe(MAX_HEARTS - 1);
+    expect(u.board[bad[0]]).toBe(Cell.Mark);
+    expect(u.wrong.has(bad[0])).toBe(true);
+  });
+
+  it("placeFace on a cell with no history keeps stacks", () => {
+    const s = live(toggleMark(begin(), 7));
+    expect(live(placeFace(s, sol[0])).history).toEqual([7]);
+  });
+
+  it("does not mutate frozen input", () => {
+    const base = live(toggleMark(toggleMark(begin(), 1), 2));
+    const undone = live(undo(base));
+    for (const s of [base, undone]) {
+      Object.freeze(s);
+      Object.freeze(s.history);
+      Object.freeze(s.future);
+    }
+    expect(undo(base)).not.toBe(base);
+    expect(redo(undone)).not.toBe(undone);
+    expect(base.history).toEqual([1, 2]);
+    expect(undone.future).toEqual([2]);
+  });
+
+  function rng(seed: number) {
+    let a = seed;
+    return () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  for (const seed of [1, 2, 3, 4, 5]) {
+    it(`keeps stack cells editable and hearts monotone (seed ${seed})`, () => {
+      const rand = rng(seed);
+      let s: GameState = begin();
+      for (let i = 0; i < 400; i++) {
+        const prevHearts = live(s).hearts;
+        const r = rand();
+        const cell = Math.floor(rand() * size2);
+        if (r < 0.4) s = toggleMark(s, cell);
+        else if (r < 0.55) s = placeFace(s, cell);
+        else if (r < 0.65) s = hint(s);
+        else if (r < 0.82) s = undo(s);
+        else s = redo(s);
+        const t = live(s);
+        expect(t.hearts).toBeLessThanOrEqual(prevHearts);
+        for (const c of [...t.history, ...t.future]) {
+          expect(isLocked(t.board, t.wrong, c)).toBe(false);
+        }
+        if (t.status !== "playing") s = restart(s);
+      }
+    });
+  }
+
+  for (const seed of [1, 2, 3, 4, 5]) {
+    it(`a hint never takes the last heart (seed ${seed})`, () => {
+      const rand = rng(seed);
+      let s: GameState = begin();
+      for (let i = 0; i < 400; i++) {
+        const r = rand();
+        const cell = Math.floor(rand() * size2);
+        if (r < 0.6) s = hint(s);
+        else if (r < 0.8) s = placeFace(s, cell);
+        else s = toggleMark(s, cell);
+        const t = live(s);
+        if (t.status !== "lost") expect(t.hearts).toBeGreaterThanOrEqual(1);
+        if (t.status !== "playing") s = restart(s);
+      }
+    });
+  }
+});
+
+describe("hint", () => {
+  type Started = Exclude<GameState, { status: "idle" }>;
+  const live = (s: GameState): Started => {
+    if (s.status === "idle") throw new Error("unreachable");
+    return s;
+  };
+  const begin = (): Started => live(startLevel(uniqueLevel7));
+  const { size, solution } = uniqueLevel7;
+  const sol = solution.map((c, r) => r * size + c);
+  const wrongCell = Array.from({ length: size * size }, (_, i) => i).find(
+    (i) => !sol.includes(i),
+  ) as number;
+
+  it("places a correct face in the first open row and costs a heart", () => {
+    const s0 = begin();
+    const s1 = live(hint(s0));
+    expect(s1.board[sol[0]]).toBe(Cell.Face);
+    expect(s1.hearts).toBe(MAX_HEARTS - 1);
+    expect(s1.hintsUsed).toBe(1);
+    expect(s1.wrong.has(sol[0])).toBe(false);
+    expect(s1.status).toBe("playing");
+    const s2 = live(hint(s1));
+    expect(s2.board[sol[1]]).toBe(Cell.Face);
+    expect(s2.hintsUsed).toBe(2);
+  });
+
+  it("leaves time and other cells alone", () => {
+    const s0 = live(tick(toggleMark(begin(), 3), 900));
+    const s1 = live(hint(s0));
+    expect(s1.elapsedMs).toBe(900);
+    const changed = Array.from(s1.board).flatMap((v, i) =>
+      v === s0.board[i] ? [] : [i],
+    );
+    expect(changed).toEqual([sol[0]]);
+  });
+
+  it("can win with one row left and spare hearts", () => {
+    let s: GameState = begin();
+    for (const c of sol.slice(0, -1)) s = placeFace(s, c);
+    const w = live(hint(s));
+    expect(w.status).toBe("won");
+    expect(w.hearts).toBe(MAX_HEARTS - 1);
+    expect(isSolved(w.board, w.level)).toBe(true);
+  });
+
+  it("is refused on the last heart, never losing", () => {
+    let s: GameState = begin();
+    for (let i = 0; i < MAX_HEARTS - 1; i++) s = hint(s);
+    expect(live(s).hearts).toBe(1);
+    expect(hint(s)).toBe(s);
+    expect(live(s).status).toBe("playing");
+  });
+
+  it("is a same-reference no-op unless playing", () => {
+    const base = begin();
+    expect(hint(idleState)).toBe(idleState);
+    for (const status of ["paused", "won", "lost"] as const) {
+      const a = { ...base, status };
+      expect(hint(a)).toBe(a);
+    }
+  });
+
+  it("is a no-op when no row is open", () => {
+    const full = live(
+      sol.reduce<GameState>((s, c) => placeFace(s, c), begin()),
+    );
+    const s = { ...full, status: "playing" as const };
+    expect(hint(s)).toBe(s);
+  });
+
+  it("overwrites the player's note and prunes it from both stacks", () => {
+    let s: GameState = begin();
+    for (const c of [sol[0], 7, sol[0], 8]) s = toggleMark(s, c);
+    s = undo(undo(s)); // history [sol0, 7], future [8, sol0]
+    const h = live(hint(s));
+    expect(h.board[sol[0]]).toBe(Cell.Face);
+    expect(h.history).toEqual([7]);
+    expect(h.future).toEqual([8]);
+  });
+
+  it("keeps wrong marks and their stacks intact", () => {
+    const s0 = live(placeFace(begin(), wrongCell));
+    const h = live(hint(s0));
+    expect(h.wrong).toEqual(s0.wrong);
+    expect(h.hearts).toBe(MAX_HEARTS - 2);
+  });
+
+  it("does not mutate the previous state", () => {
+    const s0 = begin();
+    const snap = s0.board.slice();
+    Object.freeze(s0);
+    Object.freeze(s0.wrong);
+    Object.freeze(s0.history);
+    const h = live(hint(s0));
+    expect(s0.board).toEqual(snap);
+    expect(h.board).not.toBe(s0.board);
+  });
+
+  it("restart resets hintsUsed", () => {
+    const r = live(restart(hint(begin())));
+    expect(r.hintsUsed).toBe(0);
+    expect(r.hearts).toBe(MAX_HEARTS);
   });
 });

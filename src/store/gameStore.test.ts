@@ -33,6 +33,21 @@ describe("createGameStore", () => {
     expect(s.board.every((c) => c === Cell.Empty)).toBe(true);
   });
 
+  it("hint places a face for a heart and restart resets hintsUsed", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().hint();
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[uniqueLevel7.solution[0]]).toBe(Cell.Face);
+    expect(s.hearts).toBe(MAX_HEARTS - 1);
+    expect(s.hintsUsed).toBe(1);
+    store.getState().restart();
+    const r = store.getState();
+    if (r.status === "idle") throw new Error("unreachable");
+    expect(r.hintsUsed).toBe(0);
+  });
+
   it("keeps stores independent", () => {
     const a = createGameStore();
     const b = createGameStore();
@@ -225,5 +240,44 @@ describe("createGameStore", () => {
     expect(() => store.getState().placeFace(uniqueLevel7.size ** 2)).toThrow(
       RangeError,
     );
+  });
+
+  it("tick, pause and resume drive the clock state", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().tick(250);
+    store.getState().pause();
+    expect(store.getState().status).toBe("paused");
+    store.getState().tick(250);
+    store.getState().resume();
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.status).toBe("playing");
+    expect(s.elapsedMs).toBe(250);
+  });
+});
+
+describe("undo and redo actions", () => {
+  it("undo and redo drive the state functions", () => {
+    const store = createGameStore();
+    store.getState().startLevel(uniqueLevel7);
+    store.getState().toggleMark(4);
+    store.getState().undo();
+    let s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[4]).toBe(Cell.Empty);
+    expect(s.future).toEqual([4]);
+    store.getState().redo();
+    s = store.getState();
+    if (s.status === "idle") throw new Error("unreachable");
+    expect(s.board[4]).toBe(Cell.Mark);
+    expect(s.history).toEqual([4]);
+  });
+
+  it("are no-ops while idle", () => {
+    const store = createGameStore();
+    store.getState().undo();
+    store.getState().redo();
+    expect(store.getState().status).toBe("idle");
   });
 });

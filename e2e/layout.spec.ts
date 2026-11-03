@@ -67,8 +67,8 @@ test("360x300 stays stacked: board fits and cells are not smaller than stacked g
   const header = await box(page, "header");
   // Stacked: header above the board, not in a side column that squeezes it.
   expect(header.y + header.height).toBeLessThanOrEqual(board.y + 0.5);
-  // The wide layout would give ~16px cells here; stacked gives ~20px.
-  expect(await firstCellWidth(page)).toBeGreaterThanOrEqual(19);
+  // The wide layout would give ~16px cells here; stacked gives ~14px with the 44px Pause button and the 44px controls row (Undo/Redo).
+  expect(await firstCellWidth(page)).toBeGreaterThanOrEqual(13.5);
 });
 
 test("stacked layout keeps >= 8px between header and board", async ({
@@ -89,14 +89,18 @@ test("wide layout keeps >= 8px between board and side column", async ({
   expect(header.x - (board.x + board.width)).toBeGreaterThanOrEqual(8);
 });
 
-test("stacked layout reserves no phantom row below the board", async ({
+test("stacked layout puts the controls directly under the board with no phantom row", async ({
   page,
 }) => {
   await open(page, 400, 800);
   const board = await box(page, "[data-area=board]");
+  const controls = await box(page, "[data-area=controls]");
   const layout = await box(page, ".game-layout");
-  expect(await page.locator("[data-area=controls]").count()).toBe(0);
-  expect(layout.y + layout.height - (board.y + board.height)).toBeLessThan(0.5);
+  expect(controls.y).toBeGreaterThanOrEqual(board.y + board.height);
+  expect(controls.y - (board.y + board.height)).toBeLessThan(12);
+  expect(
+    layout.y + layout.height - (controls.y + controls.height),
+  ).toBeLessThan(0.5);
 });
 
 for (const [w, h] of [
@@ -117,8 +121,14 @@ for (const [w, h] of [
     const left = board.x;
     const right = w - (header.x + header.width);
     expect(Math.abs(left - right)).toBeLessThanOrEqual(2);
-    // Header column is vertically centered against the board.
+    // The side column (header + controls) is vertically centered against the board.
+    const area = await box(page, "[data-area=header]");
+    const controls = await box(page, "[data-area=controls]");
     const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
-    expect(Math.abs(mid(header) - mid(board))).toBeLessThanOrEqual(2);
+    const column = {
+      y: area.y,
+      height: controls.y + controls.height - area.y,
+    };
+    expect(Math.abs(mid(column) - mid(board))).toBeLessThanOrEqual(2);
   });
 }

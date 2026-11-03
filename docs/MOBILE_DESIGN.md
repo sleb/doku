@@ -2,13 +2,13 @@
 
 Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
-**Status:** M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending. The iOS simulator pass is verified; a physical-device pass is not recorded. M3-07 (#65) is synced for iOS; the Android items are pending #64 and get recorded in the final pass, which closes #65.
+**Status:** milestone 4 has since landed on top of this (persistence, controls, settings; see `docs/APP_DESIGN.md`). M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending. The iOS simulator pass is verified; a physical-device pass is not recorded. M3-07 (#65) is synced for iOS; the Android items are pending #64 and get recorded in the final pass, which closes #65.
 
 ## 1. Goals and non-goals
 
 **Goal:** the existing single-level game is installable and comfortably playable on a phone: iOS first, then Android (decision 6). "Playable" means an 11×11 board fits any phone viewport with no scrolling, the existing hold-to-place gesture (250 ms delay, 500 ms glow) works unchanged under a finger, and a win or a wrong tap is felt as well as seen.
 
-**Non-goals (still later milestones):** level select, persistence and resume-after-kill (M4: backgrounding keeps the WebView alive and a dead app loses one level, which is acceptable until saves exist), undo/redo, hints, timer, settings screen, sound, store release (signing, TestFlight, Play Console), color-blind palette. Wrong-tap animation stays M6.
+**Non-goals (still later milestones):** level select, persistence and resume-after-kill, undo/redo, hints, timer and the settings screen (all delivered later in M4: autosave and resume-paused, see `docs/APP_DESIGN.md` §5), sound, store release (signing, TestFlight, Play Console), color-blind palette. Wrong-tap animation stays M6.
 
 ## 2. What exists and what mobile breaks
 
@@ -43,9 +43,9 @@ One mechanism, container queries, serves phones in both orientations and the des
 ```
 <main class="h-dvh safe-padding [container-type:size]">  app root, fills the viewport, pads by the insets
   <GameLayout>                                    CSS grid, two templates (below)
-    header   → <TopBar>  (level id, hearts)
+    header   → <TopBar>  ("Level n of N", timer, hearts, Pause)
     board    → <Board>   (centered in its cell, sized to fit)
-    controls → (rendered only when provided; absent in M3, undo, redo, hint arrive in M4)
+    controls → <ActionBar> Undo · Redo · Hint (M4; the slot is rendered only when provided)
 ```
 
 - **Tall** (default; container aspect ratio below 1.2): one column, rows `auto 1fr auto` = header, board, controls.
@@ -125,7 +125,7 @@ export function feedbackFor(prev: GameState, next: GameState): HapticKind | null
 
 ### 6.3 Settings
 
-The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the settings screen. Until then haptics are always on; the OS-level system haptics switch (iOS Settings, Android touch feedback) still governs. This is recorded in §10 as a deliberate gap, not an oversight.
+**Resolved in M4-06:** the `haptics` on/off setting lives in `settingsStore` (default on, persisted) and is a switch in the Settings dialog. The `GameScreen` subscription plays a buzz only when `settings.haptics` is true, read at event time; the OS-level system haptics switch still governs on top of it. Whether the toggle takes effect on a real device has not been verified.
 
 ## 7. Rust shell and native projects
 
@@ -155,7 +155,7 @@ The `haptics` on/off setting (`DESIGN.md` §5, `settingsStore`) is M4 with the s
 - Touch playthrough: tap a cell → ✕; hold each solution cell with dispatched `PointerEvent`s (`pointerType: "touch"`, via `locator.evaluate`, portable across engines; `page.touchscreen` only taps, so plain taps use `locator.tap()`). Synthetic events skip implicit capture and click synthesis, so the helper sends `pointerup` then `click` explicitly to exercise `swallowClick` → "You solved it"; drag off mid-hold cancels; a tap never shows the glow. Assert state, never fixed timings beyond `HOLD_TOTAL_MS` plus margin, as in `playthrough.spec.ts`.
 - Not testable in CI and therefore manual: safe-area insets, haptics, the callout/selection suppression on a real long-press, and Android edge-to-edge.
 
-**Manual device pass** (a checklist in the PR, per `DESIGN.md` §11), run on one Android device or emulator and one iOS simulator/device: 11×11 and 7×7 fit; no scroll, bounce or zoom; insets clear the notch and home indicator; tap and hold both work; a long-press shows no callout or selection; each haptic kind is distinguishable; rotate and the layout switches; kill and relaunch yields a fresh level (expected until M4).
+**Manual device pass** (a checklist in the PR, per `DESIGN.md` §11), run on one Android device or emulator and one iOS simulator/device: 11×11 and 7×7 fit; no scroll, bounce or zoom; insets clear the notch and home indicator; tap and hold both work; a long-press shows no callout or selection; each haptic kind is distinguishable; rotate and the layout switches; kill and relaunch resumes the saved game paused (M4; the iOS kill-and-relaunch check is outstanding, `docs/APP_DESIGN.md` §9).
 
 ## 9. Issue breakdown
 
@@ -179,7 +179,7 @@ Titled `M3-NN` in a new "mobile" GitHub milestone, each with Gherkin acceptance 
 
    Original question: If 26 px cells prove too small on the smallest phones, options are a tap-and-hold magnifier or pinch-zoom of the board. Deferred; free ✕ taps and the deliberate hold are the mitigation for now.
 4. **Minimum OS versions.** Container-query units need WKWebView/Safari 16 and WebView 105. Default: set the iOS deployment target to 16 and Android `minSdk` as Tauri defaults, and accept that older devices are unsupported rather than adding a `vw`/`dvh` fallback. Confirmed: `ios init` generates a 16.0 target. Android `minSdk` is pending #64.
-5. **Haptics setting.** Always on until M4's settings screen (§6.3); say if a mute switch is needed sooner.
+5. **Resolved (M4-06):** the haptics setting exists (§6.3).
 
 ## 11. Doc sync checklist (M3-07)
 

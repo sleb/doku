@@ -1,72 +1,154 @@
-import { useEffect, useMemo } from "react";
-import type { Level } from "../../engine";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { nextLevel, startOver } from "../../app/campaign";
+import { LEVELS, levelIndex } from "../../levels/campaign";
 import { feedbackFor } from "../../platform/feedback";
 import { haptics } from "../../platform/haptics";
-import { idleState } from "../../store/game";
 import { gameStore, useGameStore } from "../../store/gameStore";
+import { useProgressStore } from "../../store/progress";
 import { conflictCells } from "../../store/selectors";
+import { settingsStore, useSettingsStore } from "../../store/settings";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
+import { ActionBar } from "./ActionBar";
 import { GameLayout } from "./GameLayout";
+import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
+import { RulesDialog } from "./RulesDialog";
+import { SettingsDialog } from "./SettingsDialog";
+import { useAutoPause } from "./useAutoPause";
+import { useClock } from "./useClock";
+import { useShortcuts } from "./useShortcuts";
 
-export function GameScreen({ level }: { level: Level }) {
-  const storeLevel = useGameStore((s) => s.level);
+export function GameScreen() {
+  const level = useGameStore((s) => s.level);
   const status = useGameStore((s) => s.status);
   const board = useGameStore((s) => s.board);
   const hearts = useGameStore((s) => s.hearts);
   const wrong = useGameStore((s) => ("wrong" in s ? s.wrong : undefined));
-  const { startLevel, restart, toggleMark, placeFace } = gameStore.getState();
+  // Only the win result shows the time, and the clock is stopped by then; any
+  // other status reads 0 so clock ticks do not re-render the screen and board.
+  const elapsedMs = useGameStore((s) => (s.status === "won" ? s.elapsedMs : 0));
+  const hintsUsed = useGameStore((s) => ("hintsUsed" in s ? s.hintsUsed : 0));
+  const bestMs = useProgressStore((s) =>
+    level ? s.bestMs[level.id] : undefined,
+  );
+  const { restart, toggleMark, placeFace, pause, resume } =
+    gameStore.getState();
+  const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
+  const holdOwner = useRef<number | null>(null);
+  const boardArea = useRef<HTMLDivElement>(null);
+  const wasPaused = useRef(false);
+  useClock();
+  useAutoPause();
+  useShortcuts({ holdOwner });
 
-  // The store is a singleton: reset it on unmount so a later mount never sees
-  // this one's board or result.
-  useEffect(() => {
-    startLevel(level);
-    return () => gameStore.setState(idleState, false);
-  }, [startLevel, level]);
-
-  // Buzz for the outcome of each store change. Subscribed once per mount. The
-  // unmount reset to idle stays silent even mid-game: idle has full hearts and
-  // no board, so there is no heart drop, no face increase, and status is idle.
+  // Buzz for the outcome of each store change. Subscribed once per mount.
   useEffect(
     () =>
       gameStore.subscribe((next, prev) => {
         const kind = feedbackFor(prev, next);
-        if (kind) void haptics.play(kind);
+        if (kind && settingsStore.getState().haptics) void haptics.play(kind);
       }),
     [],
   );
 
-  // Still needed: on the first render of a new `level` prop the store holds the
-  // previous level's board until the effect above has run.
-  const fresh = storeLevel === level;
+  // Back from a pause, hand focus to the board's active cell if it fell to the
+  // page (the board is hidden while paused, so it cannot hold focus then).
+  useEffect(() => {
+    if (status === "paused") wasPaused.current = true;
+    else if (status === "playing" && wasPaused.current) {
+      wasPaused.current = false;
+      const a = document.activeElement;
+      if (!a || a === document.body)
+        boardArea.current
+          ?.querySelector<HTMLElement>("[tabindex='0']")
+          ?.focus();
+    }
+  }, [status]);
+
+  // First launch: Rules open over a paused game. Derived from `seenRules`
+  // (set on dismissal), so StrictMode's double effects cannot reopen it.
+  const seenRules = useSettingsStore((s) => s.seenRules);
+  const firstRules = !seenRules && status !== "idle";
+  useEffect(() => {
+    if (firstRules) gameStore.getState().pause();
+  }, [firstRules]);
   const conflicts = useMemo(
-    () => (board && fresh ? conflictCells(board, level) : new Set<number>()),
-    [board, level, fresh],
+    () => (board && level ? conflictCells(board, level) : new Set<number>()),
+    [board, level],
   );
 
-  if (!fresh || status === "idle" || !board || !wrong) return null;
+  if (status === "idle" || !level || !board || !wrong) return null;
 
-  const finished = status !== "playing";
+  const levelNumber = levelIndex(level.id) + 1;
+  const paused = status === "paused";
+  const finished = status === "won" || status === "lost";
   return (
     <>
       <GameLayout
-        header={<TopBar level={level} hearts={hearts} />}
+        header={
+          <TopBar
+            level={level}
+            levelNumber={levelNumber}
+            levelCount={LEVELS.length}
+            hearts={hearts}
+            onPause={pause}
+          />
+        }
         board={
-          <div inert={finished}>
+          <div
+            ref={boardArea}
+            inert={finished || paused}
+            style={paused ? { visibility: "hidden" } : undefined}
+          >
             <Board
               level={level}
               board={board}
               wrong={wrong}
               conflicts={conflicts}
-              disabled={finished}
+              disabled={finished || paused}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}
+              holdOwner={holdOwner}
             />
           </div>
         }
+        controls={<ActionBar />}
       />
-      <ResultModal status={status} onRetry={restart} />
+      {(firstRules || sheet === "rules") && (
+        <RulesDialog
+          onClose={() => {
+            settingsStore.getState().set({ seenRules: true });
+            setSheet(null);
+            if (firstRules) resume();
+          }}
+        />
+      )}
+      {sheet === "settings" && (
+        <SettingsDialog
+          onClose={() => setSheet(null)}
+          onStartOver={() => {
+            startOver();
+            pause();
+          }}
+        />
+      )}
+      <PauseDialog
+        open={paused && !firstRules && sheet === null}
+        onResume={resume}
+        onRestart={restart}
+        onRules={() => setSheet("rules")}
+        onSettings={() => setSheet("settings")}
+      />
+      <ResultModal
+        status={status}
+        elapsedMs={elapsedMs}
+        bestMs={bestMs}
+        hintsUsed={hintsUsed}
+        isLast={levelNumber === LEVELS.length}
+        onRetry={restart}
+        onNext={nextLevel}
+      />
     </>
   );
 }

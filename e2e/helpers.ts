@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { levelById } from "./levels";
 
 /** Hold Space on a focused cell until it commits (state assertion), then release. */
 export async function press(page: Page, target: Locator): Promise<void> {
@@ -110,4 +111,55 @@ export async function touchHold(target: Locator): Promise<void> {
   await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
   await touchUp(target);
   await touchClick(target);
+}
+
+/** Seed a raw `localStorage["doku:"+key]` string before the app boots. */
+export async function seedRaw(
+  page: Page,
+  key: string,
+  raw: string,
+): Promise<void> {
+  await page.addInitScript(
+    ([k, v]) => {
+      // Once per tab: a later reload must keep the app's live state.
+      const mark = `seeded:${k}`;
+      if (sessionStorage.getItem(mark)) return;
+      sessionStorage.setItem(mark, "1");
+      localStorage.setItem(`doku:${k}`, v);
+    },
+    [key, raw],
+  );
+}
+
+/** Seed `localStorage["doku:"+key]` with JSON before the app boots. */
+export const seed = (page: Page, key: string, value: unknown) =>
+  seedRaw(page, key, JSON.stringify(value));
+
+/** The raw `doku:<key>` string, or null. */
+export const storageValue = (page: Page, key: string): Promise<string | null> =>
+  page.evaluate((k) => localStorage.getItem(`doku:${k}`), key);
+
+/** Parsed `doku:<key>`, or null. */
+export async function storageJson<T = unknown>(
+  page: Page,
+  key: string,
+): Promise<T | null> {
+  const raw = await storageValue(page, key);
+  return raw === null ? null : (JSON.parse(raw) as T);
+}
+
+/**
+ * Hold-place the solution face in every row, optionally skipping rows (so the
+ * level is left unsolved). Keyboard hold, which is portable across projects.
+ */
+export async function solve(
+  page: Page,
+  levelId: string,
+  { skip = [] }: { skip?: number[] } = {},
+): Promise<void> {
+  const { size, solution } = levelById(levelId);
+  for (let r = 0; r < size; r++) {
+    if (skip.includes(r)) continue;
+    await press(page, cell(page, r, solution[r]));
+  }
 }

@@ -14,18 +14,26 @@ const wrongCell = Array.from({ length: n * n }, (_, i) => i).find(
 
 function Harness({ store }: { store: StoreApi<GameStore> }) {
   const hearts = useStore(store, (s) => s.hearts);
-  return <TopBar level={level} hearts={hearts} />;
+  return (
+    <TopBar
+      level={level}
+      levelNumber={1}
+      levelCount={8}
+      hearts={hearts}
+      onPause={() => {}}
+    />
+  );
 }
 
 test("a wrong face costs a heart in the top bar", () => {
   const store = createGameStore();
   act(() => store.getState().startLevel(level));
   render(<Harness store={store} />);
-  expect(screen.getByText(level.id)).toBeTruthy();
+  expect(screen.getByText("Level 1 of 8")).toBeTruthy();
   expect(screen.getByRole("img", { name: "3 of 3 hearts" })).toBeTruthy();
 
   act(() => store.getState().placeFace(wrongCell));
 
-  expect(screen.getByText(level.id)).toBeTruthy();
+  expect(screen.getByText("Level 1 of 8")).toBeTruthy();
   expect(screen.getByRole("img", { name: "2 of 3 hearts" })).toBeTruthy();
 });

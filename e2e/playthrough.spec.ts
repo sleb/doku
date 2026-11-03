@@ -1,14 +1,9 @@
-import { readFileSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "../src/ui/board/hold";
 import { cell, hearts, press } from "./helpers";
+import { levelById } from "./levels";
 
-type Demo = { size: number; solution: number[] };
-
-const demo = JSON.parse(
-  readFileSync(new URL("../src/levels/demo-7.json", import.meta.url), "utf8"),
-) as Demo;
-const { size, solution } = demo;
+const { size, solution } = levelById("demo-7");
 
 // Margin for "nothing happened" waits, past the hold threshold.
 const SETTLE_MS = HOLD_TOTAL_MS + 300;
@@ -51,8 +46,12 @@ test("win playthrough", async ({ page }) => {
   ).toBeVisible();
   await expect(hearts(page, 3)).toBeVisible();
 
-  await retry(page).click();
-  await expectFreshBoard(page);
+  await page.getByRole("button", { name: "Next level" }).click();
+  await expect(dialog(page)).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: /^Level 2 of / }),
+  ).toBeVisible();
+  await expect(hearts(page, 3)).toBeVisible();
 });
 
 test("lose playthrough", async ({ page }) => {
@@ -85,12 +84,12 @@ test("the board is inert behind the result dialog", async ({ page }) => {
   ).toBeVisible();
   await expect(retry(page)).toBeFocused();
 
-  // Cells are also `disabled`, which would mask a missing `inert`. Strip
-  // `disabled` from every cell so only `inert` can keep the board unreachable.
+  // Cells are also `aria-disabled`, which would mask a missing `inert`. Strip
+  // it from every cell so only `inert` can keep the board unreachable.
   const other = cell(page, 5, solution[5]);
   await page.evaluate(() => {
     for (const b of document.querySelectorAll('button[aria-label^="Row "]')) {
-      b.removeAttribute("disabled");
+      b.removeAttribute("aria-disabled");
     }
   });
   await expect(other).toBeEnabled();

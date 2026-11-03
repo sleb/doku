@@ -1,4 +1,5 @@
 export { emptyBoard } from "./board";
+export { nextHint } from "./hints";
 export type { Conflict, ConflictReason, TapJudgement } from "./rules";
 export { findConflicts, isSolved, judgeTap } from "./rules";
 export { countSolutions, solve } from "./solver";

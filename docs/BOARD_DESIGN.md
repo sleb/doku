@@ -1,14 +1,16 @@
-# Doku Board — Low-Level Design (draft 1)
+# Doku Board — Low-Level Design
 
 Companion to `DESIGN.md` §5 and §7 for milestone 2 ("Playable desktop board", tracking issue #38). This describes the store, the board UI, the HUD and the result modal: types, state transitions, component contracts, and tests. The engine (`docs/ENGINE_DESIGN.md`) is done and is consumed as-is; nothing here changes it.
 
+**Status:** implemented in milestone 2 and extended by milestones 3 and 4. Sections describe the board as designed for M2; where M3/M4 changed the shape (`GameStatus` and `GameState` fields, `GameScreen` without props, `ResultModal`, `TopBar`, roving tabindex, `aria-disabled`) the text carries the current form and points to `docs/APP_DESIGN.md`. The M2 test plan (§7) and its landed notes are kept as history.
+
 ## 1. Goal and scope
 
-A player opens the desktop app, plays one level from start to finish, loses hearts on wrong taps, and reaches a win or lose result with a retry button.
+A player opens the desktop app, plays one level from start to finish, loses hearts on wrong taps, and reaches a win or lose result with a retry button. (From M4 the result also offers "Next level"; see `docs/APP_DESIGN.md`.)
 
 In scope: Zustand game store, `<Board>`/`<Cell>`, `<Hearts>`/top bar, `<ResultModal>`, click input plus two cell keys (`x`, `Space`), Tailwind setup, test harness (RTL + Playwright).
 
-Out of scope (milestone 3+): level select, persistence, undo/redo, hints, timer/stars, settings, arrow-key navigation, right-click and drag-to-paint marks, color-blind palette, wrong-tap animation. (Mobile landed in milestone 3; arrow-key navigation is milestone 4.)
+Out of scope for M2: level select, persistence, undo/redo, hints, timer/stars, settings, right-click and drag-to-paint marks, color-blind palette, wrong-tap animation. Since then: mobile landed in M3; persistence, undo/redo, hints, timer, settings and arrow-key navigation landed in M4; level select and stars were dropped from the design; right-click and drag-to-paint marks are dropped until someone asks; the color-blind palette and wrong-tap animation remain milestone 6.
 
 Constraints carried from the design docs:
 
@@ -24,7 +26,8 @@ src/
 │  ├─ game.ts            # pure state + transitions (no Zustand, no React)
 │  ├─ game.test.ts
 │  ├─ gameStore.ts       # thin Zustand binding: createGameStore(), useGameStore
-│  └─ selectors.ts       # derived data (conflict cells)
+│  ├─ selectors.ts       # derived data (conflict cells)
+│  └─ progress.ts, settings.ts, persist.ts   # added in M4 (docs/APP_DESIGN.md)
 ├─ ui/
 │  ├─ board/
 │  │  ├─ geometry.ts     # pure: per-cell region id + border flags from a Level
@@ -34,22 +37,26 @@ src/
 │  │  └─ palette.ts      # region class lookup + region names
 │  ├─ hud/
 │  │  ├─ Hearts.tsx
+│  │  ├─ Timer.tsx       # M4
 │  │  └─ TopBar.tsx
+│  ├─ Dialog.tsx         # M4: shared modal primitive
 │  └─ screens/
-│     ├─ GameScreen.tsx
-│     └─ ResultModal.tsx
+│     ├─ GameScreen.tsx, GameLayout.tsx, ActionBar.tsx
+│     ├─ ResultModal.tsx, PauseDialog.tsx, RulesDialog.tsx, SettingsDialog.tsx, Finale.tsx
+│     └─ useClock.ts, useAutoPause.ts, useShortcuts.ts
 ├─ levels/
-│  └─ demo-7.json        # the one level M2 ships (copy of the 7×7 fixture)
+│  ├─ pack-1.json        # bundled level pack (M4-01); holds demo-7, the former M2 demo level
+│  └─ campaign.ts        # LEVELS / levelIndex
 ├─ app/
 │  └─ index.css          # @import "tailwindcss"; @theme tokens (region palette)
-└─ App.tsx               # renders <GameScreen level={demoLevel}/>
+└─ App.tsx               # <GameScreen/> or <Finale/> (M4; was <GameScreen level={LEVELS[0]}/> in M2)
 e2e/
 └─ playthrough.spec.ts
 ```
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
-`src/levels/demo-7.json` is a copy of `uniqueLevel7`, loaded with `loadLevel`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright spec reads it with `node:fs` and `JSON.parse` (path from `import.meta.url`); it does not import the JSON module.
+`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json` (8 levels in all), loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`, `levelCount`, `levelIds`); they do not import the JSON module. That helper reads every `src/levels/pack-*.json` and orders them with the app's own `orderPackKeys` (`src/levels/packOrder.ts`, numeric suffix, so `pack-2` precedes `pack-10`), so e2e sees the same campaign as `campaign.ts`.
 
 ## 3. Store (`src/store`)
 
@@ -58,20 +65,24 @@ The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Ru
 ```ts
 export const MAX_HEARTS = 3;
 
-export type GameStatus = "idle" | "playing" | "won" | "lost";
+export type GameStatus = "idle" | "playing" | "paused" | "won" | "lost";
 
 export type GameState =
   | { status: "idle"; level: null; board: null; hearts: number }
   | {
-      status: "playing" | "won" | "lost";
+      status: "playing" | "paused" | "won" | "lost";
       level: Level;
       board: Board;      // never mutated; each change allocates a new array
       wrong: ReadonlySet<number>; // cells the player got wrong; each holds Cell.Mark in `board`, locked
       hearts: number;    // 0..MAX_HEARTS
+      hintsUsed: number; // M4
+      elapsedMs: number; // M4
+      history: readonly number[]; // M4: undo stack of ✕ toggles
+      future: readonly number[];  // M4: redo stack
     };
 ```
 
-A discriminated union means components can narrow on `level !== null` once, instead of null-checking `board` everywhere. `board` holds two kinds of `Cell.Mark`: the player's own ✕ notes (free, editable) and wrong-face penalties; `wrong` tells them apart, so the latter render red and stay locked. `conflicts` is not stored: it is derived (§3.4). `elapsedMs`, `history`, `hintsUsed` from `DESIGN.md` §5 arrive with their milestone-3 features.
+A discriminated union means components can narrow on `level !== null` once, instead of null-checking `board` everywhere. `board` holds two kinds of `Cell.Mark`: the player's own ✕ notes (free, editable) and wrong-face penalties; `wrong` tells them apart, so the latter render red and stay locked. `conflicts` is not stored: it is derived (§3.4). `elapsedMs`, `history`, `future`, `hintsUsed` and the `paused` status arrived in milestone 4 (`docs/APP_DESIGN.md` §4); the M2 transitions below are unchanged except that `toggleMark` and `placeFace` also maintain the undo stacks.
 
 ### 3.2 Pure transitions (`game.ts`)
 
@@ -82,6 +93,7 @@ export const idleState: GameState;
 export function startLevel(level: Level): GameState;   // playing, emptyBoard(level), MAX_HEARTS
 export function toggleMark(state: GameState, cell: number): GameState;  // flat row-major index
 export function placeFace(state: GameState, cell: number): GameState;
+// M4 adds tick, pause, resume, undo, redo and hint (docs/APP_DESIGN.md §4.2)
 ```
 
 `restart(state)` is `startLevel(state.level)` and is a no-op on `idle`.
@@ -127,6 +139,7 @@ export interface GameStore extends ... {
   toggleMark(cell: number): void;
   placeFace(cell: number): void;
   restart(): void;
+  // M4: tick, pause, resume, undo, redo, hint
 }
 export function createGameStore(): StoreApi<GameStore>;   // one per test
 export const gameStore: StoreApi<GameStore>;                          // app singleton (tests reset it)
@@ -153,7 +166,7 @@ Flattens `findConflicts(board, level)` into a set of cell indices. M2-10 changed
 
 **Landed in M2-07 (#46):** `geometry.ts`, `selectors.ts` (`conflictCells`), `icons.tsx`, `Cell.tsx`, `Board.tsx`. Input was added in M2-08. Conflicts show as a ring class plus `data-conflict="true"` and are not part of the label (the label vocabulary is `empty|marked|face|wrong`). `WRONG_COLOR` (`#7f1d1d`, in `palette.ts`) is the wrong-tap red, chosen by computing 3:1 against all 11 region colors (a brighter red fails on indigo). The grid role and ARIA props are spread from an object, and row/gridcell carry `biome-ignore` comments, to satisfy the a11y lints (native table elements do not fit a CSS grid).
 
-**Landed in M2-08 (#47):** `Board` now also takes `disabled` (status is not `playing`), `onToggleMark` and `onPlaceFace`; `CellView` takes `disabled` plus the two callbacks. `Board` derives each cell's `disabled` as `disabled || isLocked(board, wrong, index)`, where `isLocked` is the predicate exported from `store/game.ts` that `toggleMark`/`placeFace` also use and passes it as a primitive, passing the callbacks through untouched so `memo` holds (callbacks must be stable, e.g. taken from `store.getState()`). The player's own mark stays enabled. (Gesture handling in `CellView` was reworked in #55; see the paragraph below and §4.3.) A cell that becomes a face or wrong mark turns disabled while focused and loses focus, so a keyboard player must Tab back in; accepted for M2 (arrow navigation and focus handling are milestone 4). The `useGameStore` singleton landed in M2-10.
+**Landed in M2-08 (#47):** `Board` now also takes `disabled` (status is not `playing`), `onToggleMark` and `onPlaceFace`; `CellView` takes `disabled` plus the two callbacks. `Board` derives each cell's `disabled` as `disabled || isLocked(board, wrong, index)`, where `isLocked` is the predicate exported from `store/game.ts` that `toggleMark`/`placeFace` also use and passes it as a primitive, passing the callbacks through untouched so `memo` holds (callbacks must be stable, e.g. taken from `store.getState()`). The player's own mark stays enabled. (Gesture handling in `CellView` was reworked in #55; see the paragraph below and §4.3.) A cell that becomes a face or wrong mark turned disabled while focused and lost focus in M2; since M4-09 locked cells are `aria-disabled` rather than `disabled`, stay focusable and keep focus. The `useGameStore` singleton landed in M2-10.
 
 **Landed in #55:** the double-click gesture was replaced by press-and-hold (see §4.3 and §8.8). `CellView` now uses `useHold`; `onClick` always toggles (the `detail >= 2` rule and the Space-places-immediately behavior from M2-08 are gone); Space places a face only after a hold. Tests drive holds with fake timers and `fireEvent.pointer*` via the shared `src/test/hold.ts` helper.
 
@@ -184,16 +197,17 @@ interface BoardProps {
   board: Board;
   conflicts: ReadonlySet<number>;
   wrong: ReadonlySet<number>;
-  disabled: boolean;                 // status !== "playing"
+  disabled: boolean;                 // status !== "playing" (also true while paused)
   onToggleMark(cell: number): void; // stable identity
   onPlaceFace(cell: number): void;  // stable identity
+  holdOwner?: RefObject<number | null>;  // M4-09: GameScreen owns it so shortcuts can see a hold in progress
 }
 ```
 
 - `const geometry = useMemo(() => cellGeometry(level), [level])`.
 - Renders `role="grid"` with `aria-label="Puzzle board"`, `aria-rowcount`/`aria-colcount`, and N `role="row"` wrappers using `display: contents` so the CSS grid sees the cells directly. Each `role="gridcell"` contains one `<button>` (the focusable, labelled element).
 - Sizing: the board sizes from its own container, not the viewport. `GameLayout` (`src/ui/screens/GameLayout.tsx`) puts the board in a `container-type: size` area (`.game-board-area`, no padding of its own) inside a full-height `main` (`h-dvh`, also a size container) whose padding is the safe-area gutter (`--safe-*` tokens in `src/app/index.css`). Container sets `--n: {size}` and `--cell: min((100cqw - 8px) / var(--n), (100cqh - 8px) / var(--n), 4.5rem)` (8px = the frame `border-4` in `Board.tsx`; keep them in sync); `grid-template-columns: repeat(var(--n), var(--cell))`. Tall layouts stack header, board, controls; at container aspect >= 1.2 and width >= 36rem the header and controls move to a side column. An 11x11 board fits without scrolling at 320x568 (cells ~26 px).
-- Tab order: every button is tabbable in M2 (no roving tabindex). Enter/Space work natively. Real keyboard navigation is milestone 4.
+- Tab order (M4-09): roving tabindex. Only the active cell has `tabIndex` 0, so the board is one Tab stop; arrows, Home and End move focus (see `APP_DESIGN.md` §7.5).
 
 ### 4.3 `<Cell>`
 
@@ -223,7 +237,7 @@ export const CellView = memo(function CellView(props: CellProps) { ... });
 - Gesture mapping: a short click or tap toggles the player's ✕ (`onClick` always calls `onToggleMark(index)`; double-click simply toggles twice). Pressing and holding for `HOLD_DELAY_MS` (250) plus `HOLD_MS` (500) (`hold.ts`; `HOLD_TOTAL_MS` is the sum) calls `onPlaceFace(index)` once. The `useHold` hook (`useHold.ts`) owns the two chained timers (the delay, then the trace), the `holding` state, which turns on only after the delay so a plain click never shows the glow, and a `completed` flag; `pointerdown` (primary button, not disabled) starts it, and `pointerup`, `pointercancel`, `pointerleave` and `blur` cancel it. A completed pointer hold swallows its trailing click (the flag resets on the next `pointerdown`, on `pointerleave`, on any keydown, and when the click is swallowed, so a trailing click that never arrives cannot swallow a later Enter click; `start` returns early while a timer runs, so a second input source cannot disturb state). Touch pointers are implicitly captured, which would suppress `pointerleave`, so `pointerdown` releases capture (guarded for engines without the API) so dragging off cancels on touch too. Keyboard: `Space` keydown (no ctrl/meta/alt, not `repeat`) starts the same hold, keyup and blur cancel it, repeats and the Space keyup are `preventDefault`ed; `x` toggles immediately; Enter keeps its native click (toggle) and does not hold. Disabled cells get no hold, a hold is cancelled if the cell becomes disabled, and the timer is cleared on unmount.
 - Hold feedback: once the delay has passed and until commit, the button has `data-holding="true"` and contains a `pointer-events-none` SVG `<rect pathLength=1>` (`data-hold-glow`) whose stroke is traced once around the border by `@keyframes hold-trace` (`index.css`), with the duration set inline from `HOLD_MS` so timer and glow cannot drift. Under `prefers-reduced-motion` the rect is a full outline ramping opacity over `HOLD_MS` (`hold-ramp`); the timers are unchanged. The glow mounts only after the delay, so its CSS animation starts then and stays in sync with the timer. Cells are `touch-none select-none` and carry the `.cell` class (`index.css`), which sets `-webkit-touch-callout: none` and a transparent tap highlight (scoped to cells, not every button), with and `contextmenu` prevented, so mobile does not select text or open a callout. `user-select: none` is applied to every element in `index.css` (#63, PR #68), and `useNoDoubleTapLoupe` (used by `Board`) cancels the second touchstart of a quick double-tap and replays the tap as a click on release, since the iOS selection loupe cannot be stopped in CSS. While a hold is in progress `Board` tracks the held cell and other cells ignore taps and `x` until it ends (#63, PR #68), so a second finger or palm cannot toggle a mark mid-hold.
 - Label: `"Row {row+1}, column {col+1}, {regionName} region, {empty|marked|face|wrong}"` (matches `DESIGN.md` §7, which will be updated to say the label is on the button inside the gridcell).
-- `disabled` sets the button's `disabled` attribute. `Board` passes `disabled = status !== "playing" || isLocked(board, wrong, index)` (`isLocked` from `store/game.ts`, the same rule the actions use), so faces, wrong ✕s and the whole board behind the result modal are inert. The player's own ✕ stays enabled so it can be removed.
+- `disabled` (M4-09) sets `aria-disabled="true"` on the button, not the native attribute, so locked cells stay focusable; every handler (click, `x`, Enter, Space-hold) returns early when it is set. `Board` passes `disabled = status !== "playing" || isLocked(board, wrong, index)` (`isLocked` from `store/game.ts`, the same rule the actions use), so faces, wrong ✕s and the whole board behind the result modal ignore input. The player's own ✕ stays active so it can be removed.
 
 ### 4.4 Palette (`palette.ts`, `app/index.css`)
 
@@ -242,24 +256,24 @@ export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
 export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
 ```
 
-Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. The demo level is `src/levels/demo-7.json` (a copy of `uniqueLevel7`, id `demo-7`) exported as `demoLevel` from `src/levels/demoLevel.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
+Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. The demo level is `demo-7` (a copy of `uniqueLevel7`) in `src/levels/pack-1.json`, available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
 
 Hex values were chosen under two requirements: the 11 colors are pairwise distinguishable, and the face/mark glyph (dark stroke) reaches ≥ 3:1 contrast on every one. The color-blind variant and pattern overlay (`DESIGN.md` §7 Theming) are not part of milestone 3: the palette setting arrives with settings in milestone 4 and the accessibility pass is milestone 6 (`DESIGN.md` §12), but tokens plus a lookup keep that a one-file swap.
 
 ## 5. HUD, result, screen
 
 - **`<Hearts remaining max>`**: renders `max` heart icons, the first `remaining` filled. Container has `role="img"` and `aria-label="{remaining} of {max} hearts"`. Loss is a CSS transition on the icon's fill/scale (no JS animation).
-- **`<TopBar level hearts>`**: level id/title on the left, `<Hearts>` on the right. Back button, timer, menu arrive in M3.
+- **`<TopBar level levelNumber levelCount hearts onPause>`**: "Level n of N" (the level id is kept as `data-level-id`), `<Timer/>`, `<Hearts>` and a Pause button (M4; the M2 bar showed the level id and hearts only).
 - **Landed in M2-09 (#48):** `src/ui/hud/Hearts.tsx` (with a private `HeartIcon`) and `src/ui/hud/TopBar.tsx`. Each icon carries `data-filled="true|false"` (filled = `fill-current`, empty = `fill-transparent` stroke only and `scale-90`, with `transition-[scale,fill,stroke]` and `motion-reduce:transition-none`; Tailwind v4 compiles `scale-90` to the standalone `scale` property, not `transform`, and `fill-none` cannot interpolate, hence both choices) and is `aria-hidden`; only the container is exposed. `Hearts` is presentational and does not clamp. `TopBar` shows `level.id` because `Level` has no title field, and takes `max` from `MAX_HEARTS` in `store/game`. `TopBarPlay.test.tsx` covers "wrong face shows 2 hearts" with a harness over a real `createGameStore()`; `GameScreen` (M2-10) reuses `TopBar` unchanged. The transition is not verifiable in jsdom (the heart transition is deliberately not tested in the browser, see §8.7).
-- **`<ResultModal status onRetry>`**: renders nothing unless `status` is `won` or `lost`. `div role="dialog" aria-modal="true" aria-labelledby`, heading "You solved it" / "Out of hearts", one **Retry** button (autofocused) calling `restart`. Plain `div`, not `<dialog>`: jsdom does not implement `showModal`, and the board is already inert via `disabled`. Win has no "next" button until level select exists.
-- **`<GameScreen level>`**: on mount `startLevel(level)` in an effect (idempotent, so StrictMode's double-invoke is harmless); selects `status`, `board`, `hearts`; renders `TopBar`, `Board`, `ResultModal`. Renders nothing board-related while `idle`.
+- **`<ResultModal>`**: renders nothing unless `status` is `won` or `lost`. Heading "You solved it" / "Out of hearts". As of M4 it is built on the shared `<Dialog>` (`src/ui/Dialog.tsx`; a plain `div role="dialog" aria-modal`, not `<dialog>`, because jsdom does not implement `showModal`) and takes `elapsedMs`, `bestMs`, `hintsUsed`, `isLast`, `onRetry`, `onNext`: a win shows time, best and hints and one button, "Next level" ("Finish" on the last level); a loss shows "Retry". The M2 version had only a hand-rolled focus trap and one Retry button.
+- **`<GameScreen>`**: since M4 it takes no props and is a view of `gameStore` (`src/app/campaign.ts` starts levels); it selects `status`, `board`, `hearts` and more, and renders `TopBar`, `Board`, `ActionBar`, the dialogs and `ResultModal`. Renders nothing while `idle`. (M2: took a `level` prop and started it in a mount effect.)
 
-**Landed in M2-10 (#49):** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` is now just `<main><GameScreen level={demoLevel} /></main>`.
+**Landed in M2-10 (#49), as it was in M2:** `src/ui/screens/ResultModal.tsx`, `src/ui/screens/GameScreen.tsx`, and `App` was just `<main><GameScreen level={LEVELS[0]} /></main>`. The bullets below describe that M2 form; M4 replaced the start/reset effect, the `level` prop and the Tab-swallowing in `ResultModal`.
 
 - `ResultModal`: Retry is focused by a `useEffect` + ref when the dialog opens (not the `autoFocus` attribute, which Biome's `noAutofocus` flags). There is no Escape handler, since Retry is the only exit. A `Tab` keydown on Retry is `preventDefault`ed so focus cannot leave the dialog.
 - `GameScreen`: selects `status`, `board`, `hearts` and `wrong` (`"wrong" in s ? s.wrong : undefined`) with narrow selectors, and takes actions once from `gameStore.getState()` so cell callbacks stay stable. The start effect calls `startLevel(level)` and its cleanup resets the singleton to `idleState`, so a later mount never sees an earlier mount's board or result (StrictMode's mount/cleanup/mount ends playing). One guard remains: on the first render of a new `level` prop the store still holds the previous level's board, so `conflicts` (a `useMemo`) and the render both require `storeLevel === level`. The board sits in a wrapper with `inert` while status is not `playing`, in addition to `disabled`; jsdom only proves the attribute; the M2-11 e2e checks the behaviour in a real browser with `disabled` stripped (§7). It renders `null` while `idle` or while the store holds another level (the first render before the start effect).
 - The page `h1` is owned by `TopBar` (level id); the old "Doku" title was dropped.
-- After Retry, focus falls to `body` because the focused button unmounts; accepted for M2, like the locked-cell focus loss in M2-08 (restoring focus is milestone 4).
+- After Retry, focus falls to `body` because the focused button unmounts; accepted for M2, like the locked-cell focus loss in M2-08 (M4-09 restores focus after Resume only).
 - The Playwright playthrough landed in M2-11 (§7).
 
 ## 6. Dependencies and tooling
@@ -312,12 +326,12 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
 - `GameScreen` (real store): holding each solution cell shows the win dialog; three wrong holds show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; focusing a solution cell and holding `Space` places a face, `x` toggles a ✕; Retry returns to a fresh board with 3 hearts.
 
-**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7.json`, locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
+**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7` in `pack-1.json`, locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
 
 1. Win: focus each of the 7 solution cells and hold `Space` (plus a mouse hold on one cell to cover the mouse gesture) → "You solved it" → Retry → fresh board.
 2. Lose: focus three different non-solution cells and hold `Space` (one heart each) → "Out of hearts" → Retry.
 
-**Landed in M2-11 (#50):** `e2e/playthrough.spec.ts` has three tests. Win (double-click on the row-0 solution cell, Space on the other six) and lose (wrong cell per rows 0-2 at `(solution[r]+1) % size`, each with a red ✕ svg and the hearts label stepping 2, 1, 0) both end with Retry yielding `size*size` empty cells and `3 of 3 hearts`. The inert test removes `disabled` from every cell via `page.evaluate` (cells are otherwise disabled and would mask a missing `inert`), asserts the cell's wrapper has `inert === true`, then asserts that `focus()`, Tab and Shift+Tab leave focus on Retry. Verified by mutation: replacing `inert={finished}` with a plain `div` fails the property assertion and, with that assertion removed, fails the `toBeFocused` assertion on Retry. Not verified in e2e: that Space `keyup` is `preventDefault`ed to stop a synthesized click (an earlier e2e test for it passed with the guard deleted, so it was removed; since #55 `keyup` also cancels the hold, which is covered by "releasing Space early places nothing"). Hearts stay in the accessibility tree behind the modal, so the inert test locates them by role like the other tests. Cells are located by the prefix `^Row r, column c,` because the state suffix changes. The heart transition is not tested (§8.7).
+**Landed in M2-11 (#50):** `e2e/playthrough.spec.ts` has three tests. Win (double-click on the row-0 solution cell, Space on the other six) and lose (wrong cell per rows 0-2 at `(solution[r]+1) % size`, each with a red ✕ svg and the hearts label stepping 2, 1, 0) both end with Retry yielding `size*size` empty cells and `3 of 3 hearts`. The inert test removes `aria-disabled` (originally `disabled`) from every cell via `page.evaluate` (cells are otherwise disabled and would mask a missing `inert`), asserts the cell's wrapper has `inert === true`, then asserts that `focus()`, Tab and Shift+Tab leave focus on Retry. Verified by mutation: replacing `inert={finished}` with a plain `div` fails the property assertion and, with that assertion removed, fails the `toBeFocused` assertion on Retry. Not verified in e2e: that Space `keyup` is `preventDefault`ed to stop a synthesized click (an earlier e2e test for it passed with the guard deleted, so it was removed; since #55 `keyup` also cancels the hold, which is covered by "releasing Space early places nothing"). Hearts stay in the accessibility tree behind the modal, so the inert test locates them by role like the other tests. Cells are located by the prefix `^Row r, column c,` because the state suffix changes. The heart transition is not tested (§8.7).
 
 **Landed in #55:** `playthrough.spec.ts` places faces by holding (mouse down, assert the cell commits, mouse up; Space down/assert/up) and adds tests for a short click, double-click (toggles twice, places nothing), early mouse release, drag-off cancel, glow lifecycle and early Space release. They assert state, using fixed sleeps only to show that nothing happened (`HOLD_TOTAL_MS` plus margin). Verified by mutation: removing `onPointerLeave` fails the drag-off test. Removing the click-swallow is not caught by e2e, because a committed cell is `disabled` and never receives the trailing click; it is covered by the `Cell` unit test "a completed hold swallows its trailing click", which fails without it. Touch behaviour (capture release, callout, selection) is unverified off-device. The glow test ("the glow traces a visible border mid-hold") asserts no glow at 100 ms, then samples the rect's computed `stroke-dashoffset` at 30% and 60% of `HOLD_MS` after the delay (it must decrease), checks the stroke width, and counts near-black pixels in a band just inside the cell edge in a screenshot (also saved to `test-results/hold-glow.png`). Result in Chromium: a partial dark border is painted mid-hold and the offset advances. The suspicion that `vector-effect: non-scaling-stroke` breaks `pathLength` normalisation was not reproduced in Chromium (the test also passes with it restored), but it is removed anyway because behaviour there is engine-dependent; the stroke is now `stroke-width: 6` in viewBox units (about 3px on a 50px cell). WebKit is unverified.
 

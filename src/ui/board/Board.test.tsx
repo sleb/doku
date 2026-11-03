@@ -1,8 +1,11 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { Cell, emptyBoard } from "../../engine";
-import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
+import {
+  uniqueLevel7 as level,
+  multiSolutionLevel7,
+} from "../../engine/__fixtures__/levels";
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
@@ -163,17 +166,18 @@ describe("Board", () => {
       return h;
     };
 
-    test("empty and own-mark cells are enabled; face and wrong cells disabled", () => {
+    test("empty and own-mark cells are not aria-disabled; face and wrong cells aria-disabled", () => {
       renderMixed(false);
-      expect(at(0)).toBeEnabled();
-      expect(at(1)).toBeEnabled();
-      expect(at(2)).toBeDisabled();
-      expect(at(3)).toBeDisabled();
+      expect(at(0)).not.toHaveAttribute("aria-disabled");
+      expect(at(1)).not.toHaveAttribute("aria-disabled");
+      expect(at(2)).toHaveAttribute("aria-disabled", "true");
+      expect(at(3)).toHaveAttribute("aria-disabled", "true");
     });
 
-    test("a disabled board disables every cell", () => {
+    test("a disabled board aria-disables every cell", () => {
       renderMixed(true);
-      for (const b of screen.getAllByRole("button")) expect(b).toBeDisabled();
+      for (const b of screen.getAllByRole("button"))
+        expect(b).toHaveAttribute("aria-disabled", "true");
     });
 
     test("click and hold pass the flat index to the callbacks", async () => {
@@ -183,6 +187,190 @@ describe("Board", () => {
       expect(h.onPlaceFace).not.toHaveBeenCalled();
       holdCell(at(11));
       expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(11);
+    });
+  });
+
+  describe("roving tabindex", () => {
+    const renderBoard = () =>
+      render(
+        <Board
+          level={level}
+          board={emptyBoard(level)}
+          wrong={none}
+          conflicts={none}
+          disabled={false}
+          {...handlers()}
+        />,
+      );
+    const buttons = () => screen.getAllByRole("button");
+
+    test("only the first cell is tabbable at first", () => {
+      renderBoard();
+      const tabbable = buttons().filter((b) => b.tabIndex === 0);
+      expect(tabbable).toEqual([buttons()[0]]);
+      expect(buttons().filter((b) => b.tabIndex === -1)).toHaveLength(
+        n * n - 1,
+      );
+    });
+
+    test("focusing a cell makes it the tabbable one", () => {
+      renderBoard();
+      act(() => buttons()[7].focus());
+      const tabbable = buttons().filter((b) => b.tabIndex === 0);
+      expect(tabbable).toEqual([buttons()[7]]);
+    });
+
+    test("Tab lands on the active cell and a second Tab leaves the board", async () => {
+      renderBoard();
+      act(() => buttons()[7].focus());
+      act(() => buttons()[7].blur());
+      await userEvent.tab();
+      expect(document.activeElement).toBe(buttons()[7]);
+      await userEvent.tab();
+      expect(screen.getByRole("grid").contains(document.activeElement)).toBe(
+        false,
+      );
+    });
+
+    test("a new level resets the tabbable cell to the first", () => {
+      const props = {
+        board: emptyBoard(level),
+        wrong: none,
+        conflicts: none,
+        disabled: false,
+        ...handlers(),
+      };
+      const { rerender } = render(<Board level={level} {...props} />);
+      act(() => buttons()[7].focus());
+      rerender(<Board level={multiSolutionLevel7} {...props} />);
+      const tabbable = buttons().filter((b) => b.tabIndex === 0);
+      expect(tabbable).toEqual([buttons()[0]]);
+    });
+  });
+
+  describe("arrow-key movement", () => {
+    const renderBoard = (board = emptyBoard(level), wrong = none) =>
+      render(
+        <Board
+          level={level}
+          board={board}
+          wrong={wrong}
+          conflicts={none}
+          disabled={false}
+          {...handlers()}
+        />,
+      );
+    const buttons = () => screen.getAllByRole("button");
+    const focusAt = (i: number) => act(() => buttons()[i].focus());
+    const activeIndex = () =>
+      buttons().indexOf(document.activeElement as HTMLElement);
+
+    test("ArrowRight moves focus one cell right", async () => {
+      renderBoard();
+      focusAt(8);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(9);
+    });
+
+    test("ArrowLeft moves focus one cell left", async () => {
+      renderBoard();
+      focusAt(8);
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(activeIndex()).toBe(7);
+    });
+
+    test("ArrowDown moves focus one row down", async () => {
+      renderBoard();
+      focusAt(8);
+      await userEvent.keyboard("{ArrowDown}");
+      expect(activeIndex()).toBe(8 + n);
+    });
+
+    test("ArrowUp moves focus one row up", async () => {
+      renderBoard();
+      focusAt(20);
+      await userEvent.keyboard("{ArrowUp}");
+      expect(activeIndex()).toBe(20 - n);
+    });
+
+    test("ArrowRight stays on the last column", async () => {
+      renderBoard();
+      focusAt(n - 1);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(n - 1);
+    });
+
+    test("ArrowLeft stays on the first column", async () => {
+      renderBoard();
+      focusAt(n);
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(activeIndex()).toBe(n);
+    });
+
+    test("ArrowUp stays on the first row", async () => {
+      renderBoard();
+      focusAt(3);
+      await userEvent.keyboard("{ArrowUp}");
+      expect(activeIndex()).toBe(3);
+    });
+
+    test.each([
+      "ArrowRight",
+      "ArrowLeft",
+      "ArrowDown",
+      "ArrowUp",
+      "Home",
+      "End",
+    ])("%s is default-prevented", (key) => {
+      renderBoard();
+      focusAt(10);
+      expect(fireEvent.keyDown(buttons()[10], { key })).toBe(false);
+    });
+
+    test.each(["ctrlKey", "metaKey", "altKey", "shiftKey"])(
+      "ArrowRight with %s neither moves nor is prevented",
+      (mod) => {
+        renderBoard();
+        focusAt(10);
+        const notPrevented = fireEvent.keyDown(buttons()[10], {
+          key: "ArrowRight",
+          [mod]: true,
+        });
+        expect(notPrevented).toBe(true);
+        expect(activeIndex()).toBe(10);
+      },
+    );
+
+    test("ArrowDown stays on the last row", async () => {
+      renderBoard();
+      focusAt(n * n - 2);
+      await userEvent.keyboard("{ArrowDown}");
+      expect(activeIndex()).toBe(n * n - 2);
+    });
+
+    test("Home focuses the first cell of the row", async () => {
+      renderBoard();
+      focusAt(2 * n + 4);
+      await userEvent.keyboard("{Home}");
+      expect(activeIndex()).toBe(2 * n);
+    });
+
+    test("End focuses the last cell of the row", async () => {
+      renderBoard();
+      focusAt(2 * n + 4);
+      await userEvent.keyboard("{End}");
+      expect(activeIndex()).toBe(3 * n - 1);
+    });
+
+    test("arrows move onto and past a locked cell", async () => {
+      const board = emptyBoard(level) as Uint8Array;
+      board[2] = Cell.Face;
+      renderBoard(board);
+      focusAt(1);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(2);
+      await userEvent.keyboard("{ArrowRight}");
+      expect(activeIndex()).toBe(3);
     });
   });
 });
