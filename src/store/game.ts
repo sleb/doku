@@ -101,9 +101,12 @@ function prune(s: Started, cell: number) {
 export function toggleMark(state: GameState, cell: number): GameState {
   const s = editable(state, cell);
   if (!s) return state;
-  const board = s.board.slice();
-  board[cell] = board[cell] === Cell.Mark ? Cell.Empty : Cell.Mark;
-  return { ...s, board, history: [...s.history, cell], future: [] };
+  return {
+    ...s,
+    board: flip(s.board, cell),
+    history: [...s.history, cell],
+    future: [],
+  };
 }
 
 /** Put a (correct) face on `cell`: lock it, prune the stacks, detect a win. */
