@@ -323,6 +323,8 @@ describe("GameScreen", () => {
 
     test("Resume continues from the same elapsed time", async () => {
       const user = userEvent.setup();
+      // A frozen clock: the pause credits no real time since the last tick.
+      vi.spyOn(performance, "now").mockReturnValue(1000);
       renderGame();
       act(() => gameStore.getState().tick(3000));
       await user.click(screen.getByRole("button", { name: "Pause" }));
