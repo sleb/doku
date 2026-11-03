@@ -269,7 +269,7 @@ Per-cell keys (from M2): `x` toggles ✕, holding `Space` places a face. Added i
 - **Locked cells stay focusable:** a locked cell (face or wrong ✕) gets `aria-disabled="true"` and ignores click, `x`, Enter and Space-hold, instead of `disabled`, because disabled buttons cannot take focus and the arrow walk would stall. The whole board is still `inert` once the game is finished or paused. Tests that read `disabled` read `aria-disabled`.
 - **Focus ring:** cells show a `focus-visible` outline inset past the conflict ring.
 - **Focus after Resume:** if focus fell to the page, `GameScreen` focuses the board's tabbable cell. A real browser cannot restore focus onto the `visibility: hidden` board from `Dialog`'s cleanup; the e2e caught this where jsdom did not.
-- **Shortcut guards:** `useShortcuts` ignores auto-repeat and Alt, and acts only while `playing`. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing while a cell is held, while `Esc` (without Ctrl/Meta) still pauses.
+- **Shortcut guards:** `useShortcuts` ignores auto-repeat, Alt and events a dialog already handled (`defaultPrevented`, so Esc closing the first-launch Rules does not also pause), and acts only while `playing`. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing while a cell is held, while `Esc` (without Ctrl/Meta) still pauses.
 - **Right-click and click-drag marking are not implemented** (§1).
 
 ## 8. Desktop window and Rust shell

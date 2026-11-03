@@ -518,6 +518,15 @@ describe("GameScreen", () => {
       expect(progressStore.getState().bestMs[LEVELS[0].id]).toBe(2000);
     });
 
+    test("Escape on the first-launch Rules resumes play, not Pause", async () => {
+      settingsStore.setState({ seenRules: false });
+      renderGame();
+      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
+      await userEvent.keyboard("{Escape}");
+      expect(gameStore.getState().status).toBe("playing");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
     test("Escape in Rules or Settings returns to Pause without resuming", async () => {
       renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
