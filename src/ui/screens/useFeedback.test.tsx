@@ -374,13 +374,13 @@ describe("useFeedback announcements", () => {
     expect(text()).toBe("Resumed.");
   });
 
-  test("a pause forced before the rules are seen is silent, with its resume", () => {
+  test("pause and resume are announced whether or not the tutorial was seen", () => {
     settingsStore.getState().set({ seenTutorial: false });
     mount();
     act(() => gameStore.getState().pause());
-    expect(text()).toBe("");
+    expect(text()).toBe("Paused.");
     act(() => gameStore.getState().resume());
-    expect(text()).toBe("");
+    expect(text()).toBe("Resumed.");
   });
 
   test("clears the announcer when the level resets and on unmount", () => {

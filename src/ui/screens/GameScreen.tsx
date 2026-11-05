@@ -4,7 +4,7 @@ import { LEVELS, levelIndex } from "../../levels/campaign";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { useProgressStore } from "../../store/progress";
 import { conflictCells } from "../../store/selectors";
-import { settingsStore, useSettingsStore } from "../../store/settings";
+import { useSettingsStore } from "../../store/settings";
 import { Announcer } from "../a11y/Announcer";
 import { useInputModeAnnouncement } from "../a11y/useInputModeAnnouncement";
 import { Board } from "../board/Board";
@@ -27,7 +27,12 @@ import { useFeedback } from "./useFeedback";
 import { useHoldRamp } from "./useHoldRamp";
 import { useShortcuts } from "./useShortcuts";
 
-export function GameScreen() {
+export function GameScreen({
+  onReplayTutorial,
+}: {
+  /** Pause > Replay tutorial: the app shows the tutorial over this paused game. */
+  onReplayTutorial: () => void;
+}) {
   const level = useGameStore((s) => s.level);
   const status = useGameStore((s) => s.status);
   const board = useGameStore((s) => s.board);
@@ -71,13 +76,6 @@ export function GameScreen() {
     }
   }, [status]);
 
-  // First launch: Rules open over a paused game. Derived from `seenTutorial`
-  // (set on dismissal), so StrictMode's double effects cannot reopen it.
-  const seenTutorial = useSettingsStore((s) => s.seenTutorial);
-  const firstRules = !seenTutorial && status !== "idle";
-  useEffect(() => {
-    if (firstRules) gameStore.getState().pause();
-  }, [firstRules]);
   const conflicts = useMemo(
     () => (board && level ? conflictCells(board, level) : new Set<number>()),
     [board, level],
@@ -127,15 +125,7 @@ export function GameScreen() {
         }
         controls={<ActionBar />}
       />
-      {(firstRules || sheet === "rules") && (
-        <RulesDialog
-          onClose={() => {
-            settingsStore.getState().set({ seenTutorial: true });
-            setSheet(null);
-            if (firstRules) resume();
-          }}
-        />
-      )}
+      {sheet === "rules" && <RulesDialog onClose={() => setSheet(null)} />}
       {sheet === "settings" && (
         <SettingsDialog
           onClose={() => setSheet(null)}
@@ -146,10 +136,11 @@ export function GameScreen() {
         />
       )}
       <PauseDialog
-        open={paused && !firstRules && sheet === null}
+        open={paused && sheet === null}
         onResume={resume}
         onRestart={restart}
         onRules={() => setSheet("rules")}
+        onReplayTutorial={onReplayTutorial}
         onSettings={() => setSheet("settings")}
       />
       {result.pending && <ResultSkip onSkip={result.skip} />}
