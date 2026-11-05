@@ -8,6 +8,7 @@ Companion to `DESIGN.md` §7 (Theming), §8 (`audio` adapter) and §12 for miles
 
 **Goals**
 - Every outcome (face placed, wrong tap, win, loss) is felt through **three channels from one source**: haptics (exists), sound and animation. One pure function decides the outcome; the channels only render it (§3).
+- Holding to place a face is **legible under a fingertip and felt building**: a finger-sized progress ring around the held cell and haptic pulses that ramp up to the placement tap (§6.5).
 - The game is playable without distinguishing hues (patterns, a color-blind-safe palette), without a timed press-and-hold (#57), and with a screen reader (announcements, labels, an axe-checked UI).
 - A first-time player learns the rules by **doing**, on a real board with the real components, in under two minutes.
 - Light and dark themes; the board looks the same in both (§8).
@@ -29,6 +30,8 @@ gameStore ──subscribe──▶ outcomeFor(prev, next) ──▶ Outcome | nu
                                                ├─▶ sound.play(kind, step)   if settings.sound
                                                ├─▶ fxStore.set(outcome)     → Board/Cell animation classes
                                                └─▶ announcer.say(text)      → <Announcer aria-live>
+
+Board.onHoldGlow(cell | null) ──▶ <HoldGlow> overlay (§6.5)  and  haptics.ramp() if settings.haptics
 ```
 
 | Piece | Where | New / changed |
@@ -36,6 +39,7 @@ gameStore ──subscribe──▶ outcomeFor(prev, next) ──▶ Outcome | nu
 | `outcomeFor` | `src/platform/outcome.ts` | **Replaces** `feedbackFor`; same rules plus the affected cell and face count |
 | Sound adapter | `src/platform/sound.ts` (+ pure `cues.ts`) | new; sibling of `haptics.ts` |
 | Effects store | `src/ui/fx/fxStore.ts` | new; transient, never persisted |
+| Hold glow and ramp | `src/ui/board/HoldGlow.tsx`, `src/platform/holdRamp.ts`, `haptics.ramp()` | new; replaces the in-cell border trace (§6.5) |
 | Announcer | `src/ui/a11y/Announcer.tsx`, `announce.ts` | new |
 | Region look | `src/ui/board/palette.ts`, `patterns.ts` | changed: palette becomes data keyed by setting; patterns new |
 | Theme | `src/app/theme.ts`, `index.css` tokens | new |
@@ -173,6 +177,26 @@ A restored game must not replay animations for faces already on the board: effec
 ### 6.4 Dialogs and other transitions
 
 `Dialog` gets a 120 ms fade plus 4 px rise on open (opacity/transform, CSS `@starting-style` or a keyframe on mount), no exit animation (it unmounts, `APP_DESIGN.md` §7.1 "mount it only while open"). Buttons get a `:active` scale of 0.97. No page transitions: there is no router.
+
+### 6.5 Hold to place: finger-sized glow and haptic ramp
+
+Placing a face is a press-and-hold: `HOLD_DELAY_MS = 250` of nothing, then `HOLD_MS = 500` of glow, then the face (`BOARD_DESIGN.md` §4.3). Today the glow is a stroke traced around the **cell border**. On a phone that is hidden by the fingertip (about 40 to 50 pt over a 30 to 40 pt cell), which `MOBILE_DESIGN.md` §3 already lists as a device risk. This replaces it, and adds a matching haptic build-up. `useHold`, its timings and cancel rules are unchanged.
+
+**Visual: `<HoldGlow>`**
+- A **single board-level overlay**, not part of the cell. `Cell` reports `onGlow(index | null)` from an effect on `hold.holding`; `Board` keeps `glowCell` state and renders `<HoldGlow>` absolutely positioned on that cell's center (`--row`/`--col` over `--cell`), `pointer-events: none`, `aria-hidden`, above `EdgeSegments`. A cell-internal glow would paint under the region edges and later cells and be clipped to the cell; the overlay avoids both, and only the held cell reports so the other memoized cells keep identical props.
+- A **circular ring** centered on the cell with outer diameter about 3 cells (floor 64 px), so it clears the fingertip at every size from 7×7 to 11×11. Progress is the stroke sweeping from 0 to full over `HOLD_MS` (`pathLength=1` and `stroke-dashoffset`, the technique the current glow already uses, so no `@property` or conic-gradient support is needed in WKWebView). A soft radial halo fades in behind it and the held cell brightens slightly (`data-holding`).
+- On completion the ring does a 150 ms expand-and-fade burst as the face lands, handing off to the place effect (§6.2).
+- **Contrast:** dark ring (`#171717`) with a white under-stroke, at least 3 px wide, so it reads on all 11 region colors and the dark board frame. Both colors are constants in `palette.ts`, covered by the existing contrast test.
+- **Reduced motion:** a static full ring whose opacity ramps over `HOLD_MS` (the rule the current glow follows); no sweep, halo growth or burst. Timers are unchanged.
+- Keyboard (`Space`) holds show the same overlay on the focused cell.
+
+**Haptics: `haptics.ramp()`**
+- The pulses start **when the glow starts** (after the 250 ms delay), not at press, so a tap or click still never buzzes (`DESIGN.md` §13.10). They rise in intensity until the final tap, which is the existing `place` haptic and is now the peak.
+- The schedule is one table of pure data, `HOLD_RAMP` in `src/platform/holdRamp.ts`, offsets from glow start: `soft` 0 ms, `soft` 100, `light` 200, `light` 300, `medium` 400, then `place` at 500 (`impactFeedback("heavy")`, up from `light`). The numbers are a first guess; this is the one place to tune on a physical device.
+- `haptics.ramp(): () => void` schedules the table with injected timers and returns `cancel`. Plugin failures are swallowed like `play`; it is a no-op off Tauri and on desktop. A second `ramp` cancels the first.
+- `GameScreen` receives `Board`'s glow report: when it becomes non-null and `settings.haptics` is on (read at event time), it calls `ramp()`; when it becomes null (release, drag-off, blur, completion, pause, unmount) it calls `cancel`. `Cell` and `useHold` never import haptics, which keeps the layering of §2.
+- A hint also maps to `place`, so it gets the heavier tap too. Accepted; no separate kind.
+- Android's mapping of the impact styles is unchecked (plugin not installed in the dev checkout) and is verified when #64 lands; iOS needs a physical iPhone because the simulator has no Taptic engine (§11).
 
 ## 7. Interactive tutorial
 
@@ -338,15 +362,17 @@ Strict TDD (CLAUDE.md): each row below is written first. Audio and real animatio
 | Settings (node) | `parseSettings` for every new field: wrong types and unknown enum values fall back; extras dropped; the old `seenRules` key is ignored. |
 | `announce` (node) | Text table above, singular/plural ("1 heart left"), minutes/seconds formatting. |
 | `resolveTheme` (node) | `system` follows `prefersDark`; explicit settings win. |
-| Palette and tokens (node) | Glyph ≥ 3:1 on all regions, both palettes; accessible palette ΔE floors under three simulations; every chrome token pair meets 4.5:1 / 3:1 in both themes; `regionClass` returns a class that exists in `index.css` for all 11 regions. |
+| Palette and tokens (node) | Glyph ≥ 3:1 on all regions, both palettes; hold-ring color and its white under-stroke each ≥ 3:1 on every region; accessible palette ΔE floors under three simulations; every chrome token pair meets 4.5:1 / 3:1 in both themes; `regionClass` returns a class that exists in `index.css` for all 11 regions. |
 | Patterns (node) | 11 distinct patterns; each is a valid data URI; none is applied when `patterns` is off. |
 | Tutorial data (node) | Every step's `level` has `countSolutions === 1`; `goal` cells agree with `solution`; `start` boards contain no conflicts; every `onWrong` is non-empty. |
 | `useFeedback` (jsdom) | With fake timers, a placed face calls haptics, sound and `fxStore` once each and writes the announcer text; each respects its own setting independently (`haptics: false` mutes only haptics); a restore triggers none of them; a level change clears `fxStore`. |
 | Board/Cell (jsdom) | `fx` reaches exactly the matching cell (others' props are referentially equal, via the existing render-count harness `GameScreen.renders.test.tsx`); `inputMode: "face"`: click, Enter and Space call `placeFace` once, `x` still marks, hold does not double-place; `"mark"` unchanged. `patterns` toggles the pattern style. |
+| `HOLD_RAMP` and `haptics.ramp` (node) | Offsets strictly increase from 0 and end before `HOLD_MS`; intensity (`soft < light < medium < heavy`) never decreases; with fake timers and a fake plugin, one `impactFeedback` per entry at the right time; `cancel` stops the rest; a second `ramp` cancels the first; no-op off Tauri/desktop; a rejecting plugin neither throws nor stops later pulses; `place` is `heavy`. |
+| Hold glow (jsdom) | `Cell` calls `onGlow(index)` after `HOLD_DELAY_MS` and `onGlow(null)` on release, drag-off, blur, disable and completion, never on a plain click; `Board` renders `<HoldGlow>` only while a cell reports, centered on that cell, `aria-hidden`, `pointer-events-none`, duration `HOLD_MS`; other cells' props stay referentially equal (render-count harness). `GameScreen` (haptics mocked): ramp starts only when `settings.haptics` is on, is cancelled when the glow ends or on pause, and a completed hold ends with `place` after the cancel. |
 | ResultModal delay (jsdom) | With fake timers the modal is absent for `WIN_DELAY_MS`, then present; a key press skips it; with `prefers-reduced-motion` mocked it opens immediately; progress is recorded before the modal opens. |
 | Tutorial (jsdom) | Completing each step's `goal` advances; a rule-breaking action shows `onWrong` and resets the step; Skip and Finish both set `seenTutorial`; the campaign store and `doku:save` are untouched throughout. |
 | SettingsDialog (jsdom) | Each new control flips its setting; Theme radiogroup is keyboard operable; Haptics row absent when the adapter is a no-op. |
-| E2E (Playwright) | `tutorial.spec.ts`: a fresh profile (seeding `seenTutorial: false`) completes the tutorial with pointer and with keyboard and lands on level 1 paused. `a11y.spec.ts`: `@axe-core/playwright` reports no serious or critical violations on the board, the Pause dialog, Settings, the result modal and the tutorial, in light and dark. `inputmode.spec.ts`: a level won using only `click()` in face mode. `theme.spec.ts`: dark persists across a reload and the board cell backgrounds are unchanged. `zoom.spec.ts`: 200 % device scale, nothing clips, the board stays inside the viewport. Existing specs: `seenRules` seeding replaced, the rest unaffected. |
+| E2E (Playwright) | `tutorial.spec.ts`: a fresh profile (seeding `seenTutorial: false`) completes the tutorial with pointer and with keyboard and lands on level 1 paused. `a11y.spec.ts`: `@axe-core/playwright` reports no serious or critical violations on the board, the Pause dialog, Settings, the result modal and the tutorial, in light and dark. `inputmode.spec.ts`: a level won using only `click()` in face mode. `playthrough.spec.ts` glow test now samples the overlay's dash offset at 30 % and 60 % of `HOLD_MS`, and asserts the ring is wider than the cell and not clipped on a corner cell (timings imported from `hold.ts`; also on the mobile projects). `theme.spec.ts`: dark persists across a reload and the board cell backgrounds are unchanged. `zoom.spec.ts`: 200 % device scale, nothing clips, the board stays inside the viewport. Existing specs: `seenRules` seeding replaced, the rest unaffected. |
 | Mobile projects | `inputmode` and `tutorial` also run on `mobile-chromium` and `mobile-webkit` with touch helpers. |
 
 **New dev dependency:** `@axe-core/playwright`. No runtime dependencies are added by the milestone.
@@ -356,7 +382,7 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 ## 11. Manual verification (cannot run in CI)
 
 - **Desktop (`bun tauri dev` and a release build):** sound plays on first interaction and not before; backgrounding the window silences it; dark theme follows the OS and the in-app override; window chrome vs dark theme looks acceptable; VoiceOver (macOS) reads cell labels and the announcer text on a full level; keyboard-only run through the tutorial.
-- **iOS (simulator and device):** sound muted by the ringer switch (the §5.2 assumption); sound unlocks on the first tap; VoiceOver reads the board and announcements; Dynamic Type at the largest size; reduce-motion and increase-contrast OS settings; dark mode and status bar; haptics and sound together do not feel doubled (§12 Q6).
+- **iOS (simulator and device):** sound muted by the ringer switch (the §5.2 assumption); sound unlocks on the first tap; VoiceOver reads the board and announcements; Dynamic Type at the largest size; reduce-motion and increase-contrast OS settings; dark mode and status bar; haptics and sound together do not feel doubled (§12 Q6); **on a physical iPhone, the hold ramp reads as a build-up ending in a distinct tap, not a buzz or a single blur, and the ring is visible around a fingertip on 7×7 and 11×11 (tune `HOLD_RAMP`, §12 Q10)**.
 - **Android:** all of the above once #64 lands.
 - **Color blindness:** play three levels with the accessible palette and patterns, and look at screenshots through a deficiency simulator, comparing against the default palette.
 
@@ -371,6 +397,7 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 7. **Tutorial length.** Six steps is a guess; cut to the first three plus hearts if testers find it long. Copy is edited in review.
 8. **Win celebration.** The row wave is the cheapest satisfying effect; confetti or a screen-wide burst is possible with CSS and is not planned.
 9. **Daily puzzle.** Out of scope here (§1). If it returns, it needs a place in the UI first, which is a decision about reversing `DESIGN.md` §13.13, not polish.
+10. **Hold ramp feel.** Pulse spacing (100 ms), styles and the `heavy` placement tap are guesses; iOS coalesces rapid impacts and Android's style mapping is unknown. If it feels like a buzz, fall back to fewer, wider pulses (for example 0/150/300/450). Decided on a device.
 
 ## 13. Suggested issue breakdown (milestone "polish")
 
@@ -383,26 +410,28 @@ Titled `M6-NN`, each strictly TDD, each plannable with `/doku-plan`. Order is by
 | 03 | Sound | `cues.ts`, `sound.ts`, unlock/suspend, `sound` switch; wired in `useFeedback` |
 | 04 | Cell and heart animations | `fxStore`, place and wrong effects, heart pop, reduced-motion rules, `Dialog` open transition |
 | 05 | Win and loss sequence | wave, `useDelayedStatus`, skip, result modal delay |
-| 06 | Click-only placement (#57) | `inputMode`, ActionBar toggle, `f` shortcut, Settings switch, Rules cheat-sheet row |
-| 07 | Announcer | `announce`, `<Announcer>`, level/pause/mode announcements, "conflict" in labels |
-| 08 | Patterns and accessible palette | `patterns.ts`, accessible tokens, `regionClass`, palette tests with CVD simulation |
-| 09 | Theme | semantic tokens migration, `data-theme`, no-flash script, `resolveTheme`, Theme control, contrast test |
-| 10 | Interactive tutorial | `steps.ts`, `<Tutorial>`, private store, `ActionBar` store prop, `seenTutorial`, Pause → Replay |
-| 11 | Hint presentation | highlight and explanation toast (only if M5-07 has landed) |
-| 12 | Accessibility e2e and audit | `@axe-core/playwright` specs, 200 % zoom spec, touch-target audit, focus-ring unification, fixes |
-| 13 | Docs sync | `DESIGN.md` §7, §8, §12, §13 (and the daily-puzzle line), `APP_DESIGN.md` §1, §6, §7, `BOARD_DESIGN.md` §4.4, `MOBILE_DESIGN.md` non-goals, README |
+| 06 | Hold glow and haptic ramp | `HoldGlow` overlay replacing the cell-border trace, `Cell.onGlow`/`Board.onHoldGlow`, `holdRamp.ts`, `haptics.ramp()`, heavier `place` tap, ring contrast constants, e2e glow test update (§6.5) |
+| 07 | Click-only placement (#57) | `inputMode`, ActionBar toggle, `f` shortcut, Settings switch, Rules cheat-sheet row |
+| 08 | Announcer | `announce`, `<Announcer>`, level/pause/mode announcements, "conflict" in labels |
+| 09 | Patterns and accessible palette | `patterns.ts`, accessible tokens, `regionClass`, palette tests with CVD simulation |
+| 10 | Theme | semantic tokens migration, `data-theme`, no-flash script, `resolveTheme`, Theme control, contrast test |
+| 11 | Interactive tutorial | `steps.ts`, `<Tutorial>`, private store, `ActionBar` store prop, `seenTutorial`, Pause → Replay |
+| 12 | Hint presentation | highlight and explanation toast (only if M5-07 has landed) |
+| 13 | Accessibility e2e and audit | `@axe-core/playwright` specs, 200 % zoom spec, touch-target audit, focus-ring unification, fixes |
+| 14 | Docs sync | `DESIGN.md` §7, §8, §12, §13 (and the daily-puzzle line), `APP_DESIGN.md` §1, §6, §7, `BOARD_DESIGN.md` §4.3, §4.4 and §8.8 (overlay replaces the border trace), `MOBILE_DESIGN.md` §3, §6 and non-goals (ramp, `place` style), README |
 
-**Cut line if time is short:** 01 to 07 and 10 are the milestone; 08 and 09 next; 11 is optional; 12 must run before the milestone is called done, on whatever has shipped.
+**Cut line if time is short:** 01 to 08 and 11 are the milestone; 09 and 10 next; 12 is optional; 13 must run before the milestone is called done, on whatever has shipped.
 
 ## 14. Decisions
 
 1. **One outcome function feeds every channel.** Haptics, sound, animation and announcements cannot disagree.
 2. **No store or engine changes.** Polish is subscribers and presentation; saves and the pure-store rule (`APP_DESIGN.md` decision 8) are untouched.
 3. **Synthesized audio, no assets.** Original, offline, zero bundle weight; pitch rises with progress.
-4. **Only outcomes make sound or buzz.** The free ✕, undo and redo stay silent (extends `DESIGN.md` §13.10).
+4. **Only outcomes make sound, and only outcomes plus the hold ramp buzz.** The free ✕, undo, redo and a plain tap stay silent (extends `DESIGN.md` §13.10); the ramp starts with the glow, never at press.
 5. **CSS-only animation on `transform`/`opacity`, honouring `prefers-reduced-motion`;** the only deliberate delays are the result modal's, skippable.
 6. **The board looks the same in both themes;** only the chrome is themed.
 7. **Color-blind support is two layers:** an accessible palette and patterns, because 11 hues cannot be reliably separated by color alone.
 8. **The tutorial runs on a private store and the real components,** so it cannot affect the campaign and cannot drift from the real UI.
 9. **Click-only placement is an explicit, persisted, visible mode,** defaulting to the safe hold gesture.
 10. **Daily puzzle stays out,** per `DESIGN.md` §13.13; the §12 line is corrected in the docs sync.
+11. **The hold glow is a finger-sized board-level ring, not a cell border,** and the hold haptics ramp up to a heavier `place` tap (§6.5); timings live in one table so they can be tuned on a device.
