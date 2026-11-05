@@ -96,14 +96,37 @@ describe("unlock", () => {
 });
 
 describe("play", () => {
-  it("does not schedule while the context is not running, and tries resume", async () => {
+  it("does not schedule while the context stays suspended, and tries resume", async () => {
     const { ctx, s } = setup();
-    s.unlock();
+    await s.unlock();
     ctx.state = "suspended";
     ctx.resume.mockClear();
+    ctx.resume.mockImplementationOnce(async () => {});
     await s.play("place", 1, 7);
     expect(ctx.oscs).toHaveLength(0);
     expect(ctx.resume).toHaveBeenCalled();
+  });
+
+  it("waits for a pending resume and then plays the cue", async () => {
+    const { ctx, s } = setup();
+    let finish = () => {};
+    ctx.resume.mockImplementationOnce(
+      () =>
+        new Promise<void>((r) => {
+          finish = () => {
+            ctx.state = "running";
+            r();
+          };
+        }),
+    );
+    void s.unlock();
+    const played = s.play("place", 1, 7);
+    await Promise.resolve();
+    expect(ctx.oscs).toHaveLength(0);
+    finish();
+    await played;
+    expect(ctx.oscs).toHaveLength(1);
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
   });
 
   it("releases the voice when building a cue throws partway", async () => {

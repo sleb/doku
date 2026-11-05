@@ -145,9 +145,18 @@ export function useFeedback(
 
   // Capture phase, so unlock runs before a cell handler plays the first cue.
   // Audio starts suspended until a user-activation gesture (pointerdown is
-  // not one on touch). Keep trying until the context is actually running.
+  // not one on touch). Start at the earliest event anyway: a hold completes
+  // before pointerup, and the first cue must not find a missing context.
+  // Keep trying until the context is actually running.
   useEffect(() => {
-    const events = ["pointerup", "touchend", "click", "keydown"] as const;
+    const events = [
+      "pointerdown",
+      "touchstart",
+      "pointerup",
+      "touchend",
+      "click",
+      "keydown",
+    ] as const;
     const remove = () => {
       for (const e of events) window.removeEventListener(e, unlock, true);
     };

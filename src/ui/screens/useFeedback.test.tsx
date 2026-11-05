@@ -154,7 +154,14 @@ describe("useFeedback sound", () => {
     expect(sound.play).not.toHaveBeenCalled();
   });
 
-  const gestures = ["pointerup", "touchend", "click", "keydown"];
+  const gestures = [
+    "pointerdown",
+    "touchstart",
+    "pointerup",
+    "touchend",
+    "click",
+    "keydown",
+  ];
 
   test.each(gestures)("unlocks on %s", (type) => {
     renderHook(() => useFeedback());
@@ -173,12 +180,6 @@ describe("useFeedback sound", () => {
     el.click();
     el.remove();
     expect(unlocked).toBe(1);
-  });
-
-  test("pointerdown alone does not unlock", () => {
-    renderHook(() => useFeedback());
-    window.dispatchEvent(new Event("pointerdown"));
-    expect(sound.unlock).not.toHaveBeenCalled();
   });
 
   test("stops listening once the context is running", async () => {

@@ -47,6 +47,7 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
   let master: GainNode | null = null;
   let failed = false;
   let voices: Voice[] = [];
+  let resuming: Promise<void> | null = null;
 
   const safe = (fn: () => unknown) => {
     try {
@@ -76,6 +77,20 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
     }
   }
 
+  /** One shared in-flight resume, so a cue can wait for it instead of being lost. */
+  function resumeOnce(c: AudioContext): Promise<void> {
+    resuming ??= (async () => {
+      try {
+        await c.resume();
+      } catch (err) {
+        deps.log(err);
+      } finally {
+        resuming = null;
+      }
+    })();
+    return resuming;
+  }
+
   function dropOldest() {
     const old = voices.shift();
     if (!old) return;
@@ -87,11 +102,7 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
       ensure();
       const c = ctx;
       if (!c) return false;
-      try {
-        await c.resume();
-      } catch (err) {
-        deps.log(err);
-      }
+      await resumeOnce(c);
       return c.state === "running";
     },
     suspend() {
@@ -107,9 +118,10 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
       const m = master;
       if (!c || !m) return;
       if (c.state !== "running") {
-        // currentTime is frozen; scheduling now would pile up and burst later.
-        safe(() => c.resume());
-        return;
+        // currentTime is frozen, so wait for the resume rather than schedule
+        // into it (that would pile up and burst later) or drop the cue.
+        await resumeOnce(c);
+        if (c.state !== "running") return;
       }
       let voice: Voice | null = null;
       try {
