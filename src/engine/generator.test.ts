@@ -8,6 +8,7 @@ import {
   passesShape,
   randomSolution,
   repairUniqueness,
+  tryCandidate,
 } from "./generator";
 import { makeRng, type Rng } from "./seed";
 import { countSolutions, solve } from "./solver";
@@ -338,5 +339,31 @@ describe("generate", () => {
         ],
       }
     `);
+  });
+});
+
+describe("tryCandidate", () => {
+  const reasons = (shape?: Parameters<typeof tryCandidate>[2]) =>
+    new Set(
+      Array.from({ length: 100 }, (_, k) =>
+        tryCandidate(7, makeRng(`t${k}`), shape),
+      ).flatMap((r) => ("reject" in r ? [r.reject] : [])),
+    );
+
+  it("reports a failed repair", () => {
+    expect(reasons().has("repair")).toBe(true);
+  });
+
+  it("reports a failed shape filter", () => {
+    expect(reasons({ maxRegion: 8 }).has("shape")).toBe(true);
+  });
+
+  it("agrees with generateCandidate", () => {
+    for (let k = 0; k < 40; k++) {
+      const r = tryCandidate(7, makeRng(`t${k}`));
+      expect(generateCandidate(7, makeRng(`t${k}`))).toEqual(
+        "level" in r ? r.level : null,
+      );
+    }
   });
 });

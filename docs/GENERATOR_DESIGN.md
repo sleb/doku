@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §4, §4.1, §10 and §12 for milestone 5 ("Generator + level packs + difficulty tiers"). It expands `docs/ENGINE_DESIGN.md` §9, which stays the short reference; if the two disagree, this document wins on the generator and `ENGINE_DESIGN.md` wins on the technique ladder (§6) and solvers (§7). Sync both when this lands.
 
-**Status:** draft for review. M5-01 (`seed.ts`) and M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) are implemented; see §13 for what differs from this text. The rest is not.
+**Status:** draft for review. M5-01 (`seed.ts`), M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) and M5-03 (the pack tool and generated campaign) are implemented; see §13 and §14 for what differs from this text. The rest (`rate`, tiers) is not.
 
 ## 1. Goals and non-goals
 
@@ -172,9 +172,9 @@ Bun script, node-side only (may use `fs`, `Date`, `process.argv`).
 `tools/curriculum.ts` exports the ordered list that defines the campaign:
 
 ```ts
-export const CURRICULUM: { size: number; tier: Tier; count: number }[] = [
-  { size: 7, tier: "easy", count: 8 },
-  { size: 8, tier: "easy", count: 6 },
+export const CURRICULUM: CurriculumRow[] = [
+  { pack: 1, size: 7, tier: "easy", count: 8 },
+  { pack: 1, size: 8, tier: "easy", count: 6 },
   // ...ramping up to size 11, tier hard/expert...
 ];
 ```
@@ -273,3 +273,25 @@ Deviations and measurements from the first implementation (`src/engine/generator
 | 11 | 10 | 24 | 63 | 7.6% | 450 |
 
   Repair converges well enough at 11x11 that the §10 fallbacks were not needed. The cost at 11x11 is the full-tree `solutions` call on surviving candidates; the property test (25 seeds x 5 sizes) takes about 12 s, mostly size 11, and has a 60 s timeout.
+
+## 14. As built in M5-03
+
+Deviations from §8 and measurements from the first pack tool (`tools/generate-levels.ts`, `tools/pack.ts`, `tools/curriculum.ts`).
+
+- **Split.** `pack.ts` holds the pure logic (`canonicalForm`, `levelId`, `rowStartIndexes`, `collectRow`, `verifyLevel`, `buildPack`, `computeStats`, `formatStats`) and is unit tested (`tools/pack.test.ts`, vitest `node` project, 7x7 only); `generate-levels.ts` is the thin CLI (argv, `fs`, exit codes, `AbortSignal.timeout`). The generator gained `tryCandidate`, which reports why a candidate was rejected (`repair` or `shape`); `generateCandidate` is a wrapper, so draw order and the golden snapshot are unchanged.
+- **Curriculum.** `CurriculumRow = { pack, size, tier?, count }`. Seeds are `pack-N/<size>/<tier|any>/<i>`; a duplicate board consumes a seed. Ids are `<tier|any>-<size 2 digits>-<index 3 digits>`, 1-based, numbered per (tier, size) over the whole curriculum so they stay unique across packs; the tool also refuses to write on a collision with another pack's file. A row that needs more than 50 seeds per wanted level gives up and is reported.
+- **Serialization.** 2-space JSON with number arrays on one line, which is what Biome emits, so `biome check` accepts a generated pack unchanged.
+- **CLI.** `--pack N` (default 1), `--stats`, `--only size[:tier]`, `--max-attempts K`, `--timeout SECONDS` (default 60 per level). `--only` builds just those rows but ids still come from the full curriculum; it **writes nothing** (a partial pack must not overwrite the real one). An unfilled row exits 1. `rate === tier` verification waits for #91.
+- **Dedup** reaches back only to lower-numbered packs; ids are checked against every other pack.
+- **Pack 1.** 42 untiered levels: 8 each at 7 to 10, then 10 at 11x11, in size order (the curve is simply "bigger is later" until tiers exist). Regenerating takes about 7 s and is byte-identical.
+- **`--stats`** (20 seeds per size, attempts to first success):
+
+| size | median | p90 | repair rejects | shape rejects | ms per level |
+|---|---|---|---|---|---|
+| 7 | 3 | 9 | 76% | 2% | 2 |
+| 8 | 3 | 8 | 73% | 4% | 3 |
+| 9 | 2 | 9 | 71% | 0% | 6 |
+| 10 | 5 | 15 | 86% | 0% | 46 |
+| 11 | 9 | 39 | 94% | 1% | 590 |
+
+  Shape rarely rejects; failed repair is the dominant filter, as §6 expected. The "wrong tier" and "unrated" columns of §8.2 arrive with `rate`.
