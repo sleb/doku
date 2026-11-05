@@ -86,7 +86,7 @@ A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.
 | Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. N regions confined to the same N rows or columns (pairs, triples) eliminate everything else in those lines |
 | Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
 
-Implemented so far (M5-04): Easy and Medium as in the table; `rate` returns `unrated` for any level that needs Hard techniques until those land (#92).
+Implemented so far (M5-04, M5-05): Easy and Medium as in the table; `rate` returns `unrated` for any level that needs Hard techniques until those land (#92). `generate` honours `tier` for Easy and Medium. Shipped cells: Easy 7 to 10 and Medium 7 to 11; Easy 11x11 is dropped (fewer than 18 of 20 stats seeds fill within the budget, `docs/GENERATOR_DESIGN.md` §16).
 
 Rules of the system:
 - The solver applies the simplest technique that makes progress each step, so the rating is the minimum hardest technique, not whatever a particular path happened to use.
@@ -163,8 +163,8 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 
 ## 10. Content pipeline
 
-- Today: `src/levels/pack-1.json` holds 42 untiered generated levels (8 each at 7 to 10, 10 at 11), written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
-- Milestone 5: the tool has landed (M5-03); assigning difficulty (`tier`) arrives with the technique ladder and tiered generation (M5-04, M5-05).
+- Today: `src/levels/pack-1.json` holds 69 tiered generated levels (Easy 7 to 10 and Medium 7 to 10, 8 each, then 5 Medium at 11; every level satisfies `rate(level) === level.tier`), written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
+- Milestone 5: the tool (M5-03), the ladder (M5-04) and tiered generation (M5-05) have landed; Hard and Expert cells arrive with #92 and #93.
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 
 ## 11. Testing
@@ -207,4 +207,4 @@ Decided:
 18. **One screen and one shared `<Dialog>`** for pause, rules, settings and results; the store is pure and time is injected by `useClock`.
 
 Still open:
-1. **Which size/tier combinations to ship:** decide after seeing what the generator can produce reliably. (The naive seed script could not find a unique 11x11 in 60 s, a first data point.)
+1. **Which size/tier combinations to ship:** answered for Easy and Medium (M5-05): Easy 7 to 10 and Medium 7 to 11 ship, Easy 11x11 is dropped; Hard and Expert pending. (The naive seed script could not find a unique 11x11 in 60 s, a first data point.)

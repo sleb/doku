@@ -49,11 +49,15 @@ test("the last level finishes the campaign", async ({ page }) => {
 
   const finished = page.getByRole("heading", { name: "You finished" });
   await expect(finished).toBeVisible();
-  // One-minute bests for every earlier level plus a sub-minute win (under an hour).
+  // One-minute bests for every earlier level plus a sub-minute win, so the
+  // total is levelCount - 1 minutes and some seconds.
+  const minutes = levelCount - 1;
+  const clock =
+    minutes >= 60
+      ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`
+      : String(minutes);
   await expect(
-    page.getByText(
-      new RegExp(`^Total of best times: ${levelCount - 1}:\\d\\d$`),
-    ),
+    page.getByText(new RegExp(`^Total of best times: ${clock}:\\d\\d$`)),
   ).toBeVisible();
   await expect(page.getByRole("grid")).toHaveCount(0);
   await expect.poll(() => storageValue(page, "save")).toBeNull();

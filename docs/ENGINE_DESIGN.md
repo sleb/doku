@@ -218,7 +218,7 @@ function nextHint(p: Puzzle, board: Board): Hint | null;
 ```ts
 interface GenerateOptions {
   size: number;
-  tier: Tier;
+  tier?: Tier;                            // omitted: no rating (M5-05)
   seed: string;
   maxAttempts?: number;                   // default 2000
   signal?: AbortSignal;
@@ -232,7 +232,7 @@ Pipeline for each attempt (all randomness from `Rng` seeded by `hashSeed(seed + 
 2. **Regions:** seed region `i` at the solution cell in row `i` (so each region contains exactly one solution cell). Then grow: repeatedly pick a random unassigned cell that touches an assigned cell and give it a random adjacent region (weighted toward smaller regions to avoid one giant region). This yields connected regions by construction.
 3. **Uniqueness repair:** `countSolutions(limit = 2)`. If 1, go on. If ≥ 2, take the second solution found and *mutate*: move a boundary cell (not a solution cell) from one region to an adjacent region such that (a) the source region stays connected, (b) the alternative solution becomes invalid. Re-check. Cap at ~50 mutations per attempt; then discard and restart.
 4. **Shape filter:** reject if any region has fewer than `minRegionSize` cells (default 2; a one-cell region is a free give-away) or the size spread is extreme (largest region > ~35% of the grid).
-5. **Rate:** `rate(p)` must equal the requested `tier`. Else mutate for difficulty within the same cap (merging a cell into a bigger region tends to increase difficulty; splitting off tends to decrease it), or discard.
+5. **Rate:** when `tier` is given, `rate(p)` must equal it, else the candidate is discarded (as built in M5-05; mutating for difficulty is not built, see `GENERATOR_DESIGN.md` §7.3 and §16). Without `tier`, `rate` is not called.
 6. **Output:** `Level { …, tier, seed }` after `validateLevel`.
 
 Returns `null` after `maxAttempts` (the caller treats this as "combination not available" and hides it from level select). The same `generate` call with the same options always returns the same level.
