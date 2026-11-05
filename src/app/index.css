@@ -187,12 +187,28 @@ body {
   animation: heart-pop 280ms ease-out;
 }
 
+/* Win wave (POLISH_DESIGN 6.3): faces hop in row order. Board sets --row per row. */
+[data-celebrate] [data-icon="face"] {
+  animation: win-hop 300ms ease-in-out both;
+  animation-delay: calc(var(--row) * 45ms);
+}
+
 .dialog-backdrop {
   animation: fx-fade 120ms ease-out;
 }
 
 .dialog-in {
   animation: dialog-in 120ms ease-out;
+}
+
+@keyframes win-hop {
+  0%,
+  to {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-18%);
+  }
 }
 
 @keyframes fx-place {
@@ -287,6 +303,10 @@ body {
   }
 
   [data-pop="true"] {
+    animation: none;
+  }
+
+  [data-celebrate] [data-icon="face"] {
     animation: none;
   }
 

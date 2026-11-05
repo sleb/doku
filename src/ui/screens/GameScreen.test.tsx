@@ -11,6 +11,7 @@ import { defaultProgress, progressStore } from "../../store/progress";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
+import { LOSE_DELAY_MS, WIN_DELAY_MS } from "./useDelayedStatus";
 
 vi.mock("../../platform/haptics", () => ({
   haptics: {
@@ -38,8 +39,14 @@ beforeEach(() => {
   progressStore.setState(defaultProgress);
   settingsStore.setState({ ...defaultSettings, seenTutorial: true });
   vi.mocked(haptics.play).mockClear();
+  // Most tests expect the result modal immediately; the sequence tests opt out.
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function renderGame(lvl = level, strict = false) {
   act(() => gameStore.getState().startLevel(lvl));
@@ -57,6 +64,107 @@ function renderGame(lvl = level, strict = false) {
 function hold(cells: number[]) {
   for (const i of cells) holdCell(cell(i));
 }
+
+describe("win and loss sequence", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.useFakeTimers();
+  });
+  const place = (cells: number[]) =>
+    act(() => {
+      for (const i of cells) gameStore.getState().placeFace(i);
+    });
+  const modal = () => screen.queryByRole("dialog");
+
+  test("the win modal opens after WIN_DELAY_MS, with progress already recorded", () => {
+    renderGame();
+    place(solution);
+    expect(gameStore.getState().status).toBe("won");
+    expect(modal()).toBeNull();
+    expect(screen.getByRole("grid").closest("[inert]")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(WIN_DELAY_MS - 1));
+    expect(modal()).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+  });
+
+  test("the loss modal opens after LOSE_DELAY_MS", () => {
+    renderGame();
+    place(nonSolution.slice(0, 3));
+    expect(modal()).toBeNull();
+    act(() => vi.advanceTimersByTime(LOSE_DELAY_MS));
+    expect(
+      screen.getByRole("dialog", { name: "Out of hearts" }),
+    ).toBeInTheDocument();
+  });
+
+  test("progress is recorded before the modal opens", () => {
+    const stop = recordWins();
+    renderGame();
+    place(solution);
+    stop();
+    expect(modal()).toBeNull();
+    expect(progressStore.getState().bestMs[level.id]).toBeDefined();
+  });
+
+  test("a key press skips the delay", () => {
+    renderGame();
+    place(solution);
+    act(() => {
+      fireEvent.keyDown(window, { key: "a" });
+    });
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a tap on the skip layer skips; the layer exists only while pending", () => {
+    renderGame();
+    expect(screen.queryByTestId("result-skip")).toBeNull();
+    place(solution);
+    fireEvent.pointerDown(screen.getByTestId("result-skip"));
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("result-skip")).toBeNull();
+  });
+
+  test("the board is celebrating only while the win is pending", () => {
+    renderGame();
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+    place(solution);
+    expect(screen.getByRole("grid")).toHaveAttribute("data-celebrate");
+    act(() => vi.advanceTimersByTime(WIN_DELAY_MS));
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+  });
+
+  test("a loss does not celebrate", () => {
+    renderGame();
+    place(nonSolution.slice(0, 3));
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+  });
+
+  test("reduced motion opens the modal at once with no wave", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    renderGame();
+    place(solution);
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+  });
+
+  test("a finished game restored on mount shows the modal at once", () => {
+    act(() => gameStore.getState().startLevel(level));
+    place(solution);
+    render(<GameScreen />);
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+  });
+});
 
 describe("GameScreen without props", () => {
   test("plays the store's level and shows its campaign position", () => {

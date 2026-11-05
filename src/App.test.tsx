@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
 import { boot } from "./app/boot";
 import { recordWins, startCurrent } from "./app/campaign";
@@ -21,11 +21,15 @@ import { holdCell } from "./test/hold";
 import { REGION_BG } from "./ui/board/palette";
 
 beforeEach(() => {
+  // These tests expect the result modal at once; the delay is covered in GameScreen.test.
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
   gameStore.setState(idleState, false);
   settingsStore.setState({ ...defaultSettings, seenTutorial: true });
   progressStore.setState(defaultProgress);
   startCurrent();
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 const demoLevel = LEVELS[0];
 

@@ -35,6 +35,7 @@ describe("effect keyframes", () => {
     "heart-pop",
     "dialog-in",
     "fx-fade",
+    "win-hop",
   ])("defines @keyframes %s", (name) => {
     expect(css).toContain(`@keyframes ${name}`);
   });
@@ -42,7 +43,7 @@ describe("effect keyframes", () => {
   test("effects animate only transform and opacity", () => {
     const frames = [
       ...css.matchAll(
-        /@keyframes (fx-|heart-pop|dialog-in)[^{]*\{([\s\S]*?\n\})/g,
+        /@keyframes (fx-|heart-pop|dialog-in|win-hop)[^{]*\{([\s\S]*?\n\})/g,
       ),
     ];
     expect(frames.length).toBeGreaterThan(0);
@@ -71,5 +72,19 @@ describe("reduced motion", () => {
     const r = rule(reduced, ".dialog-in");
     expect(r).toContain("animation-name: fx-fade");
     expect(r).not.toMatch(/transform|scale/);
+  });
+});
+
+describe("win wave", () => {
+  test("hops the face icons in row order", () => {
+    const r = rule(css, '[data-celebrate] [data-icon="face"]');
+    expect(r).toContain("animation: win-hop 300ms");
+    expect(r).toContain("animation-delay: calc(var(--row) * 45ms)");
+  });
+
+  test("reduced motion removes the wave", () => {
+    expect(
+      rule(reducedBlocks(), '[data-celebrate] [data-icon="face"]'),
+    ).toContain("animation: none");
   });
 });

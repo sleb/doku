@@ -20,6 +20,8 @@ export interface BoardProps {
   conflicts: ReadonlySet<number>;
   /** True when the game is not `playing`; locks the whole board. */
   disabled: boolean;
+  /** True during the win wave (result modal pending); sets `data-celebrate` and a `--row` per row. */
+  celebrate?: boolean;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
   /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
@@ -32,6 +34,7 @@ export function Board({
   wrong,
   conflicts,
   disabled,
+  celebrate,
   onToggleMark,
   onPlaceFace,
   holdOwner: sharedHoldOwner,
@@ -77,6 +80,7 @@ export function Board({
       aria-label="Puzzle board"
       aria-rowcount={size}
       aria-colcount={size}
+      data-celebrate={celebrate ? "true" : undefined}
       onKeyDown={(e) => {
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
         const i = Number((e.target as HTMLElement).dataset.index);
@@ -103,9 +107,14 @@ export function Board({
       className="relative grid w-max border-4 border-neutral-800"
       style={style}
     >
-      {rows.map((cells) => (
+      {rows.map((cells, r) => (
         // biome-ignore lint/a11y/useSemanticElements lint/a11y/useFocusableInteractive: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
-        <div key={cells[0].row} role="row" className="contents">
+        <div
+          key={cells[0].row}
+          role="row"
+          className="contents"
+          style={{ "--row": r } as CSSProperties}
+        >
           {cells.map((g) => (
             // biome-ignore lint/a11y/useSemanticElements lint/a11y/useFocusableInteractive: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
             <div key={g.index} role="gridcell" className="size-full">

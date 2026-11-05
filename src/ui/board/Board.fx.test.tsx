@@ -21,15 +21,18 @@ import { Board } from "./Board";
 
 const none: ReadonlySet<number> = new Set();
 const board = emptyBoard(level);
-const view = () => (
+const onToggleMark = vi.fn();
+const onPlaceFace = vi.fn();
+const view = (celebrate?: boolean) => (
   <Board
+    celebrate={celebrate}
     level={level}
     board={board}
     wrong={none}
     conflicts={none}
     disabled={false}
-    onToggleMark={vi.fn()}
-    onPlaceFace={vi.fn()}
+    onToggleMark={onToggleMark}
+    onPlaceFace={onPlaceFace}
   />
 );
 const fxCells = (c: HTMLElement) =>
@@ -88,5 +91,25 @@ describe("Board fx", () => {
       fxStore.getState().set({ kind: "wrong", cell: 8, faces: 1, hearts: 2 }),
     );
     expect([...renders.byIndex.keys()].sort()).toEqual([5, 8]);
+  });
+
+  test("celebrate sets data-celebrate on the grid and --row on each row", () => {
+    const { container, rerender } = render(view());
+    const grid = container.querySelector("[role=grid]");
+    expect(grid).not.toHaveAttribute("data-celebrate");
+    rerender(view(true));
+    expect(grid).toHaveAttribute("data-celebrate");
+    const rows = container.querySelectorAll<HTMLElement>("[role=row]");
+    expect(rows).toHaveLength(level.size);
+    rows.forEach((r, i) => {
+      expect(r.style.getPropertyValue("--row")).toBe(String(i));
+    });
+  });
+
+  test("toggling celebrate re-renders no cell", () => {
+    const { rerender } = render(view());
+    renders.byIndex.clear();
+    rerender(view(true));
+    expect(renders.byIndex.size).toBe(0);
   });
 });

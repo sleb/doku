@@ -11,10 +11,16 @@ import { ActionBar } from "./ActionBar";
 import { GameLayout } from "./GameLayout";
 import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
+import { ResultSkip } from "./ResultSkip";
 import { RulesDialog } from "./RulesDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
+import {
+  LOSE_DELAY_MS,
+  useDelayedStatus,
+  WIN_DELAY_MS,
+} from "./useDelayedStatus";
 import { useFeedback } from "./useFeedback";
 import { useShortcuts } from "./useShortcuts";
 
@@ -37,6 +43,7 @@ export function GameScreen() {
   const holdOwner = useRef<number | null>(null);
   const boardArea = useRef<HTMLDivElement>(null);
   const wasPaused = useRef(false);
+  const result = useDelayedStatus(status, WIN_DELAY_MS, LOSE_DELAY_MS);
   useClock();
   useAutoPause();
   useShortcuts({ holdOwner });
@@ -97,6 +104,7 @@ export function GameScreen() {
               wrong={wrong}
               conflicts={conflicts}
               disabled={finished || paused}
+              celebrate={result.pending && status === "won"}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}
               holdOwner={holdOwner}
@@ -130,8 +138,9 @@ export function GameScreen() {
         onRules={() => setSheet("rules")}
         onSettings={() => setSheet("settings")}
       />
+      {result.pending && <ResultSkip onSkip={result.skip} />}
       <ResultModal
-        status={status}
+        status={result.status}
         elapsedMs={elapsedMs}
         bestMs={bestMs}
         hintsUsed={hintsUsed}
