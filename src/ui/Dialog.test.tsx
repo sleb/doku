@@ -76,6 +76,16 @@ test("makes siblings inert while open and restores them after", () => {
   expect(outside).not.toHaveAttribute("inert");
 });
 
+test("leaves a live region (role status) un-inert so it still announces", () => {
+  render(
+    <>
+      <div role="status">live</div>
+      <Dialog title="T">x</Dialog>
+    </>,
+  );
+  expect(screen.getByRole("status")).not.toHaveAttribute("inert");
+});
+
 test("does not leave a pre-inert sibling un-inert", () => {
   const host = document.createElement("div");
   const pre = document.createElement("div");
@@ -86,4 +96,49 @@ test("does not leave a pre-inert sibling un-inert", () => {
   unmount();
   expect(pre).toHaveAttribute("inert");
   host.remove();
+});
+
+test("children scroll inside a capped panel", () => {
+  render(<Page />);
+  const panel = screen.getByRole("dialog");
+  expect(panel).toHaveClass("max-h-full", "min-h-0");
+  const scroller = screen.getByTestId("dialog-body");
+  expect(scroller).toHaveClass("flex-1", "min-h-0", "overflow-y-auto");
+  expect(scroller).toContainElement(
+    screen.getByRole("button", { name: "first" }),
+  );
+});
+
+test("animates in with a class only: focus and input are unaffected", async () => {
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  render(<Page onClose={onClose} />);
+  const dialog = screen.getByRole("dialog", { name: "Hello" });
+  expect(dialog.parentElement).toHaveClass("dialog-backdrop");
+  expect(dialog).toHaveClass("dialog-in");
+  expect(dialog.parentElement).not.toHaveAttribute("inert");
+  expect(screen.getByRole("button", { name: "first" })).toHaveFocus();
+  await user.keyboard("{Escape}");
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test("buttons with tabindex -1 are not first, last or initial focus", async () => {
+  render(
+    <Dialog title="T">
+      <button type="button" tabIndex={-1}>
+        skipped-first
+      </button>
+      <button type="button">real-first</button>
+      <button type="button">real-last</button>
+      <button type="button" tabIndex={-1}>
+        skipped-last
+      </button>
+    </Dialog>,
+  );
+  expect(screen.getByRole("button", { name: "real-first" })).toHaveFocus();
+  screen.getByRole("button", { name: "real-last" }).focus();
+  await userEvent.tab();
+  expect(screen.getByRole("button", { name: "real-first" })).toHaveFocus();
+  await userEvent.tab({ shift: true });
+  expect(screen.getByRole("button", { name: "real-last" })).toHaveFocus();
 });

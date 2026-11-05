@@ -1,8 +1,16 @@
-export type HapticKind = "place" | "wrong" | "win" | "lose";
+import { HOLD_RAMP } from "./holdRamp";
+import type { OutcomeKind } from "./outcome";
 
 export interface Haptics {
   /** Always resolves: a failed buzz must never break gameplay. */
-  play(kind: HapticKind): Promise<void>;
+  play(kind: OutcomeKind): Promise<void>;
+  /** True only in a Tauri build on mobile, where the plugin is registered. */
+  supported(): boolean;
+  /**
+   * Starts the hold build-up pulses (`HOLD_RAMP`) and returns an idempotent
+   * cancel. A new ramp cancels the previous one. No-op when unsupported.
+   */
+  ramp(): () => void;
 }
 
 type Plugin = Pick<
@@ -17,6 +25,9 @@ export interface HapticsDeps {
   loadPlugin(): Promise<Plugin>;
   /** Receives swallowed failures. */
   log(err: unknown): void;
+  /** Timer functions; default to the globals. */
+  setTimeout?(fn: () => void, ms: number): unknown;
+  clearTimeout?(handle: unknown): void;
 }
 
 /** iPhone/iPad/Android UA, or iPadOS reporting as a touch-capable Mac. */
@@ -61,14 +72,47 @@ export function createHaptics(deps: HapticsDeps = defaultDeps): Haptics {
     return loading;
   };
 
+  const supported = () => deps.isTauri() && deps.isMobile();
+
+  const setT = deps.setTimeout ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearT =
+    deps.clearTimeout ??
+    ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  let cancelCurrent: (() => void) | undefined;
+
+  const impact = async (style: "soft" | "light" | "medium" | "heavy") => {
+    try {
+      const p = await plugin();
+      const result = await p.impactFeedback(style);
+      if (result?.status === "error") deps.log(result.error);
+    } catch (err) {
+      deps.log(err);
+    }
+  };
+
   return {
+    supported,
+    ramp() {
+      cancelCurrent?.();
+      cancelCurrent = undefined;
+      if (!supported()) return () => {};
+      const handles = HOLD_RAMP.map(({ at, style }) =>
+        setT(() => void impact(style), at),
+      );
+      const cancel = () => {
+        for (const h of handles) clearT(h);
+        if (cancelCurrent === cancel) cancelCurrent = undefined;
+      };
+      cancelCurrent = cancel;
+      return cancel;
+    },
     async play(kind) {
       try {
-        if (!deps.isTauri() || !deps.isMobile()) return;
+        if (!supported()) return;
         const p = await plugin();
         const result =
           kind === "place"
-            ? await p.impactFeedback("light")
+            ? await p.impactFeedback("heavy")
             : await p.notificationFeedback(
                 kind === "wrong"
                   ? "warning"

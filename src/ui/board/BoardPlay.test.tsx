@@ -8,7 +8,7 @@ import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { createGameStore, type GameStore } from "../../store/gameStore";
 import { holdCell as hold } from "../../test/hold";
 import { Board } from "./Board";
-import { HOLD_TOTAL_MS } from "./hold";
+import { HOLD_DELAY_MS, HOLD_TOTAL_MS } from "./hold";
 
 // Count the CellView renders that get past memo, per cell index.
 const renders = vi.hoisted(() => ({ byIndex: new Map<number, number>() }));
@@ -104,6 +104,22 @@ describe("playing the board", () => {
     hold(cell(wrongCell));
     expect(label(wrongCell)).toBe("wrong");
     expect(hearts()).toBe(2);
+  });
+
+  test("the glow starting does not re-render any cell", () => {
+    const { cell } = setup();
+    const el = cell(solution[0]);
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(el, { button: 0, pointerId: 1 });
+      act(() => vi.advanceTimersByTime(HOLD_DELAY_MS - 1));
+      renders.byIndex.clear();
+      act(() => vi.advanceTimersByTime(1));
+      expect(document.querySelector("[data-hold-glow]")).not.toBeNull();
+      expect([...renders.byIndex.keys()]).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("a hold released early places nothing and costs nothing", () => {

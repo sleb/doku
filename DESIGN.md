@@ -1,6 +1,6 @@
 # Doku — Component-Level Design (draft 2)
 
-A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. The full app (milestones 1 to 4: engine, board, mobile, campaign with persistence) and the level generator with difficulty tiers (milestone 5) are implemented; iOS runs on the simulator; Android is pending (#64). Milestone 6 (polish) is not started.
+A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. The full app (milestones 1 to 4: engine, board, mobile, campaign with persistence) and the level generator with difficulty tiers (milestone 5) are implemented; iOS runs on the simulator; Android is pending (#64). Milestone 6 (polish: sound, animation, hold glow and haptic ramp, click-only placement, screen-reader announcements, color-blind palette and patterns, dark theme, interactive tutorial, hint presentation, accessibility audit) is implemented, with the device and VoiceOver passes not yet run (`docs/POLISH_DESIGN.md` §11).
 
 ## 1. Game rules
 
@@ -30,7 +30,7 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-\* The Worker is designed for, not built: v1 generates offline in `tools/` and bundles the packs (§10); the engine has no worker-specific code, so on-device generation (milestone 6) can add it.
+\* The Worker is designed for, not built: v1 generates offline in `tools/` and bundles the packs (§10); the engine has no worker-specific code, so on-device generation (not planned) could add it.
 
 **Key decision: game logic lives in pure TypeScript, not Rust.** Validation, solving, hints and generation are small, need instant feedback, and must behave identically on desktop and mobile. Rust stays a thin shell for storage and native features. This avoids IPC latency on every tap and keeps the engine unit-testable with no Tauri runtime (and runnable in a browser for fast dev). Revisit only if generation proves too slow in a Worker.
 
@@ -44,14 +44,17 @@ doku/
 ├─ src/
 │  ├─ engine/            # pure TS, zero UI/Tauri imports
 │  ├─ store/             # game state machine, progress, settings, save format, selectors
-│  ├─ platform/          # adapters: storage, haptics (+ pure feedbackFor)
+│  ├─ platform/          # adapters: storage, haptics (+ hold ramp), sound (+ pure cues), pure outcomeFor
 │  ├─ ui/
-│  │  ├─ board/          # Board, Cell, hold gesture, geometry, palette
+│  │  ├─ board/          # Board, Cell, hold gesture and HoldGlow, geometry, palette, patterns, region naming
+│  │  ├─ a11y/           # Announcer (aria-live) and the pure announce text
+│  │  ├─ fx/             # fxStore: transient per-outcome animation state
 │  │  ├─ hud/            # TopBar, Timer, Hearts
 │  │  ├─ screens/        # GameScreen, GameLayout, ActionBar, dialogs, Finale, hooks
 │  │  └─ Dialog.tsx      # shared modal primitive
 │  ├─ levels/            # campaign.ts (ordered LEVELS) + pack-*.json
-│  └─ app/               # boot, autosave, campaign flow, index.css (theme tokens)
+│  ├─ tutorial/          # interactive first-run tutorial (steps, progress, Tutorial)
+│  └─ app/               # boot, autosave, campaign flow, theme, motion, index.css (theme tokens)
 ├─ e2e/                  # Playwright specs
 └─ tools/                # offline level scripts (generate-levels.ts, pack.ts, curriculum.ts; see `docs/GENERATOR_DESIGN.md` §8)
 ```
@@ -108,9 +111,9 @@ idle → playing ⇄ paused → won | lost
 
 State (when not idle): `level`, `board`, `wrong` (cells the player got wrong, locked), `hearts`, `hintsUsed`, `elapsedMs`, `history[]` / `future[]` (undo/redo stacks of ✕ toggles), `status`. `conflicts` is derived (`selectors.ts`), not stored.
 
-Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (press-and-hold or hold `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`/`redo` (notes only), `hint` (a correct face in the first open row for one heart; refused on the last heart), `tick` (clock, driven by `useClock`), `pause`/`resume`, `restart`.
+Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (press-and-hold, hold `Space`, or a plain click or tap in "Tap places faces" mode: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`/`redo` (notes only), `hint` (the next ladder deduction for one heart; refused on the last heart; see §13 decision 16), `tick` (clock, driven by `useClock`), `pause`/`resume`, `restart`.
 
-Secondary stores: `progressStore` (`next`, `bestMs`) and `settingsStore` (`haptics`, `seenRules`). Theme, sound, color-blind palette and a `dailyStore` are not built (milestone 6 or later; stars and the daily puzzle are dropped from the app design).
+Secondary stores: `progressStore` (`next`, `bestMs`) and `settingsStore` (`haptics`, `sound`, `theme`, `palette`, `patterns`, `inputMode`, `seenTutorial`; all are consumed: see §7 and §8). A `dailyStore` is not built (stars and the daily puzzle are dropped from the app design).
 
 ## 6. Persistence (`src/platform/storage.ts`)
 
@@ -119,29 +122,36 @@ Interface `Storage { get, set, remove, flush }` with three adapters: `TauriStora
 ## 7. UI component tree
 
 ```
-<App>                           finished && idle ? <Finale/> : <GameScreen/>   (no router)
+<App>                           replaying || !seenTutorial ? <Tutorial/> : finished && idle ? <Finale/> : <GameScreen/>   (no router)
  ├─ <GameScreen>
+ │   ├─ <Announcer/>    visually hidden aria-live region (the one screen-reader speaker)
  │   ├─ <GameLayout>  slots: header / board / controls (container queries, below)
  │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/> · <Hearts/> · Pause button
  │   │    ├─ board    → <Board>
- │   │    │    └─ <Cell> → <FaceIcon/> | <MarkIcon/> | conflict ring
- │   │    └─ controls → <ActionBar>  Undo · Redo · Hint
- │   ├─ <PauseDialog>   Resume · Restart level · Rules · Settings
+ │   │    │    ├─ <Cell> → <FaceIcon/> | <MarkIcon/> | conflict ring | hint ring
+ │   │    │    └─ <HoldGlow/>  one board-level ring over the held cell
+ │   │    └─ controls → <HintBanner/> · <ActionBar>  Undo · Redo · Hint · Tap places faces
+ │   ├─ <PauseDialog>   Resume · Restart level · Rules · Replay tutorial · Settings
  │   ├─ <RulesDialog/>  <SettingsDialog/>
+ │   ├─ <ResultSkip/>   transparent layer, only while the result modal is delayed
  │   └─ <ResultModal>   (win: time/best/hints → Next level or Finish · lose: Retry)
+ ├─ <Tutorial>          (first run and replay: private store, real Board; Skip or Finish returns to the paused campaign level)
  └─ <Finale>            (all levels done: total of best times · Start over)
 ```
 
-There is no home screen, level select, daily card, how-to-play screen or router. A single `<Dialog>` primitive backs the pause, rules, settings and result dialogs. The interactive tutorial is milestone 6.
+There is no home screen, level select, daily card, how-to-play screen or router. A single `<Dialog>` primitive backs the pause, rules, settings and result dialogs. The first-run interactive tutorial (POLISH_DESIGN §7) replaces the game screen until it is skipped or finished (so the campaign's clock, shortcuts and autosave are not mounted under it), and is replayed from Pause.
 
 ### Component notes
 
 - **`<Board>`**: owns layout only. CSS grid whose `--cell` is derived from the board area's own container size (`cqw`/`cqh`, capped at 4.5rem), not the viewport, so it resizes on desktop and fits phones in both orientations (`docs/BOARD_DESIGN.md` §4.2, `docs/MOBILE_DESIGN.md` §4). Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
-- **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
-- **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
-- **Hint button** (in `<ActionBar>`): asks for the next ladder deduction and costs one heart; disabled on the last heart. A placement hint puts the face down; an elimination hint highlights the forcing cells (dashed outline) and the cells it rules out (solid outline and tint) and shows the explanation in `<HintBanner>`, writing no marks. Asking again for the hint already on display is free; any move clears it.
-- **`<ResultModal>`**: driven by `status`; a win shows time, best and hints used.
-- **Theming**: region palette is a token set with a color-blind-safe variant, plus a pattern/number overlay option, since regions are distinguished by color alone otherwise.
+- **`<Cell>`**: pure presentational, memoized; receives primitives (`region`, `state`, `isConflict`, `inputMode`, `palette`, `patterns`, and for at most one cell `fx`, `highlight` or hint markers) and callbacks. Never reads the store directly, so the board stays fast at N≈12. Its label is built from the shared region-naming rule: "Row 3, column 5, red region, face" on the default palette without patterns, "region 3" otherwise.
+- **`<Hearts>`**: 3 hearts; the one that just emptied pops (`fxStore`). Zero hearts triggers `lost`.
+- **Hint button** (in `<ActionBar>`): asks for the next ladder deduction and costs one heart; disabled on the last heart. A placement hint puts the face down; an elimination hint highlights the forcing cells (dashed outline) and the cells it rules out (solid outline and tint) and shows the explanation in `<HintBanner>`, writing no marks. A placement hint rings the new face for 2 s; the banner (not a toast) stays until the board changes and the announcer speaks it once. Asking again for the hint already on display is free; any move clears it.
+- **`<ResultModal>`**: driven by `status`; a win shows time, best and hints used. It opens after a short, skippable delay so the win wave (900 ms) or the final wrong-tap effect (450 ms) can play; under `prefers-reduced-motion` there is no delay. Progress and autosave are recorded when the state changes, not when the modal opens.
+- **Feedback and effects**: one pure function, `outcomeFor`, decides what a state change was (`place`, `wrong`, `win`, `lose`, or `hint`); `useFeedback` renders it through haptics, sound, `fxStore` (cell and heart animations: CSS keyframes on `transform`/`opacity`, calmer under `prefers-reduced-motion`) and the announcer. Each channel reads its own setting at event time. A restore, a restart and a level change produce none of them.
+- **Hold to place**: after the 250 ms delay a ring about three cells wide (`HoldGlow`) sweeps around the held cell for 500 ms, so a fingertip does not hide it; on a phone, haptic pulses build up to the placement tap (§8).
+- **Settings dialog**: sections Feedback (Haptics where supported, Sound), Display (Theme, Colors, Patterns) and Play ("Tap places faces"), then Start over (`docs/APP_DESIGN.md` §7.3).
+- **Theming**: the chrome uses semantic tokens (`surface`, `ink`, `line`, `accent`, `focus`, ...) with a dark override, chosen by `settings.theme` (`system`, `light`, `dark`; `src/app/theme.ts`, no flash on load); contrast is enforced by `src/app/tokens.test.ts`. The board looks the same in both themes. Region color is a token set with an `accessible` variant (`palette` setting; ΔE floor under three color-vision simulations) plus 11 region patterns (`patterns` setting), since regions are otherwise distinguished by color alone. Hint and cell text name regions by color only on the default palette without patterns, else "region N". One `:focus-visible` rule gives every control a 3 px outline; interactive targets are at least 44 px (board cells are exempt).
 
 ## 8. Platform adapter layer (`src/platform`)
 
@@ -150,9 +160,11 @@ Hides differences so UI code stays platform-agnostic:
 | Adapter | Desktop | Mobile (phase 2) |
 |---|---|---|
 | `storage` | `TauriStorage` (tauri-plugin-store) | same |
-| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; keyboard: arrows/Home/End move focus, `x` = toggle ✕, hold `Space` = place face, `z` undo, `Shift+Z` or `Ctrl+Y` redo, `h` hint, `Esc` pause. No right-click or click-drag marking (dropped from the design) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
-| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
-| `audio` *(M6, not built)* | WebAudio | same (respect silent switch) |
+| `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; with `inputMode: "face"` ("Tap places faces" button, Settings, or `f`) a click places a face directly (#57); keyboard: arrows/Home/End move focus, `x` = toggle ✕, hold `Space` = place face (at once in face mode), `f` toggles the mode, `z` undo, `Shift+Z` or `Ctrl+Y` redo, `h` hint, `Esc` pause. No right-click or click-drag marking (dropped from the design) | same as desktop: tap = toggle ✕, hold = place face; the same "Tap places faces" mode is the click-only path |
+| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place` (a heavy impact)/`wrong`/`win`/`lose`, derived by the pure `outcomeFor` (`src/platform/outcome.ts`) and wired by the `useFeedback` hook in `GameScreen`; `haptics.ramp()` plays the soft-to-medium build-up pulses of `HOLD_RAMP` (`src/platform/holdRamp.ts`) while the hold ring runs, started by `useHoldRamp` and cancelled on release; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
+| `sound` | `src/platform/sound.ts` + pure `cues.ts`: synthesized WebAudio cues for `place`/`wrong`/`win`/`lose` from `outcomeFor`, wired by `useFeedback` (gated by `settings.sound`, unlocked on the first gesture, suspended when hidden) | same (silent switch behaviour to be verified on device, see `docs/POLISH_DESIGN.md` §5.2) |
+| `announcer` | `src/ui/a11y`: pure `announce` text written to a visually hidden `aria-live="polite"` region by `useFeedback` (outcomes, hints, level start, pause and resume, tap-mode changes); the hint banner is not live, so the announcer is the only speaker | same |
+| `theme` | `src/app/theme.ts`: `data-theme` on `<html>` and the `theme-color` meta, following `prefers-color-scheme` while the setting is `system`; the native title bar follows the OS (no `setTheme` grant) | same; status bar color from `theme-color` (unverified on device) |
 | `window` | default 800x600, min size 420x560, remembered size/position (`tauri-plugin-window-state`, desktop only) | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
 
 Responsive layout (landed, M3-01): `GameLayout` is a single layout driven by container queries on `main`. Tall (default) stacks header, board, controls; at container aspect ratio >= 1.2 and width >= 36rem the header and controls move to a side column next to the board. Landscape phones and desktop windows share the wide template; there is no separate desktop path.
@@ -174,8 +186,8 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 - **Engine**: unit and property tests (generated levels have exactly one solution; hint always leads to a legal move; solver agrees with `rules`).
 - **Engine immutability**: engine functions never mutate their inputs (tested with frozen inputs), so undo/redo can use plain board snapshots.
 - **Store**: state-machine transition tests.
-- **UI**: jsdom component tests (React Testing Library), Playwright e2e (desktop Chromium plus mobile Chromium and WebKit projects) for playthrough, resume, campaign, keyboard, layout.
-- **Manual** (not automatable): device passes per milestone. The M4 items still outstanding (window-state, Tauri store file, iOS kill-and-relaunch) are listed in `docs/APP_DESIGN.md` §9.
+- **UI**: jsdom component tests (React Testing Library), Playwright e2e (desktop Chromium plus mobile Chromium and WebKit projects) for playthrough, resume, campaign, keyboard, layout, tutorial, input mode, theme, and accessibility (`@axe-core/playwright` on every surface in both themes, a 44 px target and focus-outline audit, 200 % font-size and page-zoom layout).
+- **Manual** (not automatable): device passes per milestone. The M4 items still outstanding (window-state, Tauri store file, iOS kill-and-relaunch) are listed in `docs/APP_DESIGN.md` §9; the M6 items (VoiceOver, ringer switch, haptic ramp feel, color-blind check) are in `docs/POLISH_DESIGN.md` §11 and have not been run.
 
 ## 12. Milestones
 
@@ -184,7 +196,7 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 3. **Mobile**: touch input, responsive layout, safe areas, haptics, iOS then Android builds (done for iOS; Android #64 pending).
 4. **Full app** (done: play through a fixed series of levels with no level select; persistence, undo/redo, hints, settings, keyboard, desktop window; low-level design in `docs/APP_DESIGN.md`; manual desktop/iOS persistence and window-state checks outstanding).
 5. **Generator + level packs + difficulty tiers** (done: 109-level tiered campaign; low-level design and as-built notes in `docs/GENERATOR_DESIGN.md`).
-6. **Polish**: sound, animations, daily puzzle, accessibility pass.
+6. **Polish** (done: `docs/POLISH_DESIGN.md`, stories M6-01 to M6-14): one `outcomeFor` feeding haptics, synthesized sound, animations and screen-reader announcements; the win/loss sequence; the hold ring and haptic ramp; click-only placement; accessible palette and patterns; dark theme; the interactive tutorial; hint presentation; an axe, target and zoom audit. The daily puzzle was dropped from the app (decision 13) and is not part of this milestone. Device and VoiceOver passes are outstanding.
 
 ## 13. Decisions and open questions
 
@@ -196,9 +208,9 @@ Decided:
 5. **Accounts, leaderboards, cloud sync:** not for v1.
 6. **Marks (✕):** free notes, never cost a heart, even on a cell that holds a face.
 7. **Wrong tap:** deviation from the unique solution (see §4). Dead-end boards are avoided by not placing wrong faces.
-8. **Mobile input is unchanged:** tap = ✕, hold (250 ms delay, 500 ms glow) = face. No tool toggle (click-only placement is #57).
+8. **Mobile input is the same as desktop:** tap = ✕, hold (250 ms delay, 500 ms glow) = face. Click-only placement (#57, M6-07) is the explicit, persisted "Tap places faces" mode (`settings.inputMode`, default `mark`), never auto-enabled.
 9. **One layout via container queries** for phones (both orientations) and desktop; orientation is not locked (landed).
-10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose), never for the free ✕.
+10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `outcomeFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose) and the hold build-up, never for the free ✕ or a plain tap; the ramp starts with the glow, not at press.
 11. **Commit `src-tauri/gen`**, ignoring build outputs (`gen/apple` committed in #63; `gen/android` pending #64).
 12. **iOS first, then Android** (decided; iOS builds on the simulator, #63; Android pending, #64).
 13. **No level select, home screen, daily puzzle or stars** in the app: levels play in a fixed order and the app opens on the current one. Progress is one integer plus best times (`next`, `bestMs`).
@@ -210,5 +222,14 @@ Decided:
 
 19. **Which size/tier combinations ship (milestone 5):** Easy 7 to 10, Medium 7 to 11, Hard 7 to 11, Expert 7 to 11 (counts in §10). Easy 11x11 is dropped for v1: only 16 of 20 `--stats` seeds fill within the attempt budget, below the 18 of 20 criterion, and a level takes about 30 s. Expert ships three levels per size, a cost choice (about 6.4 s per 11x11 level), not a limit. Expert is depth-1 lookahead (no nesting; it solved every level the other rungs left unrated). Steering the generator toward a tier (`docs/GENERATOR_DESIGN.md` §7.3) is not built because nothing needed it.
 
-Still open:
-- Daily puzzle and on-device generation (milestone 6): would add the Worker in §2 and a date-derived seed.
+20. **Polish (milestone 6):**
+    - One pure `outcomeFor` feeds every channel (haptics, sound, effects, announcements) so they cannot disagree; a hint is its own outcome kind but is felt and heard as a placement. The store and engine were not changed.
+    - Sound is synthesized with Web Audio (no assets), default on at a low master gain, only for outcomes; the free ✕, undo and redo are silent.
+    - Animation is CSS only, honours `prefers-reduced-motion` (no in-app motion switch), and never delays input; the only delay is the skippable result modal (900 ms after a win, 450 ms after a loss).
+    - The hold glow is a finger-sized board-level ring, not a cell border; the haptic ramp is one table (`HOLD_RAMP`) to tune on a device.
+    - Color-blind support is two layers: an `accessible` palette and patterns. The board is identical in light and dark; only the chrome is themed, and the native title bar is not synced.
+    - The tutorial runs on a private store and the real components, so it cannot touch the campaign. The static Rules dialog stays for reference.
+    - Region naming is one rule for cell labels and hint text: color names on the default palette without patterns, otherwise "region N".
+    - Board cells are exempt from the 44 px target rule (an 11×11 board on a phone cannot meet it); every other control meets it.
+
+Still open (carried to `docs/POLISH_DESIGN.md` §12): haptics plus sound overlap on phones, the feel of the hold ramp, whether the tutorial is too long, and whether a bright board in a dark frame is jarring. All need a device or playtesting. A daily puzzle would reverse decision 13 and is not planned.

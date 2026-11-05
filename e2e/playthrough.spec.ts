@@ -164,54 +164,86 @@ test("the glow shows while holding and is gone after commit", async ({
   await target.hover();
   await page.mouse.down();
   await expect(target).toHaveAttribute("data-holding", "true");
-  await expect(target.locator("[data-hold-glow]")).toBeVisible();
+  await expect(page.locator("[data-hold-glow]")).toBeVisible();
   await expect(target).toHaveAccessibleName(/, face$/);
-  await expect(target.locator("[data-hold-glow]")).toHaveCount(0);
+  await expect(page.locator("[data-hold-glow]")).toHaveCount(0);
   await page.mouse.up();
 });
 
-test("the glow traces a visible border mid-hold", async ({ page }) => {
+test("the glow is a finger-sized ring that sweeps mid-hold", async ({
+  page,
+}) => {
   await page.goto("/");
-  const target = cell(page, 0, (solution[0] + 1) % size);
+  const target = cell(page, 3, (solution[3] + 1) % size);
   await target.hover();
   await page.mouse.down();
   // Nothing shows during the delay, so a normal click never animates.
   await page.waitForTimeout(100);
-  await expect(target).not.toHaveAttribute("data-holding", "true");
-  await expect(target.locator("[data-hold-glow]")).toHaveCount(0);
+  await expect(page.locator("[data-hold-glow]")).toHaveCount(0);
   await page.waitForTimeout(HOLD_DELAY_MS - 100);
-  const rect = target.locator("[data-hold-glow] rect");
+  const glow = page.locator("[data-hold-glow]");
+  const ring = glow.locator("circle.hold-ring");
   const read = () =>
-    rect.evaluate((el) => {
+    ring.evaluate((el) => {
       const cs = getComputedStyle(el);
       return {
         offset: Number.parseFloat(cs.strokeDashoffset),
-        width: Number.parseFloat(cs.strokeWidth),
         dash: cs.strokeDasharray,
-        len: (el as SVGGeometryElement).getTotalLength(),
-        box: el.getBoundingClientRect().width,
+        width: el.getBoundingClientRect().width,
       };
     });
   await page.waitForTimeout(HOLD_MS * 0.3);
   const a = await read();
   await page.waitForTimeout(HOLD_MS * 0.3);
   const b = await read();
-  // The dash offset advances toward 0 as the stroke is traced.
   expect(b.offset).toBeLessThan(a.offset);
-  expect(a.dash).toBe("1px"); // user units, scaled by pathLength
-  // Stroke is normalised by pathLength (not 1px), and visibly thick.
-  expect(a.width).toBeGreaterThan(2);
-  // A traced fraction of the border is painted: screenshot shows dark pixels
-  // inside the cell's outer edge that the unheld neighbour lacks.
-  const box = await target.boundingBox();
-  if (!box) throw new Error("no box");
-  const shot = await page.screenshot({ clip: box });
-  // keep a screenshot for manual inspection
-  await page.screenshot({
-    path: "test-results/hold-glow.png",
-    clip: box,
+  expect(a.dash).toBe("1px");
+  const cellBox = await target.boundingBox();
+  const glowBox = await glow.boundingBox();
+  if (!cellBox || !glowBox) throw new Error("no box");
+  // Wider than the fingertip-hidden cell: about 3 cells, floor 64 px.
+  expect(glowBox.width).toBeGreaterThanOrEqual(
+    Math.min(64, cellBox.width * 3) - 1,
+  );
+  expect(glowBox.width).toBeGreaterThan(cellBox.width * 1.5);
+  // Centred on the held cell.
+  expect(glowBox.x + glowBox.width / 2).toBeCloseTo(
+    cellBox.x + cellBox.width / 2,
+    0,
+  );
+  expect(glowBox.y + glowBox.height / 2).toBeCloseTo(
+    cellBox.y + cellBox.height / 2,
+    0,
+  );
+  await page.mouse.up();
+});
+
+test("the glow on a corner cell is not clipped by the board", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const col = solution[0] === 0 ? 1 : 0;
+  const target = cell(page, 0, col);
+  await target.hover();
+  await page.mouse.down();
+  await expect(page.locator("[data-hold-glow]")).toBeVisible();
+  await page.waitForTimeout(HOLD_MS * 0.6);
+  const grid = await page.getByRole("grid").boundingBox();
+  const glowBox = await page.locator("[data-hold-glow]").boundingBox();
+  const cellBox = await target.boundingBox();
+  if (!grid || !glowBox || !cellBox) throw new Error("no box");
+  // The ring overflows the board's top edge...
+  expect(glowBox.y).toBeLessThan(grid.y);
+  // ...and its dark arc is actually painted there, above the frame.
+  const h = Math.min(grid.y - glowBox.y, 20);
+  const shot = await page.screenshot({
+    clip: {
+      x: cellBox.x + cellBox.width / 2,
+      y: grid.y - h,
+      width: cellBox.width,
+      height: h - 1,
+    },
   });
-  expect(shot.length).toBeGreaterThan(0);
   const dark = await page.evaluate(async (png) => {
     const img = await createImageBitmap(
       await (await fetch(`data:image/png;base64,${png}`)).blob(),
@@ -222,17 +254,30 @@ test("the glow traces a visible border mid-hold", async ({ page }) => {
     ctx.drawImage(img, 0, 0);
     const d = ctx.getImageData(0, 0, img.width, img.height).data;
     let n = 0;
-    // Count near-black pixels in the 6px band just inside the edge.
-    for (let y = 0; y < img.height; y++)
-      for (let x = 0; x < img.width; x++) {
-        const edge = Math.min(x, y, img.width - 1 - x, img.height - 1 - y);
-        if (edge < 2 || edge > 7) continue;
-        const i = (y * img.width + x) * 4;
-        if (d[i] + d[i + 1] + d[i + 2] < 120) n++;
-      }
+    for (let i = 0; i < d.length; i += 4)
+      if (d[i] + d[i + 1] + d[i + 2] < 120) n++;
     return n;
   }, shot.toString("base64"));
-  expect(dark).toBeGreaterThan(40);
+  expect(dark).toBeGreaterThan(5);
+  await page.mouse.up();
+});
+
+test("with reduced motion the ring is static and fades in", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const target = cell(page, 3, (solution[3] + 1) % size);
+  await target.hover();
+  await page.mouse.down();
+  const ring = page.locator("[data-hold-glow] circle.hold-ring");
+  await expect(ring).toBeVisible();
+  const style = await ring.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { dash: cs.strokeDasharray, name: cs.animationName };
+  });
+  expect(style.dash).toBe("none");
+  expect(style.name).toBe("hold-ramp");
   await page.mouse.up();
 });
 

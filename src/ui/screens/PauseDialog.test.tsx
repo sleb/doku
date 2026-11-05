@@ -10,6 +10,7 @@ test("renders nothing when closed", () => {
       onResume={() => {}}
       onRestart={() => {}}
       onRules={() => {}}
+      onReplayTutorial={() => {}}
       onSettings={() => {}}
     />,
   );
@@ -26,6 +27,7 @@ test("Resume is focused and resumes; Restart level restarts", async () => {
       onResume={onResume}
       onRestart={onRestart}
       onRules={() => {}}
+      onReplayTutorial={() => {}}
       onSettings={() => {}}
     />,
   );
@@ -45,6 +47,7 @@ test("Escape does not resume", async () => {
       onResume={onResume}
       onRestart={() => {}}
       onRules={() => {}}
+      onReplayTutorial={() => {}}
       onSettings={() => {}}
     />,
   );
@@ -62,6 +65,7 @@ test("Rules and Settings buttons call their handlers", async () => {
       onResume={() => {}}
       onRestart={() => {}}
       onRules={onRules}
+      onReplayTutorial={() => {}}
       onSettings={onSettings}
     />,
   );
@@ -73,6 +77,25 @@ test("Rules and Settings buttons call their handlers", async () => {
     "Resume",
     "Restart level",
     "Rules",
+    "Replay tutorial",
     "Settings",
   ]);
+});
+
+test("Replay tutorial calls onReplayTutorial", async () => {
+  const onReplayTutorial = vi.fn();
+  render(
+    <PauseDialog
+      open
+      onResume={() => {}}
+      onRestart={() => {}}
+      onRules={() => {}}
+      onReplayTutorial={onReplayTutorial}
+      onSettings={() => {}}
+    />,
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Replay tutorial" }),
+  );
+  expect(onReplayTutorial).toHaveBeenCalledTimes(1);
 });

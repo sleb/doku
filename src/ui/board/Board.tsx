@@ -1,14 +1,20 @@
 import {
   type CSSProperties,
   type RefObject,
+  useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { useStore } from "zustand";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
+import { fxStore } from "../fx/fxStore";
 import { CellView } from "./Cell";
 import { type CellGeometry, cellGeometry } from "./geometry";
+import { HoldGlow } from "./HoldGlow";
+import type { PaletteName } from "./palette";
 import { useNoDoubleTapLoupe } from "./useNoDoubleTapLoupe";
 
 export interface BoardProps {
@@ -17,15 +23,29 @@ export interface BoardProps {
   wrong: ReadonlySet<number>;
   conflicts: ReadonlySet<number>;
   /** Cells that force the hint on display (drawn dashed). */
-  highlight?: ReadonlySet<number>;
+  causes?: ReadonlySet<number>;
   /** Cells the hint on display rules out (drawn solid, tinted). */
   targets?: ReadonlySet<number>;
   /** True when the game is not `playing`; locks the whole board. */
   disabled: boolean;
+  /** True during the win wave (result modal pending); sets `data-celebrate` and a `--row` per row. */
+  celebrate?: boolean;
+  /** The face a hint just placed, ringed for `HINT_RING_MS`; `key` restarts the ring for a new hint. */
+  hintRing?: { cell: number; key: number };
+  /** Cells to ring (the tutorial's "look here" cue). */
+  highlight?: ReadonlySet<number>;
+  /** "face": a click places a face. Defaults to "mark". */
+  inputMode?: "mark" | "face";
+  /** Region color set. Defaults to "default". */
+  palette?: PaletteName;
+  /** Overlay a pattern per region. Defaults to off. */
+  patterns?: boolean;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
   /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
   holdOwner?: RefObject<number | null>;
+  /** Called with the glowing (held) cell, or null when its glow ends. */
+  onHoldGlow?: (index: number | null) => void;
 }
 
 export function Board({
@@ -33,16 +53,38 @@ export function Board({
   board,
   wrong,
   conflicts,
-  highlight,
+  causes,
   targets,
   disabled,
+  highlight,
+  hintRing,
+  celebrate,
+  inputMode,
+  palette,
+  patterns,
   onToggleMark,
   onPlaceFace,
   holdOwner: sharedHoldOwner,
+  onHoldGlow,
 }: BoardProps) {
   const { size } = level;
   const ownHoldOwner = useRef<number | null>(null);
   const holdOwner = sharedHoldOwner ?? ownHoldOwner;
+  const [glowCell, setGlowCell] = useState<number | null>(null);
+  // A cell's release (null) only clears the glow it still owns.
+  const onCellGlow = useCallback(
+    (v: number | null, owner?: number) =>
+      setGlowCell((c) => (v === null ? (c === owner ? null : c) : v)),
+    [],
+  );
+  const onHoldGlowRef = useRef(onHoldGlow);
+  onHoldGlowRef.current = onHoldGlow;
+  const reportedGlow = useRef<number | null>(null);
+  useEffect(() => {
+    if (reportedGlow.current === glowCell) return; // nothing on mount
+    reportedGlow.current = glowCell;
+    onHoldGlowRef.current?.(glowCell);
+  }, [glowCell]);
   const [active, setActive] = useState(0);
   // A new level starts with the first cell tabbable (state adjusted in render).
   const [activeLevel, setActiveLevel] = useState(level);
@@ -50,6 +92,16 @@ export function Board({
     setActiveLevel(level);
     setActive(0);
   }
+  const last = useStore(fxStore, (s) => s.last);
+  // A lose is the final wrong tap; a win has no cell here (the wave is separate).
+  const fxKind =
+    last?.cell === undefined
+      ? undefined
+      : last.kind === "place" || last.kind === "hint"
+        ? "place"
+        : last.kind === "wrong" || last.kind === "lose"
+          ? "wrong"
+          : undefined;
   const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
@@ -71,6 +123,7 @@ export function Board({
       aria-label="Puzzle board"
       aria-rowcount={size}
       aria-colcount={size}
+      data-celebrate={celebrate ? "true" : undefined}
       onKeyDown={(e) => {
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
         const i = Number((e.target as HTMLElement).dataset.index);
@@ -97,9 +150,14 @@ export function Board({
       className="relative grid w-max border-4 border-neutral-800"
       style={style}
     >
-      {rows.map((cells) => (
+      {rows.map((cells, r) => (
         // biome-ignore lint/a11y/useSemanticElements lint/a11y/useFocusableInteractive: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
-        <div key={cells[0].row} role="row" className="contents">
+        <div
+          key={cells[0].row}
+          role="row"
+          className="contents"
+          style={{ "--row": r } as CSSProperties}
+        >
           {cells.map((g) => (
             // biome-ignore lint/a11y/useSemanticElements lint/a11y/useFocusableInteractive: ARIA grid on a CSS grid; the focusable element is the inner button (BOARD_DESIGN 4.2)
             <div key={g.index} role="gridcell" className="size-full">
@@ -111,18 +169,26 @@ export function Board({
                 state={board[g.index]}
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
+                highlight={highlight?.has(g.index)}
                 hint={
                   targets?.has(g.index)
                     ? "target"
-                    : highlight?.has(g.index)
+                    : causes?.has(g.index)
                       ? "cause"
                       : undefined
                 }
                 disabled={disabled || isLocked(board, wrong, g.index)}
+                inputMode={inputMode}
+                palette={palette}
+                patterns={patterns}
                 tabIndex={g.index === active ? 0 : -1}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
                 holdOwner={holdOwner}
+                onGlow={onCellGlow}
+                hintRing={g.index === hintRing?.cell ? hintRing.key : undefined}
+                fx={g.index === last?.cell ? fxKind : undefined}
+                fxSeq={g.index === last?.cell ? last?.seq : undefined}
               />
             </div>
           ))}
@@ -131,6 +197,9 @@ export function Board({
       {geometry.map((g) => (
         <EdgeSegments key={g.index} g={g} />
       ))}
+      {glowCell !== null && (
+        <HoldGlow row={Math.floor(glowCell / size)} col={glowCell % size} />
+      )}
     </div>
   );
 }

@@ -17,7 +17,7 @@ export function Finale({ onStartOver }: { onStartOver: () => void }) {
       <button
         type="button"
         onClick={onStartOver}
-        className="rounded bg-stone-800 px-4 py-2 min-h-11 text-white"
+        className="rounded bg-accent px-4 py-2 min-h-11 text-on-accent"
       >
         Start over
       </button>

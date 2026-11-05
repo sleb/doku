@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { Cell } from "../engine";
+import { Cell, type Deduction, emptyBoard, nextHint } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import {
   idleState,
@@ -30,7 +30,13 @@ describe("toSaved", () => {
       hintsUsed: 1,
       elapsedMs: 4200,
       wrong: new Set([9, 5]),
-      hintShown: { cells: [1], targets: [2], message: "not saved" },
+      hintShown: {
+        cells: [1],
+        targets: [2],
+        message: "not saved",
+        deduction: nextHint(emptyBoard(uniqueLevel7), uniqueLevel7)
+          ?.deduction as Deduction,
+      },
     };
     expect(toSaved(playing)).toEqual({
       levelId: uniqueLevel7.id,

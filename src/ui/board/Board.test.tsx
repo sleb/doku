@@ -9,10 +9,32 @@ import {
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
+import { HOLD_DELAY_MS, HOLD_TOTAL_MS } from "./hold";
 
 const n = level.size;
 const none: ReadonlySet<number> = new Set();
 const handlers = () => ({ onToggleMark: vi.fn(), onPlaceFace: vi.fn() });
+
+describe("Board highlight", () => {
+  test("rings exactly the highlighted cells", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        highlight={new Set([0, 9])}
+        {...handlers()}
+      />,
+    );
+    const marked = screen
+      .getAllByRole("button")
+      .filter((b) => b.dataset.highlight === "true")
+      .map((b) => b.dataset.index);
+    expect(marked).toEqual(["0", "9"]);
+  });
+});
 
 describe("Board", () => {
   test("is an accessible grid of rows and gridcells with one button each", () => {
@@ -56,6 +78,22 @@ describe("Board", () => {
       const name = `Row ${r + 1}, column ${c + 1}, ${REGION_NAMES[level.regions[r][c]]} region, empty`;
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+  });
+
+  test("labels use region numbers on the accessible palette", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        palette="accessible"
+        {...handlers()}
+      />,
+    );
+    const name = `Row 1, column 1, region ${level.regions[0][0] + 1}, empty`;
+    expect(screen.getByRole("button", { name })).toBeTruthy();
   });
 
   test("shows each cell state", () => {
@@ -187,6 +225,24 @@ describe("Board", () => {
       holdCell(at(11));
       expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(11);
     });
+  });
+
+  test("inputMode face: a click places a face instead of marking", async () => {
+    const h = handlers();
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        inputMode="face"
+        {...h}
+      />,
+    );
+    await userEvent.click(screen.getAllByRole("button")[4]);
+    expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(4);
+    expect(h.onToggleMark).not.toHaveBeenCalled();
   });
 
   describe("roving tabindex", () => {
@@ -372,6 +428,81 @@ describe("Board", () => {
       expect(activeIndex()).toBe(3);
     });
   });
+
+  describe("hold glow", () => {
+    const setup = (onHoldGlow = vi.fn()) => {
+      render(
+        <Board
+          level={level}
+          board={emptyBoard(level)}
+          wrong={none}
+          conflicts={none}
+          disabled={false}
+          onHoldGlow={onHoldGlow}
+          {...handlers()}
+        />,
+      );
+      const cell = (r: number, c: number) =>
+        screen.getByRole("button", {
+          name: new RegExp(`^Row ${r + 1}, column ${c + 1},`),
+        });
+      return { onHoldGlow, cell };
+    };
+    const glows = () => document.querySelectorAll("[data-hold-glow]");
+
+    test("one glow, centred on the held cell, only while holding", () => {
+      const { cell, onHoldGlow } = setup();
+      vi.useFakeTimers();
+      try {
+        expect(glows()).toHaveLength(0);
+        fireEvent.pointerDown(cell(2, 4), { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS - 1));
+        expect(glows()).toHaveLength(0);
+        act(() => vi.advanceTimersByTime(1));
+        expect(glows()).toHaveLength(1);
+        const g = glows()[0] as HTMLElement;
+        expect(g.style.left).toBe("calc(var(--cell) * 4.5)");
+        expect(g.style.top).toBe("calc(var(--cell) * 2.5)");
+        expect(onHoldGlow).toHaveBeenLastCalledWith(2 * n + 4);
+        act(() => vi.advanceTimersByTime(HOLD_TOTAL_MS));
+        expect(glows()).toHaveLength(0);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(null);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test("a plain click never shows the glow", async () => {
+      const { cell, onHoldGlow } = setup();
+      await userEvent.click(cell(1, 1));
+      expect(glows()).toHaveLength(0);
+      expect(onHoldGlow).not.toHaveBeenCalled();
+    });
+
+    test("a second overlapping hold leaves the owner's glow alone", () => {
+      const { cell, onHoldGlow } = setup();
+      vi.useFakeTimers();
+      try {
+        const a = cell(0, 0);
+        const b = cell(3, 3);
+        fireEvent.pointerDown(a, { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
+        fireEvent.pointerDown(b, { button: 0, pointerId: 2 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
+        expect(onHoldGlow).toHaveBeenCalledTimes(1);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(0);
+        onHoldGlow.mockClear();
+        fireEvent.pointerUp(b, { button: 0, pointerId: 2 });
+        expect(glows()).toHaveLength(1);
+        expect(onHoldGlow).not.toHaveBeenCalled();
+        fireEvent.pointerUp(a, { button: 0, pointerId: 1 });
+        expect(glows()).toHaveLength(0);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(null);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
 
 describe("Board hint markers", () => {
@@ -382,7 +513,7 @@ describe("Board hint markers", () => {
         board={emptyBoard(level)}
         wrong={none}
         conflicts={none}
-        highlight={new Set([3, 4])}
+        causes={new Set([3, 4])}
         targets={new Set([10])}
         disabled={false}
         {...handlers()}
@@ -396,5 +527,49 @@ describe("Board hint markers", () => {
       ["4", "cause"],
       ["10", "target"],
     ]);
+  });
+});
+
+describe("Board hint ring", () => {
+  const renderRing = (hintRing?: { cell: number; key: number }) =>
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        hintRing={hintRing}
+        {...handlers()}
+      />,
+    );
+
+  test("rings only the placed cell", () => {
+    const { container } = renderRing({ cell: 5, key: 1 });
+    const rings = container.querySelectorAll("[data-hint-ring]");
+    expect(rings).toHaveLength(1);
+    expect(rings[0].closest("button")?.dataset.index).toBe("5");
+  });
+
+  test("no ring without a placed hint", () => {
+    const { container } = renderRing();
+    expect(container.querySelector("[data-hint-ring]")).toBeNull();
+  });
+
+  test("a new hint remounts the ring so it restarts", () => {
+    const { container, rerender } = renderRing({ cell: 5, key: 1 });
+    const first = container.querySelector("[data-hint-ring]");
+    rerender(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        hintRing={{ cell: 5, key: 2 }}
+        {...handlers()}
+      />,
+    );
+    expect(container.querySelector("[data-hint-ring]")).not.toBe(first);
   });
 });

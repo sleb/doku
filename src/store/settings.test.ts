@@ -4,10 +4,21 @@ import {
   hydrateSettings,
   parseSettings,
   persistSettings,
+  type Settings,
   settingsStore,
 } from "./settings";
 
-const defaults = { haptics: true, seenRules: false };
+const defaults: Settings = {
+  haptics: true,
+  sound: true,
+  theme: "system",
+  palette: "default",
+  patterns: false,
+  inputMode: "mark",
+  seenTutorial: false,
+};
+
+const base = { haptics: true, seenTutorial: false };
 
 describe("parseSettings", () => {
   test("undefined gives defaults", () => {
@@ -15,23 +26,26 @@ describe("parseSettings", () => {
   });
 
   test("a valid object round-trips", () => {
-    expect(parseSettings({ haptics: false, seenRules: true })).toEqual({
+    expect(parseSettings({ haptics: false, seenTutorial: true })).toEqual({
+      ...defaults,
       haptics: false,
-      seenRules: true,
+      seenTutorial: true,
     });
   });
 
   test("a partial object keeps what is valid and defaults the rest", () => {
     expect(parseSettings({ haptics: false })).toEqual({
+      ...defaults,
       haptics: false,
-      seenRules: false,
+      seenTutorial: false,
     });
   });
 
   test("a wrong-typed field falls back to its own default", () => {
-    expect(parseSettings({ haptics: "no", seenRules: true })).toEqual({
+    expect(parseSettings({ haptics: "no", seenTutorial: true })).toEqual({
+      ...defaults,
       haptics: true,
-      seenRules: true,
+      seenTutorial: true,
     });
   });
 
@@ -45,8 +59,8 @@ describe("parseSettings", () => {
 
   test("extra keys are dropped", () => {
     expect(
-      parseSettings({ haptics: false, seenRules: true, theme: "x" }),
-    ).toEqual({ haptics: false, seenRules: true });
+      parseSettings({ haptics: false, seenTutorial: true, theme: "x" }),
+    ).toEqual({ ...defaults, haptics: false, seenTutorial: true });
   });
 
   test("never throws on arbitrary JSON-ish input", () => {
@@ -60,32 +74,63 @@ describe("parseSettings", () => {
       {},
       [[]],
       { haptics: {} },
-      { seenRules: [1] },
+      { seenTutorial: [1] },
       () => 1,
       Symbol("s"),
     ];
     for (const j of junk) {
       const out = parseSettings(j);
       expect(typeof out.haptics).toBe("boolean");
-      expect(typeof out.seenRules).toBe("boolean");
+      expect(typeof out.seenTutorial).toBe("boolean");
     }
+  });
+});
+
+describe("parseSettings (all fields)", () => {
+  test("valid values are kept", () => {
+    const v = {
+      haptics: false,
+      sound: false,
+      theme: "dark",
+      palette: "accessible",
+      patterns: true,
+      inputMode: "face",
+      seenTutorial: true,
+    };
+    expect(parseSettings(v)).toEqual(v);
+  });
+
+  test("wrong types and unknown enums fall back", () => {
+    expect(
+      parseSettings({
+        sound: 1,
+        theme: "neon",
+        palette: 3,
+        patterns: "yes",
+        inputMode: "x",
+      }),
+    ).toEqual(defaults);
+  });
+
+  test("the old seenRules key is ignored", () => {
+    expect(parseSettings({ seenRules: true })).toEqual(defaults);
   });
 });
 
 describe("settingsStore", () => {
   test("starts with defaults", () => {
-    const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual(defaults);
+    const { haptics, seenTutorial } = settingsStore.getState();
+    expect({ haptics, seenTutorial }).toEqual(base);
   });
 });
 
 describe("settingsStore.set", () => {
   test("merges a patch and leaves other fields alone", () => {
     settingsStore.getState().set({ haptics: false });
-    const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual({
+    const { haptics, seenTutorial } = settingsStore.getState();
+    expect({ haptics, seenTutorial }).toEqual({
       haptics: false,
-      seenRules: false,
+      seenTutorial: false,
     });
   });
 });
@@ -95,24 +140,27 @@ describe("hydrateSettings", () => {
 
   test("fills the store from stored settings", async () => {
     const storage = new MemoryStorage();
-    await storage.set("settings", { haptics: false, seenRules: true });
+    await storage.set("settings", { haptics: false, seenTutorial: true });
     await hydrateSettings(storage);
-    const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual({ haptics: false, seenRules: true });
+    const { haptics, seenTutorial } = settingsStore.getState();
+    expect({ haptics, seenTutorial }).toEqual({
+      haptics: false,
+      seenTutorial: true,
+    });
   });
 
   test("leaves defaults when nothing is stored", async () => {
     await hydrateSettings(new MemoryStorage());
-    const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual(defaults);
+    const { haptics, seenTutorial } = settingsStore.getState();
+    expect({ haptics, seenTutorial }).toEqual(base);
   });
 
   test("a rejecting read leaves defaults and does not throw", async () => {
     const storage = new MemoryStorage();
     storage.get = () => Promise.reject(new Error("boom"));
     await expect(hydrateSettings(storage)).resolves.toBeUndefined();
-    const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual(defaults);
+    const { haptics, seenTutorial } = settingsStore.getState();
+    expect({ haptics, seenTutorial }).toEqual(base);
   });
 
   test.each(["garbage", { haptics: 5 }])(
@@ -121,8 +169,8 @@ describe("hydrateSettings", () => {
       const storage = new MemoryStorage();
       await storage.set("settings", bad);
       await hydrateSettings(storage);
-      const { haptics, seenRules } = settingsStore.getState();
-      expect({ haptics, seenRules }).toEqual(defaults);
+      const { haptics, seenTutorial } = settingsStore.getState();
+      expect({ haptics, seenTutorial }).toEqual(base);
     },
   );
 });
@@ -135,8 +183,9 @@ describe("persistSettings", () => {
     persistSettings(storage);
     settingsStore.getState().set({ haptics: false });
     expect(await storage.get("settings")).toEqual({
+      ...defaults,
       haptics: false,
-      seenRules: false,
+      seenTutorial: false,
     });
   });
 
@@ -163,12 +212,15 @@ describe("persistSettings", () => {
   test("persist, change, reset, hydrate round-trips", async () => {
     const storage = new MemoryStorage();
     const stop = persistSettings(storage);
-    settingsStore.getState().set({ haptics: false, seenRules: true });
+    settingsStore.getState().set({ haptics: false, seenTutorial: true });
     await storage.flush();
     stop();
     settingsStore.setState(defaults);
     await hydrateSettings(storage);
-    const { haptics, seenRules } = settingsStore.getState();
-    expect({ haptics, seenRules }).toEqual({ haptics: false, seenRules: true });
+    const { haptics, seenTutorial } = settingsStore.getState();
+    expect({ haptics, seenTutorial }).toEqual({
+      haptics: false,
+      seenTutorial: true,
+    });
   });
 });

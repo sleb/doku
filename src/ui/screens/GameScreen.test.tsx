@@ -12,10 +12,17 @@ import { gameStore } from "../../store/gameStore";
 import { defaultProgress, progressStore } from "../../store/progress";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
+import { announcerStore } from "../a11y/announcerStore";
+import { HOLD_DELAY_MS, HOLD_MS } from "../board/hold";
 import { GameScreen } from "./GameScreen";
+import { LOSE_DELAY_MS, WIN_DELAY_MS } from "./useDelayedStatus";
 
 vi.mock("../../platform/haptics", () => ({
-  haptics: { play: vi.fn().mockResolvedValue(undefined) },
+  haptics: {
+    play: vi.fn().mockResolvedValue(undefined),
+    ramp: vi.fn(() => vi.fn()),
+    supported: () => true,
+  },
 }));
 
 const level = LEVELS[0];
@@ -35,20 +42,27 @@ const label = (i: number) =>
 beforeEach(() => {
   gameStore.setState(idleState, false);
   progressStore.setState(defaultProgress);
-  settingsStore.setState({ ...defaultSettings, seenRules: true });
+  settingsStore.setState({ ...defaultSettings, seenTutorial: true });
   vi.mocked(haptics.play).mockClear();
+  vi.mocked(haptics.ramp).mockClear();
+  // Most tests expect the result modal immediately; the sequence tests opt out.
+  vi.stubGlobal("matchMedia", () => ({ matches: true }));
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function renderGame(lvl = level, strict = false) {
   act(() => gameStore.getState().startLevel(lvl));
   return render(
     strict ? (
       <StrictMode>
-        <GameScreen />
+        <GameScreen onReplayTutorial={() => {}} />
       </StrictMode>
     ) : (
-      <GameScreen />
+      <GameScreen onReplayTutorial={() => {}} />
     ),
   );
 }
@@ -57,10 +71,128 @@ function hold(cells: number[]) {
   for (const i of cells) holdCell(cell(i));
 }
 
+describe("win and loss sequence", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.useFakeTimers();
+  });
+  const place = (cells: number[]) =>
+    act(() => {
+      for (const i of cells) gameStore.getState().placeFace(i);
+    });
+  const modal = () => screen.queryByRole("dialog");
+
+  test("the win modal opens after WIN_DELAY_MS, with progress already recorded", () => {
+    renderGame();
+    place(solution);
+    expect(gameStore.getState().status).toBe("won");
+    expect(modal()).toBeNull();
+    expect(screen.getByRole("grid").closest("[inert]")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(WIN_DELAY_MS - 1));
+    expect(modal()).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+  });
+
+  test("the loss modal opens after LOSE_DELAY_MS", () => {
+    renderGame();
+    place(nonSolution.slice(0, 3));
+    expect(modal()).toBeNull();
+    act(() => vi.advanceTimersByTime(LOSE_DELAY_MS));
+    expect(
+      screen.getByRole("dialog", { name: "Out of hearts" }),
+    ).toBeInTheDocument();
+  });
+
+  test("progress is recorded before the modal opens", () => {
+    const stop = recordWins();
+    renderGame();
+    place(solution);
+    stop();
+    expect(modal()).toBeNull();
+    expect(progressStore.getState().bestMs[level.id]).toBeDefined();
+  });
+
+  test("a key press skips the delay", () => {
+    renderGame();
+    place(solution);
+    act(() => {
+      fireEvent.keyDown(window, { key: "a" });
+    });
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a tap on the skip layer skips; the layer exists only while pending", () => {
+    renderGame();
+    expect(screen.queryByTestId("result-skip")).toBeNull();
+    place(solution);
+    fireEvent.click(screen.getByTestId("result-skip"));
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("result-skip")).toBeNull();
+  });
+
+  test("the whole layout is inert while pending, but not the skip layer or modal", () => {
+    renderGame();
+    expect(
+      screen.getByRole("button", { name: /pause/i }).closest("[inert]"),
+    ).toBeNull();
+    place(solution);
+    expect(
+      screen.getByRole("button", { name: /pause/i }).closest("[inert]"),
+    ).not.toBeNull();
+    expect(screen.getByTestId("result-skip").closest("[inert]")).toBeNull();
+    act(() => {
+      fireEvent.keyDown(window, { key: "a" });
+    });
+    const dialog = screen.getByRole("dialog", { name: "You solved it" });
+    expect(dialog.closest("[inert]")).toBeNull();
+  });
+
+  test("the board is celebrating only while the win is pending", () => {
+    renderGame();
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+    place(solution);
+    expect(screen.getByRole("grid")).toHaveAttribute("data-celebrate");
+    act(() => vi.advanceTimersByTime(WIN_DELAY_MS));
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+  });
+
+  test("a loss does not celebrate", () => {
+    renderGame();
+    place(nonSolution.slice(0, 3));
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+  });
+
+  test("reduced motion opens the modal at once with no wave", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    renderGame();
+    place(solution);
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("grid")).not.toHaveAttribute("data-celebrate");
+  });
+
+  test("a finished game restored on mount shows the modal at once", () => {
+    act(() => gameStore.getState().startLevel(level));
+    place(solution);
+    render(<GameScreen onReplayTutorial={() => {}} />);
+    expect(
+      screen.getByRole("dialog", { name: "You solved it" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("GameScreen without props", () => {
   test("plays the store's level and shows its campaign position", () => {
     act(() => gameStore.getState().startLevel(LEVELS[2]));
-    render(<GameScreen />);
+    render(<GameScreen onReplayTutorial={() => {}} />);
     expect(
       screen.getByRole("heading", { name: `Level 3 of ${LEVELS.length}` }),
     ).toBeInTheDocument();
@@ -204,6 +336,35 @@ describe("GameScreen", () => {
 
   describe("haptics", () => {
     const play = () => vi.mocked(haptics.play);
+
+    test("the build-up ramp starts with the glow and is cancelled when it ends", () => {
+      renderGame();
+      const cancel = vi.fn();
+      vi.mocked(haptics.ramp).mockReturnValueOnce(cancel);
+      vi.useFakeTimers();
+      try {
+        const el = cell(solution[0]);
+        fireEvent.pointerDown(el, { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS - 1));
+        expect(haptics.ramp).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(1));
+        expect(haptics.ramp).toHaveBeenCalledTimes(1);
+        expect(cancel).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(HOLD_MS));
+        expect(cancel).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(play().mock.calls).toEqual([["place"]]);
+    });
+
+    test("a tap never ramps, and haptics off never ramps", async () => {
+      renderGame();
+      await userEvent.click(cell(solution[0]));
+      settingsStore.getState().set({ haptics: false });
+      hold([solution[1]]);
+      expect(haptics.ramp).not.toHaveBeenCalled();
+    });
 
     test("a correct hold plays place once", () => {
       renderGame();
@@ -436,42 +597,28 @@ describe("GameScreen", () => {
   describe("rules and settings", () => {
     const fresh = () => settingsStore.setState(defaultSettings);
 
-    test("a fresh install opens Rules and pauses the game", () => {
+    test("a fresh install no longer opens Rules or pauses: the tutorial replaces them", () => {
       fresh();
-      renderGame();
-      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
-      expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
-      expect(gameStore.getState().status).toBe("paused");
-    });
-
-    test("dismissing first-launch Rules sets seenRules and resumes", async () => {
-      fresh();
-      renderGame();
-      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
-      expect(settingsStore.getState().seenRules).toBe(true);
-      expect(screen.queryByRole("dialog")).toBeNull();
-      expect(gameStore.getState().status).toBe("playing");
-    });
-
-    test("a remount with seenRules true does not reopen Rules", () => {
       renderGame();
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(gameStore.getState().status).toBe("playing");
     });
 
-    test("the clock does not advance under first-launch Rules", () => {
-      vi.useFakeTimers();
-      try {
-        fresh();
-        renderGame();
-        act(() => {
-          vi.advanceTimersByTime(5000);
-        });
-        const state = gameStore.getState();
-        expect(state.status === "idle" ? -1 : state.elapsedMs).toBe(0);
-      } finally {
-        vi.useRealTimers();
-      }
+    test("a remount with seenTutorial true does not reopen Rules", () => {
+      renderGame();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(gameStore.getState().status).toBe("playing");
+    });
+
+    test("Pause > Replay tutorial calls onReplayTutorial", async () => {
+      const onReplayTutorial = vi.fn();
+      act(() => gameStore.getState().startLevel(level));
+      render(<GameScreen onReplayTutorial={onReplayTutorial} />);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Replay tutorial" }),
+      );
+      expect(onReplayTutorial).toHaveBeenCalledTimes(1);
     });
 
     test("Pause > Rules > Got it returns to Pause and Resume works", async () => {
@@ -522,15 +669,6 @@ describe("GameScreen", () => {
       expect(progressStore.getState().bestMs[LEVELS[0].id]).toBe(2000);
     });
 
-    test("Escape on the first-launch Rules resumes play, not Pause", async () => {
-      settingsStore.setState({ seenRules: false });
-      renderGame();
-      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
-      await userEvent.keyboard("{Escape}");
-      expect(gameStore.getState().status).toBe("playing");
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
     test("Escape in Rules or Settings returns to Pause without resuming", async () => {
       renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
@@ -554,22 +692,113 @@ describe("GameScreen", () => {
         screen.getByRole("dialog", { name: "Paused" }).closest("[inert]"),
       ).toBeNull();
     });
+  });
+});
 
-    test("restart and a later startLevel do not reopen Rules", async () => {
-      fresh();
-      renderGame();
-      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
-      act(() => gameStore.getState().restart());
-      act(() => gameStore.getState().startLevel(level));
-      expect(screen.queryByRole("dialog", { name: "Rules" })).toBeNull();
-    });
+describe("tap places faces mode", () => {
+  beforeEach(() => {
+    settingsStore.setState({ inputMode: "face" });
+  });
 
-    test("first-launch Rules open once under StrictMode", () => {
-      fresh();
-      renderGame(level, true);
-      expect(screen.getAllByRole("dialog")).toHaveLength(1);
-      expect(gameStore.getState().status).toBe("paused");
+  test("the solution can be won with clicks only", async () => {
+    renderGame();
+    const user = userEvent.setup();
+    for (const i of solution) await user.click(cell(i));
+    expect(gameStore.getState().status).toBe("won");
+  });
+
+  test("a wrong click costs a heart", async () => {
+    renderGame();
+    const before = gameStore.getState();
+    if (before.status === "idle") throw new Error("idle");
+    await userEvent.setup().click(cell(nonSolution[0]));
+    const after = gameStore.getState();
+    if (after.status === "idle") throw new Error("idle");
+    expect(after.hearts).toBe(before.hearts - 1);
+  });
+
+  test("the default mode still marks on click", async () => {
+    settingsStore.setState({ inputMode: "mark" });
+    renderGame();
+    await userEvent.setup().click(cell(nonSolution[0]));
+    expect(label(nonSolution[0])).toBe("marked");
+  });
+
+  test("the action bar toggle switches mode at runtime", async () => {
+    settingsStore.setState({ inputMode: "mark" });
+    renderGame();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Tap places faces" }));
+    await user.click(cell(solution[0]));
+    expect(label(solution[0])).toBe("face");
+  });
+});
+
+describe("GameScreen announcer", () => {
+  const status = () => screen.getByTestId("announcer");
+
+  beforeEach(() => {
+    announcerStore.getState().reset();
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
     });
+  });
+
+  test("a live region exists, outside any inert subtree, also while paused", () => {
+    renderGame();
+    expect(status().closest("[inert]")).toBeNull();
+    act(() => gameStore.getState().pause());
+    expect(status().closest("[inert]")).toBeNull();
+    expect(status()).toHaveTextContent("Paused.");
+  });
+
+  test("a win announces while the result is pending", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    renderGame();
+    act(() => {
+      for (const c of solution) gameStore.getState().placeFace(c);
+    });
+    expect(status()).toHaveTextContent(/^Solved in/);
+    expect(status().closest("[inert]")).toBeNull();
+  });
+
+  test("the f key and the action bar announce the input mode", async () => {
+    renderGame();
+    const user = userEvent.setup();
+    await user.keyboard("f");
+    expect(status()).toHaveTextContent("Tapping now places faces.");
+    await user.click(screen.getByRole("button", { name: "Tap places faces" }));
+    expect(status()).toHaveTextContent("Tapping now marks cells.");
+  });
+
+  test("Start over in Settings leaves the level-start text spoken", async () => {
+    progressStore.setState({ next: 3 });
+    renderGame(LEVELS[3]);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Pause" }));
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(status()).toHaveTextContent(`Level 1 of ${LEVELS.length}`);
+  });
+});
+
+describe("palette and patterns settings", () => {
+  test("switching the settings recolors and patterns the board", () => {
+    renderGame();
+    const region = level.regions[0][0];
+    expect(cell(0)).toHaveClass(`bg-region-${region}`);
+    expect(cell(0).style.backgroundImage).toBe("");
+    act(() => settingsStore.setState({ palette: "accessible" }));
+    expect(cell(0)).toHaveClass(`bg-region-a-${region}`);
+    act(() => settingsStore.setState({ patterns: true }));
+    const anyPatterned = Array.from({ length: n * n }, (_, i) => cell(i)).some(
+      (b) => b.style.backgroundImage !== "",
+    );
+    expect(anyPatterned).toBe(true);
+    act(() => settingsStore.setState({ patterns: false }));
+    expect(cell(0).style.backgroundImage).toBe("");
   });
 });
 
@@ -579,10 +808,10 @@ describe("hint display", () => {
 
   test("shows the explanation in a status region and rings the cells", async () => {
     renderGame();
-    expect(screen.getByRole("status").textContent).toBe("");
+    expect(screen.getByTestId("hint-banner").textContent).toBe("");
     await userEvent.click(hintBtn());
     const first = nextHint(emptyBoard(level), level);
-    expect(screen.getByRole("status").textContent).toBe(first?.message);
+    expect(screen.getByTestId("hint-banner").textContent).toBe(first?.message);
     const cause = first?.deduction.because.cells ?? [];
     for (const i of cause) {
       expect(cell(i).getAttribute("data-hint")).toBe("cause");
@@ -611,7 +840,7 @@ describe("hint display", () => {
     await userEvent.click(hintBtn());
     await userEvent.click(hintBtn());
     await userEvent.click(cell(nonSolution[0]));
-    expect(screen.getByRole("status").textContent).toBe("");
+    expect(screen.getByTestId("hint-banner").textContent).toBe("");
     expect(document.querySelector("[data-hint]")).toBeNull();
   });
 });

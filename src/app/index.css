@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
 @theme {
+  --color-surface: #ffffff;
+  --color-ink: #1c1917;
+  --color-ink-muted: #57534e;
+  --color-line: #78716c;
+  --color-accent: #292524;
+  --color-on-accent: #ffffff;
+  --color-focus: #1d4ed8;
+  /* Board cells keep their light palette in both themes, so their ring is fixed dark. */
+  --color-cell-focus: #171717;
+  --color-subtle: #e7e5e4;
   --color-region-0: #fca5a5;
   --color-region-1: #fdba74;
   --color-region-2: #fcd34d;
@@ -12,6 +22,34 @@
   --color-region-8: #c4b5fd;
   --color-region-9: #f9a8d4;
   --color-region-10: #d6d3d1;
+  --color-region-a-0: #74dbf7;
+  --color-region-a-1: #ae8cf9;
+  --color-region-a-2: #f5ffd1;
+  --color-region-a-3: #59a9b3;
+  --color-region-a-4: #e3bebe;
+  --color-region-a-5: #dfffff;
+  --color-region-a-6: #e7a300;
+  --color-region-a-7: #f0599b;
+  --color-region-a-8: #fef100;
+  --color-region-a-9: #b2cc87;
+  --color-region-a-10: #a1915e;
+}
+
+/* Chrome only: the board keeps its light palette in both themes (POLISH_DESIGN 8.1). */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-surface: #1c1917;
+  --color-ink: #fafaf9;
+  --color-ink-muted: #a8a29e;
+  --color-line: #78716c;
+  --color-accent: #fafaf9;
+  --color-on-accent: #1c1917;
+  --color-focus: #60a5fa;
+  --color-subtle: #44403c;
 }
 
 :root {
@@ -30,10 +68,25 @@ html,
 body {
   overscroll-behavior: none;
   overflow: hidden;
-  background: #fff;
+  background: var(--color-surface);
+}
+
+/* One focus style for every control (POLISH_DESIGN 9.3). Cell overrides the offset only. */
+@layer base {
+  :where(button, [role="switch"], [role="radio"], a, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Pressed feedback for buttons; board cells have their own press and hold effects. */
+button:not(.cell):active:not(:disabled) {
+  filter: brightness(0.88);
+  transition: filter 80ms ease;
 }
 
 body {
+  color: var(--color-ink);
   touch-action: manipulation;
 }
 
@@ -48,13 +101,21 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS, starting HOLD_DELAY_MS after press. */
-.hold-glow rect {
-  fill: none;
-  stroke: #171717;
-  stroke-width: 6;
+/* Hold-to-place glow (HoldGlow): a ring swept once over HOLD_MS, starting HOLD_DELAY_MS after press. */
+.hold-glow {
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.35), transparent 70%);
+  animation: hold-ramp 300ms ease-out both;
+}
+
+.hold-ring {
   stroke-dasharray: 1;
   animation: hold-trace linear forwards;
+}
+
+/* The held cell brightens slightly. */
+.cell[data-holding] {
+  filter: brightness(1.08);
 }
 
 @keyframes hold-trace {
@@ -76,15 +137,33 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hold-glow rect {
+  .hold-ring {
     stroke-dasharray: none;
     animation-name: hold-ramp;
+  }
+  .hold-glow {
+    animation: none;
   }
 }
 
 .cell {
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Tutorial "look here" ring. The board is the same in both themes, so the
+   ring is a fixed dark dashed line (shape, not just colour) over a light halo. */
+.cell[data-highlight] {
+  box-shadow: inset 0 0 0 8px rgb(255 255 255 / 0.55);
+}
+
+/* The dashed line is a pseudo-element, so the cell's own outline stays free for the focus ring. */
+.cell[data-highlight]::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 3px dashed #1c1917;
+  pointer-events: none;
 }
 
 /* Responsive game layout (GameLayout). `main` is the size container. */
@@ -164,5 +243,180 @@ body {
   .game-header header {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* One-shot outcome effects (POLISH_DESIGN 6.2). Only transform/opacity. */
+[data-fx="place"] {
+  animation: fx-place 220ms ease-out;
+}
+
+[data-fx="wrong"] {
+  animation: fx-wrong 280ms ease-in-out;
+}
+
+.fx-ring {
+  border-radius: 9999px;
+  margin: 15%;
+  border: 3px solid currentColor;
+  animation: fx-ring 220ms ease-out forwards;
+}
+
+/* Hint ring (POLISH_DESIGN 9.4): holds, then fades over the last 30%. Opacity
+   only, so reduced motion needs no variant. Duration is HINT_RING_MS, set inline. */
+.hint-ring {
+  border-radius: 9999px;
+  margin: 8%;
+  border: 3px solid;
+  animation: hint-ring 2000ms linear forwards;
+}
+
+@keyframes hint-ring {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+[data-pop="true"] {
+  animation: heart-pop 280ms ease-out;
+}
+
+/* Win wave (POLISH_DESIGN 6.3): faces hop in row order. Board sets --row per row. */
+[data-celebrate] [data-icon="face"] {
+  animation: win-hop 300ms ease-in-out both;
+  animation-delay: calc(var(--row) * 45ms);
+}
+
+.dialog-backdrop {
+  animation: fx-fade 120ms ease-out;
+}
+
+.dialog-in {
+  animation: dialog-in 120ms ease-out;
+}
+
+@keyframes win-hop {
+  0%,
+  to {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-18%);
+  }
+}
+
+@keyframes fx-place {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fx-ring {
+  from {
+    transform: scale(0.5);
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes fx-wrong {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(-3px);
+    opacity: 1;
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fx-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-fx="place"],
+  [data-fx="wrong"] {
+    animation-name: fx-fade;
+    animation-duration: 150ms;
+  }
+
+  .fx-ring {
+    animation: none;
+    display: none;
+  }
+
+  [data-pop="true"] {
+    animation: none;
+  }
+
+  [data-celebrate] [data-icon="face"] {
+    animation: none;
+  }
+
+  .dialog-in {
+    animation-name: fx-fade;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(.cell):active:not(:disabled) {
+    filter: none;
+    transition: none;
   }
 }

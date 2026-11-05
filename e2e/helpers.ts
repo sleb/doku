@@ -5,7 +5,7 @@ import { levelById, levelBySize } from "./levels";
 export async function press(page: Page, target: Locator): Promise<void> {
   await target.focus();
   await page.keyboard.down("Space");
-  await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
+  await expect(target).toHaveAccessibleName(/, (face|wrong)(, highlighted)?$/);
   await page.keyboard.up("Space");
 }
 
@@ -108,7 +108,7 @@ export const touchClick = (t: Locator) => fire(t, "click");
 /** Touch-hold until the cell commits (state assertion), then release and click. */
 export async function touchHold(target: Locator): Promise<void> {
   await touchDown(target);
-  await expect(target).toHaveAccessibleName(/, (face|wrong)$/);
+  await expect(target).toHaveAccessibleName(/, (face|wrong)(, highlighted)?$/);
   await touchUp(target);
   await touchClick(target);
 }

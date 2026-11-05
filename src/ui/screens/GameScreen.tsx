@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nextLevel, startOver } from "../../app/campaign";
 import { LEVELS, levelIndex } from "../../levels/campaign";
-import { feedbackFor } from "../../platform/feedback";
-import { haptics } from "../../platform/haptics";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { useProgressStore } from "../../store/progress";
 import { conflictCells } from "../../store/selectors";
-import { settingsStore, useSettingsStore } from "../../store/settings";
+import { useSettingsStore } from "../../store/settings";
+import { Announcer } from "../a11y/Announcer";
+import { useInputModeAnnouncement } from "../a11y/useInputModeAnnouncement";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
 import { ActionBar } from "./ActionBar";
@@ -14,13 +14,26 @@ import { GameLayout } from "./GameLayout";
 import { HintBanner } from "./HintBanner";
 import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
+import { ResultSkip } from "./ResultSkip";
 import { RulesDialog } from "./RulesDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
+import {
+  LOSE_DELAY_MS,
+  useDelayedStatus,
+  WIN_DELAY_MS,
+} from "./useDelayedStatus";
+import { useFeedback } from "./useFeedback";
+import { useHoldRamp } from "./useHoldRamp";
 import { useShortcuts } from "./useShortcuts";
 
-export function GameScreen() {
+export function GameScreen({
+  onReplayTutorial,
+}: {
+  /** Pause > Replay tutorial: the app shows the tutorial over this paused game. */
+  onReplayTutorial: () => void;
+}) {
   const level = useGameStore((s) => s.level);
   const status = useGameStore((s) => s.status);
   const board = useGameStore((s) => s.board);
@@ -38,23 +51,20 @@ export function GameScreen() {
   );
   const { restart, toggleMark, placeFace, pause, resume } =
     gameStore.getState();
+  const inputMode = useSettingsStore((s) => s.inputMode);
+  const palette = useSettingsStore((s) => s.palette);
+  const patterns = useSettingsStore((s) => s.patterns);
   const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
   const holdOwner = useRef<number | null>(null);
   const boardArea = useRef<HTMLDivElement>(null);
   const wasPaused = useRef(false);
+  const result = useDelayedStatus(status, WIN_DELAY_MS, LOSE_DELAY_MS);
   useClock();
   useAutoPause();
   useShortcuts({ holdOwner });
-
-  // Buzz for the outcome of each store change. Subscribed once per mount.
-  useEffect(
-    () =>
-      gameStore.subscribe((next, prev) => {
-        const kind = feedbackFor(prev, next);
-        if (kind && settingsStore.getState().haptics) void haptics.play(kind);
-      }),
-    [],
-  );
+  useFeedback();
+  useInputModeAnnouncement();
+  const onHoldGlow = useHoldRamp();
 
   // Back from a pause, hand focus to the board's active cell if it fell to the
   // page (the board is hidden while paused, so it cannot hold focus then).
@@ -70,13 +80,6 @@ export function GameScreen() {
     }
   }, [status]);
 
-  // First launch: Rules open over a paused game. Derived from `seenRules`
-  // (set on dismissal), so StrictMode's double effects cannot reopen it.
-  const seenRules = useSettingsStore((s) => s.seenRules);
-  const firstRules = !seenRules && status !== "idle";
-  useEffect(() => {
-    if (firstRules) gameStore.getState().pause();
-  }, [firstRules]);
   const conflicts = useMemo(
     () => (board && level ? conflictCells(board, level) : new Set<number>()),
     [board, level],
@@ -88,6 +91,11 @@ export function GameScreen() {
     [hintShown],
   );
 
+  const hintRing =
+    hintShown?.placed === undefined
+      ? undefined
+      : { cell: hintShown.placed, key: hintsUsed };
+
   if (status === "idle" || !level || !board || !wrong) return null;
 
   const levelNumber = levelIndex(level.id) + 1;
@@ -95,7 +103,9 @@ export function GameScreen() {
   const finished = status === "won" || status === "lost";
   return (
     <>
+      <Announcer />
       <GameLayout
+        inert={result.pending}
         header={
           <TopBar
             level={level}
@@ -116,12 +126,18 @@ export function GameScreen() {
               board={board}
               wrong={wrong}
               conflicts={conflicts}
-              highlight={hintCells}
+              causes={hintCells}
               targets={hintTargets}
+              hintRing={hintRing}
               disabled={finished || paused}
+              inputMode={inputMode}
+              palette={palette}
+              patterns={patterns}
+              celebrate={result.pending && status === "won"}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}
               holdOwner={holdOwner}
+              onHoldGlow={onHoldGlow}
             />
           </div>
         }
@@ -132,15 +148,7 @@ export function GameScreen() {
           </>
         }
       />
-      {(firstRules || sheet === "rules") && (
-        <RulesDialog
-          onClose={() => {
-            settingsStore.getState().set({ seenRules: true });
-            setSheet(null);
-            if (firstRules) resume();
-          }}
-        />
-      )}
+      {sheet === "rules" && <RulesDialog onClose={() => setSheet(null)} />}
       {sheet === "settings" && (
         <SettingsDialog
           onClose={() => setSheet(null)}
@@ -151,14 +159,16 @@ export function GameScreen() {
         />
       )}
       <PauseDialog
-        open={paused && !firstRules && sheet === null}
+        open={paused && sheet === null}
         onResume={resume}
         onRestart={restart}
         onRules={() => setSheet("rules")}
+        onReplayTutorial={onReplayTutorial}
         onSettings={() => setSheet("settings")}
       />
+      {result.pending && <ResultSkip onSkip={result.skip} />}
       <ResultModal
-        status={status}
+        status={result.status}
         elapsedMs={elapsedMs}
         bestMs={bestMs}
         hintsUsed={hintsUsed}

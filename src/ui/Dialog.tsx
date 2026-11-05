@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 
 const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not([disabled]):not([tabindex="-1"]), [href], input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Modal dialog: focus moves in on open and is restored on close, Tab cycles
@@ -26,7 +26,12 @@ export function Dialog({
     const previous = document.activeElement as HTMLElement | null;
     const inerted: Element[] = [];
     for (const sibling of Array.from(el.parentElement?.children ?? [])) {
-      if (sibling !== el && !sibling.hasAttribute("inert")) {
+      // A live region must stay reachable so announcements are still spoken.
+      if (
+        sibling !== el &&
+        sibling.getAttribute("role") !== "status" &&
+        !sibling.hasAttribute("inert")
+      ) {
         sibling.setAttribute("inert", "");
         inerted.push(sibling);
       }
@@ -73,19 +78,24 @@ export function Dialog({
   return (
     <div
       ref={root}
-      className="fixed inset-0 z-10 flex items-center justify-center bg-black/50 safe-padding"
+      className="dialog-backdrop fixed inset-0 z-10 flex items-center justify-center bg-black/50 safe-padding"
     >
       <div
         onKeyDown={onKeyDown}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex flex-col items-center gap-4 rounded-lg bg-white p-6 shadow-lg"
+        className="dialog-in flex max-h-full min-h-0 flex-col items-center gap-4 rounded-lg border border-line bg-surface text-ink p-6 shadow-lg"
       >
         <h2 id={titleId} className="text-xl font-semibold">
           {title}
         </h2>
-        {children}
+        <div
+          data-testid="dialog-body"
+          className="flex min-h-0 -m-2 w-[calc(100%+1rem)] flex-1 flex-col items-center gap-4 overflow-y-auto p-2"
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

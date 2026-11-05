@@ -7,10 +7,19 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { Cell, REGION_NAMES } from "../../engine";
+import { Cell } from "../../engine";
+import { holdCell } from "../../test/hold";
 import { CellView } from "./Cell";
+import { HINT_RING_MS } from "./hintRing";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
-import { GLYPH_COLOR, REGION_BG, WRONG_COLOR } from "./palette";
+import {
+  GLYPH_COLOR,
+  HINT_RING_COLOR,
+  HINT_RING_UNDERSTROKE_COLOR,
+  regionClass,
+  WRONG_COLOR,
+} from "./palette";
+import { patternStyle } from "./patterns";
 
 type Props = Parameters<typeof CellView>[0];
 
@@ -38,14 +47,23 @@ function renderCell(over: Partial<Props> = {}) {
 }
 
 const REGION = 5;
-const NAME = REGION_NAMES[REGION];
+const NAME = "teal region"; // default palette, no patterns: colour name
 
 const icon = (b: HTMLElement) => b.querySelector("[data-icon]");
 
 describe("CellView", () => {
   test("labels each state with row, column, region and state", () => {
     expect(renderCell().getAttribute("aria-label")).toBe(
-      `Row 2, column 3, ${NAME} region, empty`,
+      `Row 2, column 3, ${NAME}, empty`,
+    );
+  });
+
+  test.each([
+    [{ palette: "accessible" }, "region 6"],
+    [{ patterns: true }, "region 6"],
+  ] as const)("%j names the region by number: %s", (over, name) => {
+    expect(renderCell(over).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${name}, empty`,
     );
   });
 
@@ -56,10 +74,22 @@ describe("CellView", () => {
   ] as const)("%j shows %s with the %s icon", (over, label, kind) => {
     const b = renderCell(over);
     expect(b.getAttribute("aria-label")).toBe(
-      `Row 2, column 3, ${NAME} region, ${label}`,
+      `Row 2, column 3, ${NAME}, ${label}`,
     );
     expect(icon(b)?.getAttribute("data-icon")).toBe(kind);
   });
+
+  test.each([
+    [Cell.Empty, "empty"],
+    [Cell.Face, "face"],
+  ] as const)(
+    "a conflicting %s cell appends conflict last, once",
+    (state, label) => {
+      expect(
+        renderCell({ state, isConflict: true }).getAttribute("aria-label"),
+      ).toBe(`Row 2, column 3, ${NAME}, ${label}, conflict`);
+    },
+  );
 
   test("an empty cell has no icon", () => {
     expect(icon(renderCell())).toBeNull();
@@ -74,7 +104,31 @@ describe("CellView", () => {
   });
 
   test("uses the region background", () => {
-    expect(renderCell({ region: 3 }).className).toContain(REGION_BG[3]);
+    expect(renderCell({ region: 3 }).className).toContain(
+      regionClass("default", 3),
+    );
+  });
+
+  test("the accessible palette uses the accessible background", () => {
+    const cn = renderCell({ region: 3, palette: "accessible" }).className;
+    expect(cn).toContain("bg-region-a-3");
+    expect(cn).not.toContain("bg-region-3");
+  });
+
+  test("patterns off applies no background image", () => {
+    expect(renderCell({ region: 3 }).style.backgroundImage).toBe("");
+  });
+
+  test("patterns on applies the region's pattern", () => {
+    const b = renderCell({ region: 3, patterns: true });
+    expect(b.style.backgroundImage).toBe(patternStyle(3).backgroundImage);
+    expect(b.style.backgroundImage).not.toBe("");
+  });
+
+  test("patterns on leaves region 0 solid", () => {
+    expect(
+      renderCell({ region: 0, patterns: true }).style.backgroundImage,
+    ).toBe("");
   });
 
   test("conflict adds a ring and data-conflict", () => {
@@ -87,6 +141,20 @@ describe("CellView", () => {
     const cls = renderCell().className;
     expect(cls).toContain("focus-visible:outline-3");
     expect(cls).toContain("focus-visible:-outline-offset-8");
+  });
+
+  test("highlight sets data-highlight and says so in the label", () => {
+    const b = renderCell({ highlight: true });
+    expect(b.dataset.highlight).toBe("true");
+    expect(b.getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${NAME}, empty, highlighted`,
+    );
+  });
+
+  test("no highlight leaves the label and attribute alone", () => {
+    const b = renderCell();
+    expect(b.dataset.highlight).toBeUndefined();
+    expect(b.getAttribute("aria-label")).not.toContain("highlighted");
   });
 
   test("no conflict means no ring", () => {
@@ -319,22 +387,128 @@ describe("CellView", () => {
       expect(holding(b)).toBeUndefined();
     });
 
-    test("data-holding and the glow track the hold lifecycle", () => {
-      const b = renderCell();
+    test("data-holding and onGlow track the hold lifecycle", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
       expect(holding(b)).toBeUndefined();
-      expect(b.querySelector("[data-hold-glow]")).toBeNull();
       down(b);
       expect(holding(b)).toBeUndefined();
+      expect(onGlow).not.toHaveBeenCalled();
       tick(HOLD_DELAY_MS);
       expect(holding(b)).toBe("true");
-      const glow = b.querySelector("[data-hold-glow]") as SVGElement;
-      expect(glow.getAttribute("class")).toContain("pointer-events-none");
-      expect(glow.querySelector("rect")?.style.animationDuration).toBe(
-        `${HOLD_MS}ms`,
-      );
+      expect(onGlow).toHaveBeenLastCalledWith(17);
+      expect(b.querySelector("[data-hold-glow]")).toBeNull();
       tick(HOLD_MS);
       expect(holding(b)).toBeUndefined();
-      expect(b.querySelector("[data-hold-glow]")).toBeNull();
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test.each([
+      ["release", (b: HTMLElement) => fireEvent.pointerUp(b)],
+      ["drag-off", (b: HTMLElement) => fireEvent.pointerLeave(b)],
+      ["blur", (b: HTMLElement) => fireEvent.blur(b)],
+    ])("onGlow(null) on %s", (_n, end) => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
+      down(b);
+      tick(HOLD_DELAY_MS);
+      end(b);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test("onGlow(null) when disabled mid-hold and on unmount", () => {
+      const onGlow = vi.fn();
+      const props = {
+        index: 17,
+        row: 1,
+        col: 2,
+        region: REGION,
+        state: Cell.Empty,
+        isWrong: false,
+        isConflict: false,
+        onToggleMark: vi.fn(),
+        onPlaceFace: vi.fn(),
+        onGlow,
+      };
+      const { rerender, unmount } = render(
+        <CellView {...props} disabled={false} />,
+      );
+      const b = screen.getByRole("button");
+      down(b);
+      tick(HOLD_DELAY_MS);
+      rerender(<CellView {...props} disabled={true} />);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+      rerender(<CellView {...props} disabled={false} />);
+      down(b);
+      tick(HOLD_DELAY_MS);
+      expect(onGlow).toHaveBeenLastCalledWith(17);
+      unmount();
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test("a cell whose hold is not owned never starts a hold or glow", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow, holdOwner: { current: 3 } });
+      down(b);
+      tick(HOLD_DELAY_MS);
+      expect(holding(b)).toBeUndefined();
+      expect(onGlow).not.toHaveBeenCalled();
+      tick(HOLD_MS * 2);
+      expect(onGlow).not.toHaveBeenCalled();
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("an overlapping second hold leaves the owner's glow untouched", () => {
+      const holdOwner = { current: null as number | null };
+      const onGlowA = vi.fn();
+      const onGlowB = vi.fn();
+      const base = {
+        row: 0,
+        col: 0,
+        region: 0,
+        state: Cell.Empty,
+        isWrong: false,
+        isConflict: false,
+        disabled: false,
+        onToggleMark: vi.fn(),
+        onPlaceFace: vi.fn(),
+        holdOwner,
+      };
+      render(
+        <>
+          <CellView {...base} index={1} onGlow={onGlowA} />
+          <CellView {...base} index={2} onGlow={onGlowB} />
+        </>,
+      );
+      const [a, b] = screen.getAllByRole("button");
+      down(a);
+      tick(100);
+      down(b);
+      tick(HOLD_DELAY_MS - 100);
+      expect(onGlowA).toHaveBeenLastCalledWith(1);
+      tick(HOLD_DELAY_MS);
+      expect(onGlowB).not.toHaveBeenCalled();
+      expect(onGlowA).toHaveBeenCalledTimes(1);
+      expect(holdOwner.current).toBe(1);
+    });
+
+    test("a keyboard hold reports the glow too", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
+      fireEvent.keyDown(b, { key: " " });
+      tick(HOLD_DELAY_MS);
+      expect(onGlow).toHaveBeenLastCalledWith(17);
+    });
+
+    test("a click or tap never reports a glow", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
+      down(b);
+      tick(HOLD_DELAY_MS - 1);
+      fireEvent.pointerUp(b);
+      fireEvent.click(b, { detail: 1 });
+      tick(5000);
+      expect(onGlow).not.toHaveBeenCalled();
     });
 
     test("no glow before the delay; a short click never shows it", () => {
@@ -342,7 +516,6 @@ describe("CellView", () => {
       down(b);
       tick(HOLD_DELAY_MS - 1);
       expect(holding(b)).toBeUndefined();
-      expect(b.querySelector("[data-hold-glow]")).toBeNull();
       fireEvent.pointerUp(b);
       fireEvent.click(b, { detail: 1 });
       expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
@@ -497,6 +670,154 @@ describe("CellView", () => {
   });
 });
 
+describe("CellView fx", () => {
+  const wrap = (b: HTMLElement) => b.querySelector("[data-fx]");
+
+  test("no fx wrapper without an fx prop", () => {
+    expect(wrap(renderCell({ state: Cell.Face }))).toBeNull();
+  });
+
+  test.each(["place", "wrong"] as const)("%s marks the icon wrapper", (fx) => {
+    const b = renderCell({
+      state: fx === "place" ? Cell.Face : Cell.Mark,
+      isWrong: fx === "wrong",
+      fx,
+      fxSeq: 1,
+    });
+    const w = wrap(b);
+    expect(w?.getAttribute("data-fx")).toBe(fx);
+    expect(w?.querySelector("[data-icon]")).not.toBeNull();
+    expect(b.querySelector("[data-fx-ring]") !== null).toBe(fx === "place");
+  });
+
+  test("the icon keeps its DOM node when fx clears", () => {
+    const props = {
+      index: 17,
+      row: 1,
+      col: 2,
+      region: REGION,
+      state: Cell.Face,
+      isWrong: false,
+      isConflict: false,
+      disabled: false,
+      onToggleMark: vi.fn(),
+      onPlaceFace: vi.fn(),
+    } as const;
+    const { container, rerender } = render(
+      <CellView {...props} fx="place" fxSeq={1} />,
+    );
+    const icon = container.querySelector("[data-icon]");
+    rerender(<CellView {...props} />);
+    expect(container.querySelector("[data-icon]")).toBe(icon);
+  });
+
+  test("the shake is not on the button", () => {
+    const b = renderCell({ state: Cell.Face, fx: "place", fxSeq: 1 });
+    expect(b.hasAttribute("data-fx")).toBe(false);
+  });
+
+  test("a new seq remounts the wrapper so the effect restarts", () => {
+    const props = {
+      index: 17,
+      row: 1,
+      col: 2,
+      region: REGION,
+      state: Cell.Face,
+      isWrong: false,
+      isConflict: false,
+      disabled: false,
+      onToggleMark: vi.fn(),
+      onPlaceFace: vi.fn(),
+    } as const;
+    const { container, rerender } = render(
+      <CellView {...props} fx="place" fxSeq={1} />,
+    );
+    const first = wrap(container as HTMLElement);
+    rerender(<CellView {...props} fx="place" fxSeq={2} />);
+    expect(wrap(container as HTMLElement)).not.toBe(first);
+    expect(container.querySelectorAll("[data-fx]")).toHaveLength(1);
+  });
+
+  describe("face input mode", () => {
+    test("a click places a face once and does not mark", async () => {
+      const b = renderCell({ inputMode: "face" });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("Enter places a face once", async () => {
+      const b = renderCell({ inputMode: "face" });
+      b.focus();
+      await userEvent.setup().keyboard("{Enter}");
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
+    test("Space places immediately, once, with no hold", () => {
+      const b = renderCell({ inputMode: "face" });
+      const down = fireEvent.keyDown(b, { key: " " });
+      expect(down).toBe(false); // preventDefault
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+      fireEvent.keyDown(b, { key: " ", repeat: true });
+      fireEvent.keyUp(b, { key: " " });
+      expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
+      expect(b.hasAttribute("data-holding")).toBe(false);
+    });
+
+    test("x still toggles the mark", () => {
+      const b = renderCell({ inputMode: "face" });
+      fireEvent.keyDown(b, { key: "x" });
+      expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("a full pointer hold places once, not twice", () => {
+      const b = renderCell({ inputMode: "face" });
+      holdCell(b);
+      fireEvent.click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("a disabled cell never places", async () => {
+      const b = renderCell({ inputMode: "face", disabled: true });
+      await userEvent.setup().click(b);
+      fireEvent.keyDown(b, { key: " " });
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("another cell's hold blocks click, Enter and Space placement", async () => {
+      const b = renderCell({ inputMode: "face", holdOwner: { current: 3 } });
+      b.focus();
+      const user = userEvent.setup();
+      await user.click(b);
+      await user.keyboard("{Enter}");
+      fireEvent.keyDown(b, { key: " " });
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("this cell's own hold owner does not block placement", async () => {
+      const b = renderCell({ inputMode: "face", holdOwner: { current: 17 } });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
+    test("a player mark accepts a face", async () => {
+      const b = renderCell({ inputMode: "face", state: Cell.Mark });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+  });
+
+  test("mark mode: click marks, Space does not place immediately", async () => {
+    const b = renderCell();
+    await userEvent.setup().click(b);
+    expect(b.onToggleMark).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(b, { key: " " });
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
+  });
+});
+
 describe("CellView hint markers", () => {
   test("has no marker by default", () => {
     expect(renderCell().getAttribute("data-hint")).toBeNull();
@@ -520,7 +841,33 @@ describe("CellView hint markers", () => {
 
   test("does not change the accessible name", () => {
     expect(renderCell({ hint: "target" }).getAttribute("aria-label")).toBe(
-      `Row 2, column 3, ${NAME} region, empty`,
+      `Row 2, column 3, ${NAME}, empty`,
+    );
+  });
+});
+
+describe("CellView hint ring", () => {
+  test("has no ring by default", () => {
+    expect(renderCell().querySelector("[data-hint-ring]")).toBeNull();
+  });
+
+  test("a placed hint draws one ring for HINT_RING_MS, hidden from assistive tech", () => {
+    const ring = renderCell({ hintRing: 3 }).querySelector(
+      "[data-hint-ring]",
+    ) as HTMLElement;
+    expect(ring).not.toBeNull();
+    expect(ring.getAttribute("aria-hidden")).toBe("true");
+    expect(ring.style.animationDuration).toBe(`${HINT_RING_MS}ms`);
+    const probe = document.createElement("i");
+    probe.style.borderColor = HINT_RING_COLOR;
+    probe.style.boxShadow = `0 0 0 2px ${HINT_RING_UNDERSTROKE_COLOR}`;
+    expect(ring.style.borderColor).toBe(probe.style.borderColor);
+    expect(ring.style.boxShadow).toBe(probe.style.boxShadow);
+  });
+
+  test("is not in the accessible name", () => {
+    expect(renderCell({ hintRing: 3 }).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${NAME}, empty`,
     );
   });
 });

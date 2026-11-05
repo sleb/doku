@@ -1,6 +1,7 @@
 import {
   type Board,
   Cell,
+  type Deduction,
   emptyBoard,
   isSolved,
   judgeTap,
@@ -35,7 +36,11 @@ export type GameState =
 export interface HintShown {
   cells: number[];
   targets: number[];
+  /** The default-naming text; the UI re-renders `deduction` for the palette. */
   message: string;
+  deduction: Deduction;
+  /** The cell a placement hint just filled; keys the timed ring. */
+  placed?: number;
 }
 
 export const idleState: GameState = {
@@ -160,7 +165,8 @@ const sameCells = (a: readonly number[], b: readonly number[]) =>
  * Ask for the simplest deduction the player has not acted on, for a heart. A
  * placement puts the face down; an elimination only highlights and explains
  * (it writes no marks and nothing to history). Asking again for the hint
- * already on display is free. Refused (same state) unless playing with a spare
+ * already on display is free (every board change clears `hintShown`, which
+ * `game.test.ts` locks in, so a stale display never matches). Refused (same state) unless playing with a spare
  * heart: a hint can win but never lose.
  */
 export function hint(state: GameState): GameState {
@@ -172,6 +178,8 @@ export function hint(state: GameState): GameState {
     cells: because.cells,
     targets: place === undefined ? eliminate : [],
     message: found.message,
+    deduction: found.deduction,
+    ...(place === undefined ? {} : { placed: place }),
   };
   const current = state.hintShown;
   if (

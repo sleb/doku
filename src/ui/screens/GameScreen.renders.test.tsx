@@ -20,12 +20,12 @@ import { GameScreen } from "./GameScreen";
 
 beforeEach(() => {
   gameStore.setState(idleState, false);
-  settingsStore.setState({ ...defaultSettings, seenRules: true });
+  settingsStore.setState({ ...defaultSettings, seenTutorial: true });
 });
 
 test("a clock tick does not re-render the board", () => {
   act(() => gameStore.getState().startLevel(LEVELS[0]));
-  render(<GameScreen />);
+  render(<GameScreen onReplayTutorial={() => {}} />);
   boardRenders.count = 0;
   act(() => gameStore.getState().tick(500));
   act(() => gameStore.getState().tick(500));

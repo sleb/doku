@@ -37,7 +37,7 @@ export function ResultModal({
       <button
         type="button"
         onClick={status === "won" ? onNext : onRetry}
-        className="rounded bg-stone-800 px-4 py-2 text-white"
+        className="rounded bg-accent px-4 py-2 min-h-11 text-on-accent"
       >
         {status === "lost" ? "Retry" : isLast ? "Finish" : "Next level"}
       </button>

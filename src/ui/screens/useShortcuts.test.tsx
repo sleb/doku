@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { idleState, MAX_HEARTS } from "../../store/game";
-import { gameStore } from "../../store/gameStore";
+import { createGameStore, gameStore } from "../../store/gameStore";
+import { defaultSettings, settingsStore } from "../../store/settings";
 import { useShortcuts } from "./useShortcuts";
 
 function press(init: KeyboardEventInit): KeyboardEvent {
@@ -26,6 +27,7 @@ const future = () => {
 };
 
 beforeEach(() => {
+  settingsStore.setState({ ...defaultSettings });
   gameStore.setState(idleState, false);
   gameStore.getState().startLevel(level);
   gameStore.getState().toggleMark(1);
@@ -107,6 +109,52 @@ describe("useShortcuts", () => {
       expect(marked()).toBe(2);
       expect(e.defaultPrevented).toBe(false);
     }
+  });
+
+  describe("f toggles the tap mode", () => {
+    test("flips inputMode back and forth and prevents default", () => {
+      renderHook(() => useShortcuts());
+      const e = press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("face");
+      expect(e.defaultPrevented).toBe(true);
+      press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+    });
+
+    test("ignores Shift+F but works with Caps Lock (capital F)", () => {
+      renderHook(() => useShortcuts());
+      press({ key: "F", shiftKey: true });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+      press({ key: "F" });
+      expect(settingsStore.getState().inputMode).toBe("face");
+    });
+
+    test.each([
+      ["pause: false", { pause: false }],
+      ["only: []", { only: [] }],
+      ["only: undo", { only: ["undo"] as const }],
+    ])("is gated like the other shortcuts (%s)", (_, opts) => {
+      renderHook(() => useShortcuts(opts));
+      const e = press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+      expect(e.defaultPrevented).toBe(false);
+    });
+
+    test("ignores modified f, repeats, and non-playing states", () => {
+      renderHook(() => useShortcuts());
+      press({ key: "f", ctrlKey: true });
+      press({ key: "f", metaKey: true });
+      press({ key: "f", repeat: true });
+      gameStore.setState({ status: "paused" }, false);
+      press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+    });
+
+    test("still works during a hold", () => {
+      renderHook(() => useShortcuts({ holdOwner: { current: 5 } }));
+      press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("face");
+    });
   });
 
   describe("during a hold", () => {
@@ -248,5 +296,36 @@ describe("useShortcuts", () => {
       expect(faces()).toBe(1);
       expect(gameStore.getState().hearts).toBe(1);
     });
+  });
+});
+
+describe("useShortcuts options", () => {
+  test("acts on the given store only", () => {
+    const store = createGameStore();
+    store.getState().startLevel(level);
+    store.getState().toggleMark(1);
+    renderHook(() => useShortcuts({ store }));
+    press({ key: "z" });
+    expect(marked()).toBe(2);
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("idle");
+    expect(s.future).toEqual([1]);
+  });
+
+  test("pause: false leaves Escape alone", () => {
+    renderHook(() => useShortcuts({ pause: false }));
+    const e = press({ key: "Escape" });
+    expect(gameStore.getState().status).toBe("playing");
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  test("only limits which actions the keys trigger", () => {
+    renderHook(() => useShortcuts({ only: ["undo"] }));
+    press({ key: "h" });
+    expect(gameStore.getState().hearts).toBe(MAX_HEARTS);
+    press({ key: "Z", shiftKey: true });
+    expect(future()).toBe(0);
+    press({ key: "z" });
+    expect(future()).toBe(1);
   });
 });

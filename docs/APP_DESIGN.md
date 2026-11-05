@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"). It turned the single-level game into an app a person can open, play through a series of levels, quit, and come back to: campaign progression, persistence, timer and pause, undo/redo, hints, settings, keyboard play and the desktop window. The engine, the board and the mobile work (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`) are consumed as-is except where stated. `DESIGN.md` was synced to this document in M4-12; if the two disagree, fix whichever is wrong.
 
-**Status:** implemented (M4-01 to M4-11, issues #72 to #82) and synced (M4-12). Automated coverage is unit, jsdom and Playwright (desktop Chromium plus the two mobile projects). The manual checks listed in §9 ("Remaining manual verification") have not been done; in particular window-state restore, the Tauri store file on disk and kill-and-relaunch on iOS are unverified on real runtimes.
+**Status:** implemented (M4-01 to M4-11, issues #72 to #82) and synced (M4-12). Milestone 6 (`docs/POLISH_DESIGN.md`) has since added sound, animation, themes, the accessible palette and patterns, click-only placement, announcements and the interactive tutorial on top; §1, §6 and §7 carry the current form. Automated coverage is unit, jsdom and Playwright (desktop Chromium plus the two mobile projects). The manual checks listed in §9 ("Remaining manual verification") have not been done; in particular window-state restore, the Tauri store file on disk and kill-and-relaunch on iOS are unverified on real runtimes.
 
 ## 1. Goals and non-goals
 
@@ -11,7 +11,7 @@ Companion to `DESIGN.md` §5, §6, §7, §8 and §12 for milestone 4 ("Full app"
 **Non-goals:**
 - Level select, home screen, daily puzzle, stars (`HomeScreen`, `LevelSelectScreen`, `DailyCard`, `ContinueCard` are dropped, not deferred).
 - Generating levels on the device. The generator, difficulty rating and technique-explained hint were delivered in milestone 5 (the hint in M5-06, §4.4); levels come from a bundled generated pack (§3.1).
-- Sound, animations, color-blind palette, themes, the interactive tutorial (milestone 6). Android specifics (#64, #70).
+- Sound, animations, color-blind palette, themes and the interactive tutorial were deferred from this milestone and delivered in milestone 6 (`docs/POLISH_DESIGN.md`; §6 and §7 describe the result). Android specifics (#64, #70) are still pending.
 - Right-click and click-drag marking (dropped from the design until someone asks; click and hold are the only pointer gestures).
 - Accounts, cloud sync, leaderboards (`DESIGN.md` decision 5).
 
@@ -85,7 +85,7 @@ Win on the last level records `next === LEVELS.length`; the result modal's butto
 5. Restore the saved game if `fromSaved` accepts it for the level progress points at (state comes back `paused`); otherwise remove the stale or unreadable `save` and `startCurrent()`.
 6. Install autosave **after** the restore, so restoring does not write itself back.
 
-**Dev override:** `?level=<id>` (only when `import.meta.env.DEV`) is parsed by the pure `devLevelOverride(search, isDev)` and passed as `devLevel`. Settings are still hydrated and persisted (so `seenRules` and haptics behave normally and the first-launch Rules still open), but the saved game and progress are ignored and not written: no win recording, no progress persistence, no autosave. An unknown id boots normally. It exists to keep the e2e specs that need the 11×11 board deterministic. Production builds have no override.
+**Dev override:** `?level=<id>` (only when `import.meta.env.DEV`) is parsed by the pure `devLevelOverride(search, isDev)` and passed as `devLevel`. Settings are still hydrated and persisted (so `seenTutorial` and haptics behave normally and the first-run tutorial still shows), but the saved game and progress are ignored and not written: no win recording, no progress persistence, no autosave. An unknown id boots normally. It exists to keep the e2e specs that need the 11×11 board deterministic. Production builds have no override.
 
 **The Finale is not reachable through the override**, because the override records nothing. The Finale e2e seeds `doku:progress` one level short of the end and boots normally.
 
@@ -139,9 +139,9 @@ export function nextHint(board: Board, level: Level): Hint | null;
 // Hint = { deduction: Deduction; message: string }
 ```
 
-It returns the first technique step that places a face or eliminates a cell the player has not marked, so a hint is always true (never contradicts the solution) and advances as the player acts. **Elimination hints highlight and explain only; they write no marks.** Marking stays the player's move, and the next hint skips what they have marked. `hintShown: { cells, targets, message } | null` is transient store state: `cells` are the forcing cells (`because.cells`), `targets` the cells ruled out (empty for a placement). It is set by `hint()` and cleared by `placeFace`, `toggleMark`, `undo`, `redo`, `restart`, `startLevel` and `pause`; it is never saved (`toSaved` ignores it, `fromSaved` yields `null`).
+It returns the first technique step that places a face or eliminates a cell the player has not marked, so a hint is always true (never contradicts the solution) and advances as the player acts. **Elimination hints highlight and explain only; they write no marks.** Marking stays the player's move, and the next hint skips what they have marked. `hintShown: { cells, targets, message, deduction, placed? } | null` is transient store state: `cells` are the forcing cells (`because.cells`), `targets` the cells ruled out (empty for a placement), `deduction` the source of the text (so the UI can name regions for the palette), `placed` the cell a placement hint filled (keys the 2 s ring). It is set by `hint()` and cleared by `placeFace`, `toggleMark`, `undo`, `redo`, `restart`, `startLevel` and `pause`; it is never saved (`toSaved` ignores it, `fromSaved` yields `null`).
 
-**A hint costs one heart** (`DESIGN.md` §13 decision 2 holds: 3 hearts, no recovery), so hints are naturally capped at two per level and trade directly against mistakes. The Hint button is disabled on the last heart. The count is recorded and shown on the result. `feedbackFor` reads a `hintsUsed` increase as `place` (a hint is a deliberate, correct step, placement or elimination alike), checked after win/lose and before the heart-drop check so it is not mistaken for `wrong`.
+**A hint costs one heart** (`DESIGN.md` §13 decision 2 holds: 3 hearts, no recovery), so hints are naturally capped at two per level and trade directly against mistakes. The Hint button is disabled on the last heart. The count is recorded and shown on the result. `outcomeFor` reads a `hintsUsed` increase as `hint` (a deliberate, correct step, placement or elimination alike; M6-12), checked after win/lose and before the heart-drop check so it is not mistaken for `wrong`.
 
 ## 5. Persistence
 
@@ -197,36 +197,45 @@ Not saved: `history`/`future` (undo does not survive a restart) and the status. 
 - A rejected `set`/`flush`/`remove` is swallowed; the next change retries naturally.
 - Progress and settings write immediately on change (they change rarely).
 
-Consequence for e2e: specs that reload find the game paused (Resume) rather than playing. Specs run with `doku:settings` seeded `seenRules: true` via `storageState` in `playwright.config.ts`.
+Consequence for e2e: specs that reload find the game paused (Resume) rather than playing. Specs run with `doku:settings` seeded `seenTutorial: true` via `storageState` in `playwright.config.ts`.
 
 ## 6. Settings
 
 ```ts
-interface Settings { haptics: boolean; seenRules: boolean }
-// defaults: { haptics: true, seenRules: false }
+interface Settings {
+  haptics: boolean; sound: boolean;
+  theme: "system" | "light" | "dark"; palette: "default" | "accessible";
+  patterns: boolean; inputMode: "mark" | "face"; seenTutorial: boolean;
+}
+// defaults: { true, true, "system", "default", false, "mark", false }
 ```
 
-`src/store/settings.ts`: pure `parseSettings`, a thin Zustand binding with `set(patch)`, `hydrateSettings` / `persistSettings` (hydrate first so loading does not write back), persisted on every change. Consumers:
-- The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics`, read at event time (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
-- `seenRules` triggers the rules dialog on first launch (§7.3) and is set when it is dismissed.
+`src/store/settings.ts`: pure `parseSettings` (field-by-field, `oneOf` for enums; a saved `seenTutorial` is ignored, no migration), a thin Zustand binding with `set(patch)`, `hydrateSettings` / `persistSettings` (hydrate first so loading does not write back), the whole object (minus `set`) persisted on every change. Consumers:
+- `useFeedback` (`src/ui/screens/useFeedback.ts`, called by `GameScreen`) renders each outcome through haptics (if `settings.haptics`), sound (if `settings.sound`), the effects store and the announcer, reading settings at event time (resolves `MOBILE_DESIGN.md` §6.3). The desktop haptics adapter is a no-op.
+- `seenTutorial` shows the interactive tutorial on first launch (POLISH_DESIGN §7) and is set when it is skipped or finished. A replay from Pause leaves it set.
+- `inputMode` ("Tap places faces") is read by `GameScreen` and passed to `Board`; the ActionBar toggle, the `f` key and the Settings switch all write it, and `useInputModeAnnouncement` speaks every change.
+- `palette` and `patterns` are passed `GameScreen → Board → Cell` and also choose how cell labels and hint text name regions (`src/ui/board/regionNaming.ts`).
 
-Theme, sound and the color-blind palette are milestone 6 and add fields then. The settings dialog also hosts "Start over" (§7.3), the one destructive action.
+`sound` is consumed by `useFeedback` and `src/platform/sound.ts`, `theme` by `src/app/theme.ts` (POLISH_DESIGN §8.1; `boot.ts` applies it after hydrate and on every change), `palette` and `patterns` by the board, `inputMode` by the cells. `Haptics.supported()` (Tauri and mobile) hides the Haptics row elsewhere. The settings dialog also hosts "Start over" (§7.3), the one destructive action.
 
 ## 7. UI
 
 ### 7.1 Component tree
 
 ```
-<App>                              progress.next === LEVELS.length && status idle ? <Finale/> : <GameScreen/>
- ├─ <GameScreen>                   view of gameStore; no props
+<App>                              replaying || !seenTutorial ? <Tutorial/> : progress.next === LEVELS.length && status idle ? <Finale/> : <GameScreen/>
+ ├─ <GameScreen>                   view of gameStore; prop onReplayTutorial
+ │   ├─ <Announcer/>               visually hidden aria-live region
  │   ├─ <GameLayout>
  │   │    ├─ header   → <TopBar>  "Level n of N" · <Timer/> · <Hearts/> · Pause button
- │   │    ├─ board    → <Board>   (roving focus, §7.5)
- │   │    └─ controls → <ActionBar>  Undo · Redo · Hint
- │   ├─ <PauseDialog>             status === "paused": Resume · Restart level · Rules · Settings
+ │   │    ├─ board    → <Board>   (roving focus, §7.5; <HoldGlow/> overlay while a cell is held)
+ │   │    └─ controls → <HintBanner/> · <ActionBar>  Undo · Redo · Hint · Tap places faces
+ │   ├─ <PauseDialog>             status === "paused": Resume · Restart level · Rules · Replay tutorial · Settings
+ │   ├─ <ResultSkip/>             only while the result modal is delayed
  │   ├─ <ResultModal>             won: time/best/hints → Next level | Finish · lost: Retry
- │   ├─ <RulesDialog>             static text; auto-opens once (settings.seenRules)
- │   └─ <SettingsDialog>          Haptics switch, Start over (with confirm)
+ │   ├─ <RulesDialog>             static text; opened from Pause
+ │   └─ <SettingsDialog>          sections Feedback, Display, Play; Start over (with confirm)
+ ├─ <Tutorial>                    private store, real Board; Skip or Finish pauses the campaign level and sets seenTutorial
  └─ <Finale>                      all levels done: total of best times · Start over
 ```
 
@@ -239,16 +248,17 @@ There is no router. `<Dialog>` (`src/ui/Dialog.tsx`) is the one shared primitive
 - **Manual pause:** the Pause button in `TopBar`, and `Esc` (handled by `useShortcuts`; Esc only pauses, it never resumes). The paused board stays mounted but `inert` and `visibility: hidden`, so pausing is not a way to study the puzzle with the clock stopped.
 - **Timer display:** `m:ss` (`h:mm:ss` past an hour) from `Math.floor(elapsedMs / 1000)` selected from the store, so it re-renders once a second, not on every tick. The timer is always shown; there is no setting to hide it. `GameScreen` reads `elapsedMs` only while `won` (for the result), so ticks do not re-render the screen or the board.
 - **Action bar** (`ActionBar.tsx`): three real buttons in one row in the `controls` slot (side panel in the wide layout, under the board in the tall one), each at least 44 px (`min-h-11 min-w-11`, `MOBILE_DESIGN.md` §4.3). Undo and Redo are disabled unless `playing` and their stack is non-empty. Hint is labelled "Hint" with a small non-wrapping "-1 ♥" cost marker and `aria-label="Hint, costs one heart"`, disabled unless `playing` and `hearts > 1`. All are disabled while paused, so a paused board cannot be studied.
-- **Hint display** (`HintBanner.tsx`, `Cell.tsx`, `Board.tsx`): `HintBanner` is a `role="status"` paragraph above the action bar showing `hintShown.message`; it is mounted but empty (zero height) until a hint is shown, so the cramped layouts keep their board size (the board re-fits while a hint is up). `Board` takes `highlight` (forcing cells) and `targets` (ruled-out cells); `Cell` draws a dashed inset outline for a cause and a solid outline with a light tint for a target, never colour alone, sets `data-hint` and `aria-description` (the accessible name is unchanged), and ignores the hint for conflict and wrong styling.
-- **Shortcuts:** `useShortcuts({ holdOwner })` is one window `keydown` listener, active only while `status === "playing"` (so dialogs and the paused state swallow them). See §7.5.
+- **Hint display** (`HintBanner.tsx`, `Cell.tsx`, `Board.tsx`): `HintBanner` is a plain (non-live; the announcer is the one speaker) paragraph above the action bar showing the hint text for the palette in use (`hintMessage`; colour names only on the default palette without patterns, else "region N"; cell labels follow the same rule), never auto-dismissed; it is mounted but empty (zero height) until a hint is shown, so the cramped layouts keep their board size (the board re-fits while a hint is up). `Board` takes `highlight` (forcing cells) and `targets` (ruled-out cells); `Cell` draws a dashed inset outline for a cause and a solid outline with a light tint for a target, never colour alone, sets `data-hint` and `aria-description` (the accessible name is unchanged), and ignores the hint for conflict and wrong styling. A placement hint also passes `hintRing` so the placed cell draws a 2 s `hint-ring` (POLISH_DESIGN §9.4).
+- **Result delay:** `useDelayedStatus` (`src/ui/screens/useDelayedStatus.ts`) holds the result modal back by `WIN_DELAY_MS` (900) after a win and `LOSE_DELAY_MS` (450) after a loss so the win wave and the wrong-tap effect can play. A key press or a tap on `ResultSkip` (a transparent layer, because the board is already `inert`) opens it at once; under `prefers-reduced-motion`, and for a result present on mount (restore), there is no delay. Autosave and progress recording follow the state change, not the modal.
+- **Shortcuts:** `useShortcuts({ store, pause, only, holdOwner })` is one window `keydown` listener, active only while `status === "playing"` (so dialogs and the paused state swallow them). See §7.5.
 
 ### 7.3 Dialogs
 
-- **PauseDialog:** Resume (autofocused), Restart level, Rules, Settings. It passes no `onClose`, so Escape does not close it.
+- **PauseDialog:** Resume (autofocused), Restart level, Rules, Replay tutorial, Settings ("Replay tutorial" opens the tutorial over the paused game; leaving it returns to this dialog with the campaign unchanged). It passes no `onClose`, so Escape does not close it.
 - **Sheets:** `GameScreen` holds `sheet: "rules" | "settings" | null`. While a sheet is open the Pause dialog is unmounted and returns on close (Escape or the button), without resuming.
 - **ResultModal:** won: "You solved it", "Time: m:ss", "New best" when `elapsedMs <= best` (the win is already recorded, so a first win or a tie shows it) otherwise "Best: m:ss", "Hints: n" only when n > 0, and one button: "Next level" (or "Finish" on the last level), which takes focus. Lost: "Out of hearts" and "Retry". It receives `elapsedMs`, `bestMs`, `hintsUsed` and `isLast` as props.
-- **RulesDialog:** the four rules in plain text and the input cheat sheet (tap = ✕, hold = face, arrows, `x`, Space, `z`, `h`), and a "Got it" button; Escape also closes it. No interactive board; that is milestone 6. On first launch (`!seenRules` and a level loaded) Rules open over a game that is **paused** (clock stopped); dismissal sets `seenRules: true` and resumes straight to play. `firstRules` is derived from `seenRules`, not an effect, so StrictMode cannot reopen it.
-- **SettingsDialog:** a `role="switch"` Haptics control, "Start over" and "Done". "Start over" swaps to an inline confirm ("Start over? Your best times are kept." with Confirm and Cancel); Escape cancels the confirm first (a second Escape closes the dialog); Confirm calls `campaign.startOver`, then pauses (level 1 comes up behind the Pause dialog, not running) and closes the sheet. Start over shipped with M4-07 (level progression), not with M4-06 (settings).
+- **RulesDialog:** the four rules in plain text and the input cheat sheet (tap = ✕, hold = face, the "Tap places faces" button or `f`, arrows, `x`, Space, `z`, `h`), and a "Got it" button; Escape also closes it. No interactive board (the tutorial, POLISH_DESIGN §7, is separate). It no longer opens on first launch.
+- **SettingsDialog:** sections Feedback (Haptics, only where supported, and Sound as `SwitchRow`s), Display (Theme and Colors radiogroups, Patterns) and Play ("Tap places faces" for `inputMode`), then "Start over" and "Done". The body is a `max-h` + `overflow-y-auto` container so it scrolls on short landscape screens. "Start over" swaps to an inline confirm ("Start over? Your best times are kept." with Confirm and Cancel); Escape cancels the confirm first (a second Escape closes the dialog); Confirm calls `campaign.startOver`, then pauses (level 1 comes up behind the Pause dialog, not running) and closes the sheet. Start over shipped with M4-07 (level progression), not with M4-06 (settings).
 
 ### 7.4 Finale
 
@@ -265,13 +275,14 @@ Per-cell keys (from M2): `x` toggles ✕, holding `Space` places a face. Added i
 | `z`, `Ctrl/Cmd+Z` | Undo |
 | `Shift+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl+Y` | Redo (`Cmd+Y` is deliberately not bound) |
 | `h` | Hint (plain key only) |
+| `f` | Toggle "Tap places faces" (plain lowercase key; allowed during a hold) |
 | `Esc` | Pause |
 
 - **Roving tabindex:** `Board` holds `active` (default 0, reset to 0 on a new level) and gives `tabIndex` 0 to that cell's button and -1 to the rest, so the board is one Tab stop. A cell focus event (mouse included) sets `active`. Arrow handling lives in `Board` on the grid, using `geometry` indices; handled navigation keys are default-prevented; arrows with Ctrl/Meta/Alt/Shift are neither handled nor prevented. `CellView` stays presentational.
 - **Locked cells stay focusable:** a locked cell (face or wrong ✕) gets `aria-disabled="true"` and ignores click, `x`, Enter and Space-hold, instead of `disabled`, because disabled buttons cannot take focus and the arrow walk would stall. The whole board is still `inert` once the game is finished or paused. Tests that read `disabled` read `aria-disabled`.
 - **Focus ring:** cells show a `focus-visible` outline inset past the conflict ring.
 - **Focus after Resume:** if focus fell to the page, `GameScreen` focuses the board's tabbable cell. A real browser cannot restore focus onto the `visibility: hidden` board from `Dialog`'s cleanup; the e2e caught this where jsdom did not.
-- **Shortcut guards:** `useShortcuts` ignores auto-repeat, Alt and events a dialog already handled (`defaultPrevented`, so Esc closing the first-launch Rules does not also pause), and acts only while `playing`. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing while a cell is held, while `Esc` (without Ctrl/Meta) still pauses.
+- **Shortcut guards:** `useShortcuts` ignores auto-repeat, Alt and events a dialog already handled (`defaultPrevented`, so Esc closing a dialog does not also pause), and acts only while `playing`. `GameScreen` owns the `holdOwner` ref (passed to `Board` and `useShortcuts`), so undo, redo and hint do nothing while a cell is held, while `Esc` (without Ctrl/Meta) still pauses.
 - **Right-click and click-drag marking are not implemented** (§1).
 
 ## 8. Desktop window and Rust shell
@@ -292,8 +303,8 @@ Rust gates (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`) run i
 - `playthrough.spec.ts`: win, then "Next level" lands on level 2 of N; lose and Retry; hold and click gestures.
 - `resume.spec.ts`: place a face, mark a cell, lose a heart, let the clock run, reload; the Pause dialog is up, the clock is stopped, and Resume shows the same board and hearts. The scenario lives in `e2e/resumeFlow.ts` and is shared with the touch variant in `mobile.spec.ts`. A corrupt `doku:save` (not an object, wrong-length board, another level's id, zero hearts, unparsable JSON) boots a fresh level with no page error and no leftover save.
 - `campaign.spec.ts`: progress survives a reload and the game resumes paused on level 2. Finale: the test seeds `doku:progress` one level short of the end and boots normally (the `?level=` override records nothing and cannot reach it). It wins the last level, sees "Finish" (no "Next level"), then the Finale; a reload stays on the Finale; "Start over" returns to level 1 and keeps best times. Settings "Start over" asks first, Escape cancels only the confirm, Confirm rewinds to a paused level 1. The override leaves `doku:progress` and `doku:save` untouched; an unknown id boots level 1.
-- `keyboard.spec.ts` (a level played from the keyboard alone), `hint.spec.ts`, `pause.spec.ts`, `settings.spec.ts` (first-launch Rules, corrupt settings, haptics persists), plus the layout, webview, borders and smoke specs from earlier milestones.
-- Helpers in `e2e/helpers.ts`: `seed`/`seedRaw` (a once-per-tab init script so a reload keeps live state), `storageValue`/`storageJson`, `solve`, touch helpers. The M4-11 specs avoid `waitForTimeout`: autosave is awaited with `expect.poll` and the clock is driven with `page.clock` (`pause.spec.ts` and the gesture tests in `playthrough.spec.ts` still use fixed waits). Each test starts with empty storage apart from the `seenRules` seed.
+- `keyboard.spec.ts` (a level played from the keyboard alone), `hint.spec.ts`, `pause.spec.ts`, `settings.spec.ts` (first-run tutorial, corrupt settings, haptics persists), `tutorial.spec.ts`, plus the layout, webview, borders and smoke specs from earlier milestones.
+- Helpers in `e2e/helpers.ts`: `seed`/`seedRaw` (a once-per-tab init script so a reload keeps live state), `storageValue`/`storageJson`, `solve`, touch helpers. The M4-11 specs avoid `waitForTimeout`: autosave is awaited with `expect.poll` and the clock is driven with `page.clock` (`pause.spec.ts` and the gesture tests in `playthrough.spec.ts` still use fixed waits). Each test starts with empty storage apart from the `seenTutorial` seed.
 
 **Remaining manual verification (not done; none of these can run in CI):**
 - Desktop (`bun tauri dev` / a release build): the `doku.json` store file is written to the app data dir and a relaunch restores board, hearts and clock paused; window size and position are restored across a relaunch (window-state); the window cannot be resized below 420×560, and an 11×11 board is legible at that size; minimize and return auto-pauses; the haptics toggle persists.
@@ -333,3 +344,4 @@ All done, titled `M4-NN` in the "full-app" GitHub milestone: 01 Seed pack and ca
 9. **Unversioned saves that validate or are discarded**, per the pre-MVP rule.
 10. **One screen, shared `<Dialog>`** for pause, rules, settings and results.
 11. **No right-click or drag marking.** Click (✕) and hold (face) are the only pointer gestures.
+12. **Polish is presentation over the same store.** Sound, effects, announcements and the tutorial subscribe to or read the pure store; the tutorial uses its own `createGameStore()` instance so the campaign, `save` and `progress` are untouched (`docs/POLISH_DESIGN.md` §14).

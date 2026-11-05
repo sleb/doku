@@ -17,10 +17,10 @@ beforeEach(() => {
 describe("boot", () => {
   test("hydrates the settings store from storage", async () => {
     const storage = new MemoryStorage();
-    await storage.set("settings", { haptics: false, seenRules: true });
+    await storage.set("settings", { haptics: false, seenTutorial: true });
     await boot(storage);
     expect(settingsStore.getState().haptics).toBe(false);
-    expect(settingsStore.getState().seenRules).toBe(true);
+    expect(settingsStore.getState().seenTutorial).toBe(true);
   });
 
   test("persists later changes", async () => {
@@ -28,8 +28,8 @@ describe("boot", () => {
     await boot(storage);
     settingsStore.getState().set({ haptics: false });
     expect(await storage.get("settings")).toEqual({
+      ...defaultSettings,
       haptics: false,
-      seenRules: false,
     });
   });
 
@@ -38,7 +38,7 @@ describe("boot", () => {
     await storage.set("settings", "garbage");
     await boot(storage);
     expect(settingsStore.getState().haptics).toBe(true);
-    expect(settingsStore.getState().seenRules).toBe(false);
+    expect(settingsStore.getState().seenTutorial).toBe(false);
   });
 });
 
@@ -211,5 +211,55 @@ describe("boot autosave", () => {
     gameStore.getState().toggleMark(4);
     vi.advanceTimersByTime(1000);
     expect(set).not.toHaveBeenCalledWith("save", expect.anything());
+  });
+});
+
+describe("boot theme", () => {
+  test("mirrors the theme setting into localStorage for the no-flash script", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("settings", { theme: "dark" });
+    await boot(storage);
+    expect(localStorage.getItem("doku:theme")).toBe("dark");
+    settingsStore.getState().set({ theme: "system" });
+    expect(localStorage.getItem("doku:theme")).toBe("system");
+  });
+
+  test("a throwing localStorage does not break boot", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    await expect(boot(new MemoryStorage())).resolves.toBeUndefined();
+    vi.restoreAllMocks();
+  });
+
+  test("applies the saved theme to <html> before resolving", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("settings", { theme: "dark" });
+    await boot(storage);
+    expect(document.documentElement.dataset.theme).toBe("dark");
+  });
+
+  test("follows later theme changes", async () => {
+    const storage = new MemoryStorage();
+    await boot(storage);
+    settingsStore.getState().set({ theme: "dark" });
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    settingsStore.getState().set({ theme: "light" });
+    expect(document.documentElement.dataset.theme).toBe("light");
+  });
+
+  test("booting again stops listening to the previous system query", async () => {
+    const mql = {
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal("matchMedia", () => mql);
+    const storage = new MemoryStorage();
+    await boot(storage);
+    expect(mql.addEventListener).toHaveBeenCalledTimes(1);
+    await boot(storage);
+    expect(mql.removeEventListener).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 });
