@@ -58,20 +58,20 @@ The game store, `game.ts` and the engine are **not** changed by this milestone. 
 export type OutcomeKind = "place" | "wrong" | "win" | "lose";
 export interface Outcome {
   kind: OutcomeKind;
-  cell?: number;      // the cell the player acted on (place, wrong); absent for win and lose
+  cell?: number;      // the cell the player acted on (place, wrong, and a lose caused by a wrong tap); absent for win
   faces: number;      // faces on the board after the change (drives the rising pitch, §5.3)
   hearts: number;     // hearts after the change (announcements)
 }
 export function outcomeFor(prev: GameState, next: GameState): Outcome | null;
 ```
 
-The decision order is exactly `feedbackFor`'s today (`prev` not `playing` → null; won; lost; hint → place; heart drop → wrong; more faces → place), because that order already handles the corner cases the M4 reviews found (a hint is `place`, not `wrong`; a restore is not an outcome). What is new is `cell`: the single index whose value changed between `prev.board` and `next.board` (for a hint, the committed cell; for a heart drop, the new locked ✕). `HapticKind` becomes an alias of `OutcomeKind`; `haptics.ts` and `GameScreen` import from the new module. `feedback.ts` and its test are deleted and ported (fearless refactor, no shim).
+The decision order is exactly `feedbackFor`'s today (`prev` not `playing` → null; won; lost; hint → place; heart drop → wrong; more faces → place), because that order already handles the corner cases the M4 reviews found (a hint is `place`, not `wrong`; a restore is not an outcome). What is new is `cell`: the single index whose value changed between `prev.board` and `next.board` (for a hint, the committed cell; for a heart drop, the new locked ✕). The order above still returns `lose` before the heart-drop branch, but a `lose` produced by a wrong tap (the last heart) keeps that `cell`, so the shake and red ✕ of §6.2 still target it; only `win` has no cell. `HapticKind` becomes an alias of `OutcomeKind`; `haptics.ts` and `GameScreen` import from the new module. `feedback.ts` and its test are deleted and ported (fearless refactor, no shim).
 
 Why one function: three channels disagreeing about what just happened (a buzz for a hint but a "wrong" sound) is the bug to design out. It is also why the tests for "what counts as an outcome" stay in one place (§10).
 
 ### 3.2 `useFeedback()` (replaces the inline effect in `GameScreen`)
 
-`src/ui/screens/useFeedback.ts`, called once by `GameScreen`. One `gameStore.subscribe`, one settings read **at event time** (the pattern `GameScreen` uses for haptics today). It also resets `fxStore` and the announcer when the level changes or a save is restored, so a restore never animates or announces itself. It installs the one-time audio **unlock** listener (§5.2).
+`src/ui/screens/useFeedback.ts`, called once by `GameScreen` and once by `Tutorial`. It takes the store to watch (`useFeedback(store = gameStore)`), so the tutorial's private store (§7.1) uses the same path: its placements get the same haptics, sound, effects and announcements as the real game, which is what a tutorial should teach. Each caller has its own `fxStore`/announcer subscription lifetime; they are never mounted together. One `store.subscribe`, one settings read **at event time** (the pattern `GameScreen` uses for haptics today). It also resets `fxStore` and the announcer when the level changes or a save is restored, so a restore never animates or announces itself. It installs the one-time audio **unlock** listener (§5.2).
 
 ## 4. Settings changes
 
@@ -105,7 +105,7 @@ Same shape and discipline as `haptics.ts`: injected deps, always resolves, never
 
 ```ts
 export interface Sound {
-  play(kind: OutcomeKind, faces: number): void;   // fire and forget
+  play(kind: OutcomeKind, faces: number): Promise<void>;   // always resolves, like Haptics.play; callers may ignore it
   unlock(): void;                                 // call from a user gesture
   suspend(): void; resume(): void;                // visibility
 }
@@ -170,7 +170,7 @@ A restored game must not replay animations for faces already on the board: effec
 
 ### 6.3 Win and loss
 
-- **Win:** faces play a staggered "wave" in row order: `animation-delay: calc(var(--row) * 45ms)`, each a quick hop (`translateY(-18%)` and back, 300 ms). `--row` is set inline per cell by `Board` only during the win (a `data-celebrate` attribute on the grid). Total at size 11 is about 800 ms. The win cue (§5.3) starts with it. `ResultModal` opens after `WIN_DELAY_MS = 900`, driven by a small `useDelayedStatus(status, ms)` hook in `GameScreen` that returns the previous status until the delay passes. Pressing any key or clicking the board area during the delay skips it. Under reduced motion the delay is 0 and there is no wave.
+- **Win:** faces play a staggered "wave" in row order: `animation-delay: calc(var(--row) * 45ms)`, each a quick hop (`translateY(-18%)` and back, 300 ms). `--row` is set inline per cell by `Board` only during the win (a `data-celebrate` attribute on the grid). Total at size 11 is about 800 ms. The win cue (§5.3) starts with it. `ResultModal` opens after `WIN_DELAY_MS = 900`, driven by a small `useDelayedStatus(status, ms)` hook in `GameScreen` that returns the previous status until the delay passes. Pressing any key, or tapping a transparent `ResultSkip` layer that covers the screen while the delay runs, skips it. The layer is separate from the board wrapper because that wrapper is `inert` the moment the game finishes (so clicks on board cells can never reach a handler); the layer is unmounted when the modal opens. Under reduced motion the delay is 0 and there is no wave.
 - **Loss:** the final wrong-tap effect plays, hearts empty, and the modal opens after `LOSE_DELAY_MS = 450`. No celebration-style effect.
 - The board is `inert` the moment the game finishes, as today; only the *dialog* is deferred. Autosave, progress recording and `recordWins` are triggered by the state change, not the dialog, so a quit during the delay still keeps the win (`APP_DESIGN.md` §3.3).
 
@@ -250,7 +250,7 @@ The tutorial boards are below the app's 7..11 size range (`MIN_SIZE` is a *loade
 
 ### 7.4 Flow
 
-- A step is complete when the private board satisfies `goal`; the card swaps to the next step after a 600 ms beat (immediate under reduced motion). An action that breaks the lesson (a face that is not in `solution`, a ✕ on the answer cell) is undone by the step and `onWrong` is shown in the card's `aria-live` region.
+- A step is complete when the private board satisfies `goal`; the card swaps to the next step after a 600 ms beat (immediate under reduced motion). An action that breaks the lesson (a face that is not in `solution`, a ✕ on the answer cell) is undone by the step and `onWrong` is shown in the card and also sent to the announcer (the same `<Announcer>`, written by the card, since `outcomeFor` knows nothing of lessons). The private store's wrong tap still produces a `wrong` outcome, so it gets the wrong effect, sound and haptic, but `announce` is passed a `tutorial` flag that suppresses the heart count (hearts are not shown there).
 - **Skip** is always available and sets `seenTutorial`. Finishing sets it too. Either way the campaign starts at the player's current level, **paused with Resume**, matching how every other entry behaves.
 - Reached again from Pause → "Replay tutorial": it opens over the paused game (as `RulesDialog` does) and closing it returns to the Pause dialog without changing the campaign.
 - Keyboard and screen-reader users can complete every step: step 1 uses the Space hold, and in `inputMode: "face"` (§9.1) every step can be done with plain activation. The card text names the actual gesture for the current input mode.
@@ -282,7 +282,7 @@ Today `index.css` hard-codes `background: #fff` and components use literal Tailw
 - **The board is theme-independent.** Region colors, the dark glyph (`GLYPH_COLOR`), the wrong ✕ and the thick region borders keep their light-theme values in dark mode. The M3 contrast guarantees (glyph ≥ 3:1 on every region) were chosen against these exact pastels, and re-deriving 11 distinguishable dark region colors with new glyph colors is a second palette project for little gain: a bright board on a dark frame is a normal look for puzzle games. (If playtesting disagrees, §12 Q4.)
 - `settings.theme === "system"` follows `prefers-color-scheme`; `light`/`dark` override it. `src/app/theme.ts` has a pure `resolveTheme(setting, prefersDark)` and `applyTheme` which sets `data-theme` on `<html>` and keeps it in sync via a `matchMedia` listener.
 - **No flash:** `index.html` gets a tiny inline script that reads the theme from `localStorage` (`doku:settings`) and sets `data-theme` before first paint, plus `<meta name="color-scheme" content="light dark">`. On Tauri the persisted settings live in the store plugin, not `localStorage`, so the first frame follows the OS and is corrected after hydrate; this is acceptable for a personal app and noted for the manual pass. `theme-color` meta is set from the resolved theme for mobile browsers and the iOS status bar (verify on device).
-- Desktop window chrome follows the OS by default. Syncing it to an in-app override needs `setTheme` on the Tauri window, which needs a capability grant; deferred unless it looks wrong in the manual pass (§12 Q5).
+- Desktop window chrome follows the OS and is not synced to the in-app override (no `setTheme` capability grant; decided, §12 Q5).
 
 ### 8.2 Region palette as data
 
@@ -343,7 +343,7 @@ Cell labels (`Row 3, column 5, emerald region, face`) already exist. Added: the 
 - **Chrome contrast** in both themes: text ≥ 4.5:1, borders and focus ring ≥ 3:1. A node test computes the ratio for each semantic-token pair (the same approach as `palette.test.ts`), so a token edit that breaks contrast fails CI.
 - Focus ring: the board already has a visible ring; extend a single `:focus-visible` style to every button and the switches using `--color-focus`.
 - Touch targets: the audit of every interactive element is ≥ 44 px (M3 did the action bar; Settings rows and the tutorial card are new).
-- Text scaling: layout must survive the OS/browser font size at 200 % and page zoom to 200 %; the board is container-sized so it is not affected, the header and dialogs wrap rather than clip. Checked in the manual pass and with one Playwright spec at a 200 % device-scale emulation (§10).
+- Text scaling: layout must survive the OS/browser font size at 200 % and page zoom to 200 %; the board is container-sized so it is not affected, the header and dialogs wrap rather than clip. Checked in the manual pass and with one Playwright spec that sets a 200 % root font size and, separately, halves the viewport at 1× to get the CSS layout of 200 % page zoom (device scale factor alone changes neither) (§10).
 - `<html lang="en">` already set; the document `<title>` is "Doku" always (fine); the page `h1` is the level name via `TopBar`.
 
 ### 9.4 Hint presentation (conditional on M5)
@@ -356,7 +356,7 @@ Strict TDD (CLAUDE.md): each row below is written first. Audio and real animatio
 
 | Kind | What |
 |---|---|
-| `outcomeFor` (node) | The existing `feedbackFor` table, ported, plus `cell` is the changed index for place, wrong and hint; `faces` and `hearts` are the after-values; restore and non-`playing` give null. |
+| `outcomeFor` (node) | The existing `feedbackFor` table, ported, plus `cell` is the changed index for place, wrong, hint and a `lose` from a wrong tap on the last heart (a `win` has none); `faces` and `hearts` are the after-values; restore and non-`playing` give null. |
 | `cueFor` (node) | Each kind returns notes with finite frequencies and durations, gains in `(0, 0.5]`, `at ≥ 0`; `place` pitch is strictly increasing in `faces` across `1..size`; win ends higher than it starts; wrong is lower than every place note. |
 | `sound` adapter (node) | With a fake `AudioContext` recording calls: no sound before `unlock`; `play` schedules one oscillator per note with a ramp to 0; the 5th simultaneous voice stops the oldest; `suspend`/`resume` forward; a throwing context is logged and `play` still resolves; `createContext` returning null is a silent no-op. |
 | Settings (node) | `parseSettings` for every new field: wrong types and unknown enum values fall back; extras dropped; the old `seenRules` key is ignored. |
@@ -369,10 +369,10 @@ Strict TDD (CLAUDE.md): each row below is written first. Audio and real animatio
 | Board/Cell (jsdom) | `fx` reaches exactly the matching cell (others' props are referentially equal, via the existing render-count harness `GameScreen.renders.test.tsx`); `inputMode: "face"`: click, Enter and Space call `placeFace` once, `x` still marks, hold does not double-place; `"mark"` unchanged. `patterns` toggles the pattern style. |
 | `HOLD_RAMP` and `haptics.ramp` (node) | Offsets strictly increase from 0 and end before `HOLD_MS`; intensity (`soft < light < medium < heavy`) never decreases; with fake timers and a fake plugin, one `impactFeedback` per entry at the right time; `cancel` stops the rest; a second `ramp` cancels the first; no-op off Tauri/desktop; a rejecting plugin neither throws nor stops later pulses; `place` is `heavy`. |
 | Hold glow (jsdom) | `Cell` calls `onGlow(index)` after `HOLD_DELAY_MS` and `onGlow(null)` on release, drag-off, blur, disable and completion, never on a plain click; `Board` renders `<HoldGlow>` only while a cell reports, centered on that cell, `aria-hidden`, `pointer-events-none`, duration `HOLD_MS`; other cells' props stay referentially equal (render-count harness). `GameScreen` (haptics mocked): ramp starts only when `settings.haptics` is on, is cancelled when the glow ends or on pause, and a completed hold ends with `place` after the cancel. |
-| ResultModal delay (jsdom) | With fake timers the modal is absent for `WIN_DELAY_MS`, then present; a key press skips it; with `prefers-reduced-motion` mocked it opens immediately; progress is recorded before the modal opens. |
+| ResultModal delay (jsdom) | With fake timers the modal is absent for `WIN_DELAY_MS`, then present; a key press skips it; a pointer press on the `ResultSkip` layer skips it, while a press on a board cell does nothing (the wrapper stays inert); with `prefers-reduced-motion` mocked it opens immediately; progress is recorded before the modal opens. |
 | Tutorial (jsdom) | Completing each step's `goal` advances; a rule-breaking action shows `onWrong` and resets the step; Skip and Finish both set `seenTutorial`; the campaign store and `doku:save` are untouched throughout. |
 | SettingsDialog (jsdom) | Each new control flips its setting; Theme radiogroup is keyboard operable; Haptics row absent when the adapter is a no-op. |
-| E2E (Playwright) | `tutorial.spec.ts`: a fresh profile (seeding `seenTutorial: false`) completes the tutorial with pointer and with keyboard and lands on level 1 paused. `a11y.spec.ts`: `@axe-core/playwright` reports no serious or critical violations on the board, the Pause dialog, Settings, the result modal and the tutorial, in light and dark. `inputmode.spec.ts`: a level won using only `click()` in face mode. `playthrough.spec.ts` glow test now samples the overlay's dash offset at 30 % and 60 % of `HOLD_MS`, and asserts the ring is wider than the cell and not clipped on a corner cell (timings imported from `hold.ts`; also on the mobile projects). `theme.spec.ts`: dark persists across a reload and the board cell backgrounds are unchanged. `zoom.spec.ts`: 200 % device scale, nothing clips, the board stays inside the viewport. Existing specs: `seenRules` seeding replaced, the rest unaffected. |
+| E2E (Playwright) | `tutorial.spec.ts`: a fresh profile (seeding `seenTutorial: false`) completes the tutorial with pointer and with keyboard and lands on level 1 paused. `a11y.spec.ts`: `@axe-core/playwright` reports no serious or critical violations on the board, the Pause dialog, Settings, the result modal and the tutorial, in light and dark. `inputmode.spec.ts`: a level won using only `click()` in face mode. `playthrough.spec.ts` glow test now samples the overlay's dash offset at 30 % and 60 % of `HOLD_MS`, and asserts the ring is wider than the cell and not clipped on a corner cell (timings imported from `hold.ts`; also on the mobile projects). `theme.spec.ts`: dark persists across a reload and the board cell backgrounds are unchanged. `zoom.spec.ts`: (a) root font size 200 % at a fixed viewport: header and dialogs wrap, nothing clips; (b) viewport halved at 1× (200 % page zoom layout): nothing clips, the board stays inside the viewport, interactive targets stay ≥ 44 px. Existing specs: `seenRules` seeding replaced, the rest unaffected. |
 | Mobile projects | `inputmode` and `tutorial` also run on `mobile-chromium` and `mobile-webkit` with touch helpers. |
 
 **New dev dependency:** `@axe-core/playwright`. No runtime dependencies are added by the milestone.
@@ -388,11 +388,11 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 
 ## 12. Open questions
 
-1. **Hint UI ownership (§9.4).** Does the highlight-and-explain toast belong in M5-07 or here? Proposal: here, conditional on M5-07 returning the object form. If M5-07 is expanded to include it, drop that story.
+1. **Resolved: hint UI ownership (§9.4).** The highlight-and-explain toast belongs here, conditional on M5-07 returning the object form. If M5-07 is expanded to include it, drop that story.
 2. **Accessible palette thresholds.** The ΔE floors are set when the palette is tuned, from simulated renderings, not decided in advance.
 3. **Reduced-motion switch.** Only the OS preference is honoured. Add an in-app "Reduce motion" setting only if someone needs animations off on a platform whose OS flag is not reachable (older WebViews).
 4. **Dark board.** The board is the same in both themes (§8.1). If a bright board in a dark frame is jarring in play, a dark region palette is a follow-up with its own glyph/contrast pass.
-5. **Window theme sync.** Whether to grant `setTheme` so the native title bar follows the in-app override, or leave it following the OS.
+5. **Resolved: window theme sync.** The native title bar follows the OS; no `setTheme` grant. The in-app theme override affects the web content only.
 6. **Haptics + sound overlap.** On a phone both fire on every outcome. Proposal: keep both on by default; if that is too much in play, make sound default off on mobile only. Decide by playing on a device.
 7. **Tutorial length.** Six steps is a guess; cut to the first three plus hearts if testers find it long. Copy is edited in review.
 8. **Win celebration.** The row wave is the cheapest satisfying effect; confetti or a screen-wide burst is possible with CSS and is not planned.
