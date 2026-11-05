@@ -12,8 +12,11 @@
       (function () {
         var theme = null;
         try {
-          var saved = JSON.parse(localStorage.getItem("doku:settings"));
-          theme = saved && saved.theme;
+          theme = localStorage.getItem("doku:theme");
+          if (!theme) {
+            var saved = JSON.parse(localStorage.getItem("doku:settings"));
+            theme = saved && saved.theme;
+          }
         } catch (e) {}
         var dark = theme === "dark";
         if (theme !== "dark" && theme !== "light") {

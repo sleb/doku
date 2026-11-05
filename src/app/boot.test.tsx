@@ -215,6 +215,23 @@ describe("boot autosave", () => {
 });
 
 describe("boot theme", () => {
+  test("mirrors the theme setting into localStorage for the no-flash script", async () => {
+    const storage = new MemoryStorage();
+    await storage.set("settings", { theme: "dark" });
+    await boot(storage);
+    expect(localStorage.getItem("doku:theme")).toBe("dark");
+    settingsStore.getState().set({ theme: "system" });
+    expect(localStorage.getItem("doku:theme")).toBe("system");
+  });
+
+  test("a throwing localStorage does not break boot", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    await expect(boot(new MemoryStorage())).resolves.toBeUndefined();
+    vi.restoreAllMocks();
+  });
+
   test("applies the saved theme to <html> before resolving", async () => {
     const storage = new MemoryStorage();
     await storage.set("settings", { theme: "dark" });

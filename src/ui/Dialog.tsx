@@ -85,7 +85,7 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="dialog-in flex max-h-full min-h-0 flex-col items-center gap-4 rounded-lg bg-surface text-ink p-6 shadow-lg"
+        className="dialog-in flex max-h-full min-h-0 flex-col items-center gap-4 rounded-lg border border-line bg-surface text-ink p-6 shadow-lg"
       >
         <h2 id={titleId} className="text-xl font-semibold">
           {title}

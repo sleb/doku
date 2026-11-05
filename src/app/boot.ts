@@ -69,11 +69,13 @@ export function devLevelOverride(
 
 /** Applies the theme setting now and on every change; the returned stop undoes both. */
 function followTheme(): () => void {
+  mirrorTheme(settingsStore.getState().theme);
   let stopApply = applyTheme(settingsStore.getState().theme);
   let current = settingsStore.getState().theme;
   const unsubscribe = settingsStore.subscribe(({ theme }) => {
     if (theme === current) return;
     current = theme;
+    mirrorTheme(theme);
     stopApply();
     stopApply = applyTheme(theme);
   });
@@ -81,4 +83,16 @@ function followTheme(): () => void {
     unsubscribe();
     stopApply();
   };
+}
+
+/**
+ * The saved theme lives in the platform store, which index.html cannot read before first
+ * paint, so mirror it into localStorage (key read by the inline no-flash script).
+ */
+function mirrorTheme(theme: string): void {
+  try {
+    localStorage.setItem("doku:theme", theme);
+  } catch {
+    // Storage unavailable: worst case is a first-paint flash.
+  }
 }

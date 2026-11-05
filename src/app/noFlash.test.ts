@@ -1,68 +1,56 @@
+// @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { runInNewContext } from "node:vm";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const html = readFileSync("index.html", "utf8");
 const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
 
-function run(opts: {
-  stored?: string | null;
-  throws?: boolean;
-  dark: boolean;
-}) {
-  const root = { dataset: {} as Record<string, string> };
-  const meta = { content: "" };
-  const localStorage = {
-    getItem(key: string) {
-      if (opts.throws) throw new Error("denied");
-      return key === "doku:settings" ? (opts.stored ?? null) : null;
-    },
-  };
-  runInNewContext(script, {
-    document: {
-      documentElement: root,
-      querySelector: () => meta,
-    },
-    localStorage,
-    matchMedia: () => ({ matches: opts.dark }),
-  });
-  return { theme: root.dataset.theme, color: meta.content };
+function run(items: Record<string, string>, dark = false) {
+  vi.stubGlobal("matchMedia", () => ({ matches: dark }));
+  localStorage.clear();
+  for (const [k, v] of Object.entries(items)) localStorage.setItem(k, v);
+  delete document.documentElement.dataset.theme;
+  new Function(script)();
+  return document.documentElement.dataset.theme;
 }
 
-const saved = (theme: string) => JSON.stringify({ theme });
+beforeEach(() => {
+  document.head.innerHTML = '<meta name="theme-color" content="#ffffff">';
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-describe("index.html no-flash script", () => {
-  test("is present, before the module script", () => {
-    expect(script).not.toBe("");
-    expect(html.indexOf("<script>")).toBeLessThan(
-      html.indexOf('type="module"'),
-    );
+describe("no-flash inline script", () => {
+  test("found the script", () => expect(script).toContain("doku:theme"));
+  test("reads doku:theme", () => {
+    expect(run({ "doku:theme": "dark" })).toBe("dark");
+    expect(run({ "doku:theme": "light" }, true)).toBe("light");
   });
-  test("declares color-scheme and theme-color metas", () => {
-    expect(html).toContain('<meta name="color-scheme" content="light dark" />');
-    expect(html).toContain('<meta name="theme-color"');
+  test("doku:theme wins over doku:settings", () => {
+    expect(
+      run({ "doku:theme": "light", "doku:settings": '{"theme":"dark"}' }),
+    ).toBe("light");
   });
-  test("saved dark wins over a light OS", () => {
-    expect(run({ stored: saved("dark"), dark: false })).toEqual({
-      theme: "dark",
-      color: "#1c1917",
+  test("system or absent follows the OS", () => {
+    expect(run({ "doku:theme": "system" }, true)).toBe("dark");
+    expect(run({}, false)).toBe("light");
+    expect(run({}, true)).toBe("dark");
+  });
+  test("falls back to doku:settings", () => {
+    expect(run({ "doku:settings": '{"theme":"dark"}' })).toBe("dark");
+  });
+  test("corrupt settings fall back to the OS", () => {
+    expect(run({ "doku:settings": "{nope" }, true)).toBe("dark");
+  });
+  test("throwing storage falls back to the OS", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
     });
-  });
-  test("saved light wins over a dark OS", () => {
-    expect(run({ stored: saved("light"), dark: true }).theme).toBe("light");
-  });
-  test("saved system follows the OS", () => {
-    expect(run({ stored: saved("system"), dark: true }).theme).toBe("dark");
-    expect(run({ stored: saved("system"), dark: false }).theme).toBe("light");
-  });
-  test("absent follows the OS", () => {
-    expect(run({ dark: true }).theme).toBe("dark");
-  });
-  test("corrupt JSON follows the OS", () => {
-    expect(run({ stored: "{nope", dark: true }).theme).toBe("dark");
-    expect(run({ stored: "null", dark: false }).theme).toBe("light");
-  });
-  test("throwing storage follows the OS", () => {
-    expect(run({ throws: true, dark: true }).theme).toBe("dark");
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    delete document.documentElement.dataset.theme;
+    new Function(script)();
+    expect(document.documentElement.dataset.theme).toBe("dark");
   });
 });

@@ -17,8 +17,9 @@ const bodyBg = (page: Page) =>
 const cellBg = (page: Page) =>
   page.evaluate(
     () =>
-      getComputedStyle(document.querySelector('[role="gridcell"]') as Element)
-        .backgroundColor,
+      getComputedStyle(
+        document.querySelector('[role="gridcell"] button') as Element,
+      ).backgroundColor,
   );
 
 test("saved dark applies on load", async ({ page }) => {
@@ -53,6 +54,8 @@ test("region colours are the same in both themes", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await expect.poll(() => dataTheme(page)).toBe("light");
   const light = await cellBg(page);
+  expect(light).not.toBe("rgba(0, 0, 0, 0)");
+  expect(light).not.toBe("transparent");
   await page.emulateMedia({ colorScheme: "dark" });
   await expect.poll(() => dataTheme(page)).toBe("dark");
   expect(await cellBg(page)).toBe(light);
