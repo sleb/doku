@@ -42,7 +42,7 @@ doku/
 ├─ src/
 │  ├─ engine/            # pure TS, zero UI/Tauri imports
 │  ├─ store/             # game state machine, progress, settings, save format, selectors
-│  ├─ platform/          # adapters: storage, haptics (+ pure feedbackFor)
+│  ├─ platform/          # adapters: storage, haptics (+ pure outcomeFor)
 │  ├─ ui/
 │  │  ├─ board/          # Board, Cell, hold gesture, geometry, palette
 │  │  ├─ hud/            # TopBar, Timer, Hearts
@@ -147,7 +147,7 @@ Hides differences so UI code stays platform-agnostic:
 |---|---|---|
 | `storage` | `TauriStorage` (tauri-plugin-store) | same |
 | `input` | click = toggle ✕, hold (250 ms delay + 500 ms glow) = place face; keyboard: arrows/Home/End move focus, `x` = toggle ✕, hold `Space` = place face, `z` undo, `Shift+Z` or `Ctrl+Y` redo, `h` hint, `Esc` pause. No right-click or click-drag marking (dropped from the design) | same as desktop: tap = toggle ✕, hold = place face (no tool toggle; click-only placement is #57) |
-| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `feedbackFor` (`src/platform/feedback.ts`) and wired in `GameScreen`; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
+| `haptics` | no-op | `src/platform/haptics` adapter (no-op unless running under Tauri) plays `place`/`wrong`/`win`/`lose`, derived by the pure `outcomeFor` (`src/platform/outcome.ts`) and wired by the `useFeedback` hook in `GameScreen`; the plugin is registered on mobile only and the adapter is gated on Tauri and a mobile user agent (iOS #63 landed, Android #64 pending), see §9 |
 | `audio` *(M6, not built)* | WebAudio | same (respect silent switch) |
 | `window` | default 800x600, min size 420x560, remembered size/position (`tauri-plugin-window-state`, desktop only) | safe-area insets via CSS `env()` (`--safe-*` tokens, `viewport-fit=cover`); orientation is not locked |
 
@@ -194,7 +194,7 @@ Decided:
 7. **Wrong tap:** deviation from the unique solution (see §4). Dead-end boards are avoided by not placing wrong faces.
 8. **Mobile input is unchanged:** tap = ✕, hold (250 ms delay, 500 ms glow) = face. No tool toggle (click-only placement is #57).
 9. **One layout via container queries** for phones (both orientations) and desktop; orientation is not locked (landed).
-10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose), never for the free ✕.
+10. **Haptics through `src/platform/haptics` with a no-op default** and a pure `outcomeFor`, so the store stays side-effect free (landed). Haptics only for outcomes (place, wrong, win, lose), never for the free ✕.
 11. **Commit `src-tauri/gen`**, ignoring build outputs (`gen/apple` committed in #63; `gen/android` pending #64).
 12. **iOS first, then Android** (decided; iOS builds on the simulator, #63; Android pending, #64).
 13. **No level select, home screen, daily puzzle or stars** in the app: levels play in a fixed order and the app opens on the current one. Progress is one integer plus best times (`next`, `bestMs`).
