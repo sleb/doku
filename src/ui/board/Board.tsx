@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type RefObject,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -11,6 +12,7 @@ import { isLocked } from "../../store/game";
 import { fxStore } from "../fx/fxStore";
 import { CellView } from "./Cell";
 import { type CellGeometry, cellGeometry } from "./geometry";
+import { HoldGlow } from "./HoldGlow";
 import { useNoDoubleTapLoupe } from "./useNoDoubleTapLoupe";
 
 export interface BoardProps {
@@ -26,6 +28,8 @@ export interface BoardProps {
   onPlaceFace: (index: number) => void;
   /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
   holdOwner?: RefObject<number | null>;
+  /** Called with the glowing (held) cell, or null when its glow ends. */
+  onHoldGlow?: (index: number | null) => void;
 }
 
 export function Board({
@@ -38,10 +42,20 @@ export function Board({
   onToggleMark,
   onPlaceFace,
   holdOwner: sharedHoldOwner,
+  onHoldGlow,
 }: BoardProps) {
   const { size } = level;
   const ownHoldOwner = useRef<number | null>(null);
   const holdOwner = sharedHoldOwner ?? ownHoldOwner;
+  const [glowCell, setGlowCell] = useState<number | null>(null);
+  const onHoldGlowRef = useRef(onHoldGlow);
+  onHoldGlowRef.current = onHoldGlow;
+  const reportedGlow = useRef<number | null>(null);
+  useEffect(() => {
+    if (reportedGlow.current === glowCell) return; // nothing on mount
+    reportedGlow.current = glowCell;
+    onHoldGlowRef.current?.(glowCell);
+  }, [glowCell]);
   const [active, setActive] = useState(0);
   // A new level starts with the first cell tabbable (state adjusted in render).
   const [activeLevel, setActiveLevel] = useState(level);
@@ -131,6 +145,7 @@ export function Board({
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
                 holdOwner={holdOwner}
+                onGlow={setGlowCell}
                 fx={g.index === last?.cell ? fxKind : undefined}
                 fxSeq={g.index === last?.cell ? last?.seq : undefined}
               />
@@ -141,6 +156,9 @@ export function Board({
       {geometry.map((g) => (
         <EdgeSegments key={g.index} g={g} />
       ))}
+      {glowCell !== null && (
+        <HoldGlow row={Math.floor(glowCell / size)} col={glowCell % size} />
+      )}
     </div>
   );
 }

@@ -48,13 +48,21 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* Hold-to-place glow: a stroke traced once around the cell over HOLD_MS, starting HOLD_DELAY_MS after press. */
-.hold-glow rect {
-  fill: none;
-  stroke: #171717;
-  stroke-width: 6;
+/* Hold-to-place glow (HoldGlow): a ring swept once over HOLD_MS, starting HOLD_DELAY_MS after press. */
+.hold-glow {
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.35), transparent 70%);
+  animation: hold-ramp 300ms ease-out both;
+}
+
+.hold-ring {
   stroke-dasharray: 1;
   animation: hold-trace linear forwards;
+}
+
+/* The held cell brightens slightly. */
+.cell[data-holding] {
+  filter: brightness(1.08);
 }
 
 @keyframes hold-trace {
@@ -76,9 +84,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hold-glow rect {
+  .hold-ring {
     stroke-dasharray: none;
     animation-name: hold-ramp;
+  }
+  .hold-glow {
+    animation: none;
   }
 }
 

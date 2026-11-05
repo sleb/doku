@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHaptics, defaultLog, detectMobile, haptics } from "./haptics";
+import { HOLD_RAMP } from "./holdRamp";
 
 function setup(
   over: {
@@ -57,7 +58,7 @@ describe("createHaptics", () => {
   it("maps each kind to the plugin call", async () => {
     const { plugin, h } = setup();
     await h.play("place");
-    expect(plugin.impactFeedback).toHaveBeenCalledWith("light");
+    expect(plugin.impactFeedback).toHaveBeenCalledWith("heavy");
     await h.play("wrong");
     expect(plugin.notificationFeedback).toHaveBeenLastCalledWith("warning");
     await h.play("win");
@@ -138,6 +139,98 @@ describe("createHaptics", () => {
 
   it("default singleton is a safe no-op in node", async () => {
     await expect(haptics.play("place")).resolves.toBeUndefined();
+  });
+});
+
+describe("ramp", () => {
+  const flush = async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  };
+  const calls = (p: { impactFeedback: ReturnType<typeof vi.fn> }) =>
+    p.impactFeedback.mock.calls.map((c) => c[0]);
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("fires each pulse at its offset", async () => {
+    const { plugin, h } = setup();
+    h.ramp();
+    await flush();
+    expect(calls(plugin)).toEqual(["soft"]);
+    let prev = 0;
+    for (let i = 1; i < HOLD_RAMP.length; i++) {
+      await vi.advanceTimersByTimeAsync(HOLD_RAMP[i].at - prev - 1);
+      expect(plugin.impactFeedback).toHaveBeenCalledTimes(i);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(plugin.impactFeedback).toHaveBeenCalledTimes(i + 1);
+      expect(calls(plugin)[i]).toBe(HOLD_RAMP[i].style);
+      prev = HOLD_RAMP[i].at;
+    }
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(plugin.impactFeedback).toHaveBeenCalledTimes(HOLD_RAMP.length);
+  });
+
+  it("is a no-op off-device", async () => {
+    for (const over of [{ isTauri: false }, { isMobile: false }]) {
+      const { plugin, load, h } = setup(over);
+      const cancel = h.ramp();
+      await vi.advanceTimersByTimeAsync(2000);
+      cancel();
+      expect(load).not.toHaveBeenCalled();
+      expect(plugin.impactFeedback).not.toHaveBeenCalled();
+    }
+  });
+
+  it("cancel stops the remaining pulses and is idempotent", async () => {
+    const { plugin, h } = setup();
+    const cancel = h.ramp();
+    await vi.advanceTimersByTimeAsync(HOLD_RAMP[2].at);
+    const n = plugin.impactFeedback.mock.calls.length;
+    cancel();
+    cancel();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(plugin.impactFeedback).toHaveBeenCalledTimes(n);
+  });
+
+  it("a second ramp cancels the first", async () => {
+    const { plugin, h } = setup();
+    h.ramp();
+    await vi.advanceTimersByTimeAsync(HOLD_RAMP[1].at);
+    h.ramp();
+    await vi.advanceTimersByTimeAsync(2000);
+    // first ramp got 2 pulses, second ramp all of them
+    expect(plugin.impactFeedback).toHaveBeenCalledTimes(2 + HOLD_RAMP.length);
+  });
+
+  it("an old cancel does not stop a newer ramp", async () => {
+    const { plugin, h } = setup();
+    const old = h.ramp();
+    h.ramp();
+    old();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(plugin.impactFeedback).toHaveBeenCalledTimes(HOLD_RAMP.length);
+  });
+
+  it("swallows and logs plugin errors without stopping later pulses", async () => {
+    const log = vi.fn();
+    const plugin = {
+      impactFeedback: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValue({ status: "error", error: "nope" }),
+      notificationFeedback: vi.fn(),
+    };
+    const h = createHaptics({
+      isTauri: () => true,
+      isMobile: () => true,
+      // biome-ignore lint/suspicious/noExplicitAny: test fake
+      loadPlugin: (async () => plugin) as any,
+      log,
+    });
+    h.ramp();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(plugin.impactFeedback).toHaveBeenCalledTimes(HOLD_RAMP.length);
+    expect(log).toHaveBeenCalledTimes(HOLD_RAMP.length);
   });
 });
 

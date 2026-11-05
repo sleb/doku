@@ -33,3 +33,12 @@ export const GLYPH_COLOR = "#1f1f1f";
 
 // Wrong-tap ✕ stroke; must reach 3:1 contrast on every region color.
 export const WRONG_COLOR = "#7f1d1d";
+
+// Hold-glow ring: dark stroke that carries the light region colors.
+export const HOLD_RING_COLOR = "#171717";
+
+// Hold-glow under-stroke: light, so the ring stays visible over the dark board frame.
+export const HOLD_UNDERSTROKE_COLOR = "#ffffff";
+
+// The board frame border (Board's `border-neutral-800`).
+export const BOARD_FRAME_COLOR = "#262626";

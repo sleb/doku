@@ -49,7 +49,7 @@ test("a tap toggles a mark and never shows the glow", async ({ page }) => {
   const target = cell(page, 0, solution[0]);
   await target.tap();
   await expect(target).toHaveAccessibleName(/, marked$/);
-  await expect(target.locator("[data-hold-glow]")).toHaveCount(0);
+  await expect(page.locator("[data-hold-glow]")).toHaveCount(0);
   await expect(target).not.toHaveAttribute("data-holding", "true");
   await target.tap();
   await expect(target).toHaveAccessibleName(/, empty$/);
@@ -63,7 +63,7 @@ test("a 100ms touch press shows no glow and its click marks the cell", async ({
   const target = cell(page, 0, (solution[0] + 1) % size);
   await touchDown(target);
   await page.waitForTimeout(100);
-  await expect(target.locator("[data-hold-glow]")).toHaveCount(0);
+  await expect(page.locator("[data-hold-glow]")).toHaveCount(0);
   await expect(target).not.toHaveAttribute("data-holding", "true");
   await touchUp(target);
   await touchClick(target);

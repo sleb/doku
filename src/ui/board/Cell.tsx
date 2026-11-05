@@ -1,6 +1,5 @@
-import { memo, type RefObject, useRef } from "react";
+import { memo, type RefObject, useEffect, useRef } from "react";
 import { Cell } from "../../engine";
-import { HOLD_MS } from "./hold";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
 import { REGION_BG, REGION_NAMES } from "./palette";
 import { useHold } from "./useHold";
@@ -20,6 +19,8 @@ export interface CellProps {
   onPlaceFace: (index: number) => void;
   /** Shared by a board's cells: the index of the cell being held, if any. Other cells ignore marks meanwhile. */
   holdOwner?: RefObject<number | null>;
+  /** Reports the cell while its hold glows (`index`) and when it stops (`null`). Must be stable. */
+  onGlow?: (index: number | null) => void;
   /** One-shot effect for the outcome that just hit this cell. Primitives only, so other cells stay memoised. */
   fx?: "place" | "wrong";
   /** Changes with every outcome; keys the effect so a repeat restarts it. */
@@ -47,6 +48,7 @@ export const CellView = memo(function CellView({
   onToggleMark,
   onPlaceFace,
   holdOwner,
+  onGlow,
   fx,
   fxSeq,
 }: CellProps) {
@@ -59,6 +61,12 @@ export const CellView = memo(function CellView({
       else if (holdOwner.current === index) holdOwner.current = null;
     },
   );
+  const holding = hold.holding;
+  useEffect(() => {
+    if (!holding || !onGlow) return;
+    onGlow(index);
+    return () => onGlow(null);
+  }, [holding, onGlow, index]);
   // A second finger or palm on a neighbor must not mark it mid-hold.
   const toggleMark = () => {
     if (disabled) return;
@@ -142,24 +150,6 @@ export const CellView = memo(function CellView({
         if (!hold.swallowClick()) toggleMark();
       }}
     >
-      {hold.holding ? (
-        <svg
-          data-hold-glow
-          aria-hidden="true"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="hold-glow pointer-events-none absolute inset-0 size-full"
-        >
-          <rect
-            x="4"
-            y="4"
-            width="92"
-            height="92"
-            pathLength={1}
-            style={{ animationDuration: `${HOLD_MS}ms` }}
-          />
-        </svg>
-      ) : null}
       {fx === "place" ? (
         <span
           key={`ring${fxSeq}`}

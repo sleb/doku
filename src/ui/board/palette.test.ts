@@ -1,7 +1,15 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
+import {
+  BOARD_FRAME_COLOR,
+  GLYPH_COLOR,
+  HOLD_RING_COLOR,
+  HOLD_UNDERSTROKE_COLOR,
+  REGION_BG,
+  REGION_NAMES,
+  WRONG_COLOR,
+} from "./palette";
 
 function tokenHex(i: number): string {
   const m = css.match(
@@ -76,5 +84,25 @@ describe("region palette", () => {
         REGION_NAMES[i],
       ).toBeGreaterThanOrEqual(3);
     });
+  });
+});
+
+describe("hold glow colors", () => {
+  test("the ring reaches 3:1 on every region color", () => {
+    REGION_BG.forEach((_, i) => {
+      expect(
+        contrast(HOLD_RING_COLOR, tokenHex(i)),
+        REGION_NAMES[i],
+      ).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  test("the under-stroke reaches 3:1 on the board frame, and the ring on it", () => {
+    expect(
+      contrast(HOLD_UNDERSTROKE_COLOR, BOARD_FRAME_COLOR),
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      contrast(HOLD_RING_COLOR, HOLD_UNDERSTROKE_COLOR),
+    ).toBeGreaterThanOrEqual(3);
   });
 });

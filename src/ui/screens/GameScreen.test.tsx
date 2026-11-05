@@ -10,12 +10,14 @@ import { gameStore } from "../../store/gameStore";
 import { defaultProgress, progressStore } from "../../store/progress";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
+import { HOLD_DELAY_MS, HOLD_MS } from "../board/hold";
 import { GameScreen } from "./GameScreen";
 import { LOSE_DELAY_MS, WIN_DELAY_MS } from "./useDelayedStatus";
 
 vi.mock("../../platform/haptics", () => ({
   haptics: {
     play: vi.fn().mockResolvedValue(undefined),
+    ramp: vi.fn(() => vi.fn()),
     supported: () => true,
   },
 }));
@@ -39,6 +41,7 @@ beforeEach(() => {
   progressStore.setState(defaultProgress);
   settingsStore.setState({ ...defaultSettings, seenTutorial: true });
   vi.mocked(haptics.play).mockClear();
+  vi.mocked(haptics.ramp).mockClear();
   // Most tests expect the result modal immediately; the sequence tests opt out.
   vi.stubGlobal("matchMedia", () => ({ matches: true }));
 });
@@ -330,6 +333,35 @@ describe("GameScreen", () => {
 
   describe("haptics", () => {
     const play = () => vi.mocked(haptics.play);
+
+    test("the build-up ramp starts with the glow and is cancelled when it ends", () => {
+      renderGame();
+      const cancel = vi.fn();
+      vi.mocked(haptics.ramp).mockReturnValueOnce(cancel);
+      vi.useFakeTimers();
+      try {
+        const el = cell(solution[0]);
+        fireEvent.pointerDown(el, { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS - 1));
+        expect(haptics.ramp).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(1));
+        expect(haptics.ramp).toHaveBeenCalledTimes(1);
+        expect(cancel).not.toHaveBeenCalled();
+        act(() => vi.advanceTimersByTime(HOLD_MS));
+        expect(cancel).toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(play().mock.calls).toEqual([["place"]]);
+    });
+
+    test("a tap never ramps, and haptics off never ramps", async () => {
+      renderGame();
+      await userEvent.click(cell(solution[0]));
+      settingsStore.getState().set({ haptics: false });
+      hold([solution[1]]);
+      expect(haptics.ramp).not.toHaveBeenCalled();
+    });
 
     test("a correct hold plays place once", () => {
       renderGame();
