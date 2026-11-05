@@ -14,7 +14,7 @@ export function RadioGroup<T extends string>({
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const checked = options.findIndex(([v]) => v === value);
-  const tabbable = checked < 0 ? 0 : checked;
+  const tabbable = Math.max(checked, 0);
 
   function move(to: number) {
     const i = (to + options.length) % options.length;
