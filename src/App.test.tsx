@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { boot } from "./app/boot";
 import { recordWins, startCurrent } from "./app/campaign";
@@ -18,6 +18,7 @@ import { toSaved } from "./store/persist";
 import { defaultProgress, progressStore } from "./store/progress";
 import { defaultSettings, settingsStore } from "./store/settings";
 import { holdCell } from "./test/hold";
+import { STEPS } from "./tutorial/steps";
 import { regionClass } from "./ui/board/palette";
 
 beforeEach(() => {
@@ -166,4 +167,72 @@ test("hiding the app pauses and the saved elapsed time lands", async () => {
   });
   expect(gameStore.getState().status).toBe("paused");
   expect(await storage.get("save")).toMatchObject({ elapsedMs: 6000 });
+});
+
+describe("tutorial", () => {
+  const firstRun = () =>
+    settingsStore.setState({ ...defaultSettings, seenTutorial: false });
+
+  test("a first run shows the tutorial, not Rules or the game", () => {
+    firstRun();
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: STEPS[0].title }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByTestId("top-bar")).toBeNull();
+    expect(gameStore.getState().status).toBe("playing");
+  });
+
+  test("Skip lands on the current level, paused, and marks the tutorial seen", async () => {
+    firstRun();
+    render(<App />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Skip tutorial" }),
+    );
+    expect(settingsStore.getState().seenTutorial).toBe(true);
+    expect(gameStore.getState().status).toBe("paused");
+    expect(screen.getByRole("dialog", { name: "Paused" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: `Level 1 of ${LEVELS.length}` }),
+    ).toBeInTheDocument();
+  });
+
+  test("a finished campaign with the tutorial unseen shows it before the Finale", async () => {
+    firstRun();
+    progressStore.setState({ next: LEVELS.length, bestMs: {} });
+    startCurrent();
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: STEPS[0].title }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Skip tutorial" }),
+    );
+    expect(screen.getByRole("heading", { name: "You finished" })).toBeTruthy();
+  });
+
+  test("Pause > Replay tutorial shows it; leaving returns to Pause, campaign unchanged", async () => {
+    progressStore.setState({ next: 2, bestMs: { [LEVELS[0].id]: 1234 } });
+    startCurrent();
+    render(<App />);
+    const before = gameStore.getState().level;
+    await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Replay tutorial" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: STEPS[0].title }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("top-bar")).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Skip tutorial" }),
+    );
+    expect(screen.getByRole("dialog", { name: "Paused" })).toBeInTheDocument();
+    expect(gameStore.getState().status).toBe("paused");
+    expect(gameStore.getState().level).toBe(before);
+    expect(progressStore.getState().next).toBe(2);
+    expect(progressStore.getState().bestMs[LEVELS[0].id]).toBe(1234);
+  });
 });

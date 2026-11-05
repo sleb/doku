@@ -57,10 +57,10 @@ function renderGame(lvl = level, strict = false) {
   return render(
     strict ? (
       <StrictMode>
-        <GameScreen />
+        <GameScreen onReplayTutorial={() => {}} />
       </StrictMode>
     ) : (
-      <GameScreen />
+      <GameScreen onReplayTutorial={() => {}} />
     ),
   );
 }
@@ -180,7 +180,7 @@ describe("win and loss sequence", () => {
   test("a finished game restored on mount shows the modal at once", () => {
     act(() => gameStore.getState().startLevel(level));
     place(solution);
-    render(<GameScreen />);
+    render(<GameScreen onReplayTutorial={() => {}} />);
     expect(
       screen.getByRole("dialog", { name: "You solved it" }),
     ).toBeInTheDocument();
@@ -190,7 +190,7 @@ describe("win and loss sequence", () => {
 describe("GameScreen without props", () => {
   test("plays the store's level and shows its campaign position", () => {
     act(() => gameStore.getState().startLevel(LEVELS[2]));
-    render(<GameScreen />);
+    render(<GameScreen onReplayTutorial={() => {}} />);
     expect(
       screen.getByRole("heading", { name: `Level 3 of ${LEVELS.length}` }),
     ).toBeInTheDocument();
@@ -593,19 +593,9 @@ describe("GameScreen", () => {
   describe("rules and settings", () => {
     const fresh = () => settingsStore.setState(defaultSettings);
 
-    test("a fresh install opens Rules and pauses the game", () => {
+    test("a fresh install no longer opens Rules or pauses: the tutorial replaces them", () => {
       fresh();
       renderGame();
-      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
-      expect(screen.queryByRole("dialog", { name: "Paused" })).toBeNull();
-      expect(gameStore.getState().status).toBe("paused");
-    });
-
-    test("dismissing first-launch Rules sets seenTutorial and resumes", async () => {
-      fresh();
-      renderGame();
-      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
-      expect(settingsStore.getState().seenTutorial).toBe(true);
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(gameStore.getState().status).toBe("playing");
     });
@@ -616,19 +606,15 @@ describe("GameScreen", () => {
       expect(gameStore.getState().status).toBe("playing");
     });
 
-    test("the clock does not advance under first-launch Rules", () => {
-      vi.useFakeTimers();
-      try {
-        fresh();
-        renderGame();
-        act(() => {
-          vi.advanceTimersByTime(5000);
-        });
-        const state = gameStore.getState();
-        expect(state.status === "idle" ? -1 : state.elapsedMs).toBe(0);
-      } finally {
-        vi.useRealTimers();
-      }
+    test("Pause > Replay tutorial calls onReplayTutorial", async () => {
+      const onReplayTutorial = vi.fn();
+      act(() => gameStore.getState().startLevel(level));
+      render(<GameScreen onReplayTutorial={onReplayTutorial} />);
+      await userEvent.click(screen.getByRole("button", { name: "Pause" }));
+      await userEvent.click(
+        screen.getByRole("button", { name: "Replay tutorial" }),
+      );
+      expect(onReplayTutorial).toHaveBeenCalledTimes(1);
     });
 
     test("Pause > Rules > Got it returns to Pause and Resume works", async () => {
@@ -679,15 +665,6 @@ describe("GameScreen", () => {
       expect(progressStore.getState().bestMs[LEVELS[0].id]).toBe(2000);
     });
 
-    test("Escape on the first-launch Rules resumes play, not Pause", async () => {
-      settingsStore.setState({ seenTutorial: false });
-      renderGame();
-      expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
-      await userEvent.keyboard("{Escape}");
-      expect(gameStore.getState().status).toBe("playing");
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
-
     test("Escape in Rules or Settings returns to Pause without resuming", async () => {
       renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Pause" }));
@@ -710,22 +687,6 @@ describe("GameScreen", () => {
       expect(
         screen.getByRole("dialog", { name: "Paused" }).closest("[inert]"),
       ).toBeNull();
-    });
-
-    test("restart and a later startLevel do not reopen Rules", async () => {
-      fresh();
-      renderGame();
-      await userEvent.click(screen.getByRole("button", { name: "Got it" }));
-      act(() => gameStore.getState().restart());
-      act(() => gameStore.getState().startLevel(level));
-      expect(screen.queryByRole("dialog", { name: "Rules" })).toBeNull();
-    });
-
-    test("first-launch Rules open once under StrictMode", () => {
-      fresh();
-      renderGame(level, true);
-      expect(screen.getAllByRole("dialog")).toHaveLength(1);
-      expect(gameStore.getState().status).toBe("paused");
     });
   });
 });
@@ -816,12 +777,6 @@ describe("GameScreen announcer", () => {
     await user.click(screen.getByRole("button", { name: "Start over" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
     expect(status()).toHaveTextContent(`Level 1 of ${LEVELS.length}`);
-  });
-
-  test("the first-run Rules pause is not announced", () => {
-    settingsStore.setState({ seenTutorial: false });
-    renderGame();
-    expect(status()).toHaveTextContent("");
   });
 });
 

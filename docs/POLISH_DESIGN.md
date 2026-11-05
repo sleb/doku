@@ -44,7 +44,7 @@ Board.onHoldGlow(cell | null) ──▶ <HoldGlow> overlay (§6.5)  and  haptics
 | Region look | `src/ui/board/palette.ts`, `patterns.ts` | changed: palette becomes data keyed by setting; patterns new |
 | Theme | `src/app/theme.ts`, `index.css` tokens | new |
 | Settings | `src/store/settings.ts` | changed: more fields (§4) |
-| Tutorial | `src/ui/tutorial/*`, `src/tutorial/steps.ts` | new |
+| Tutorial | `src/tutorial/*` (`steps.ts`, `progress.ts`, `Tutorial.tsx`, `TutorialCard.tsx`) | new |
 | Input mode | `src/store/settings.ts`, `ActionBar.tsx`, `Cell.tsx` | changed (#57) |
 
 The game store, `game.ts` and the engine are **not** changed by this milestone. All polish is a subscriber to, or a function of, state that already exists. That keeps the store pure (`APP_DESIGN.md` decision 8) and means saves, autosave and the e2e specs for rules and persistence stay valid.
@@ -200,6 +200,8 @@ Placing a face is a press-and-hold: `HOLD_DELAY_MS = 250` of nothing, then `HOLD
 
 ## 7. Interactive tutorial
 
+**Landed in M6-11** (notes at the end of §7.5). Where the text below and the landed notes differ, the notes are current.
+
 ### 7.1 Goal and shape
 
 Replace the static first-launch `RulesDialog` with a short guided play-through that uses the **real** `Board`, `Cell` and gestures, then drops the player into level 1. The static Rules dialog stays reachable from Pause for reference, with a "Replay tutorial" button.
@@ -217,9 +219,12 @@ interface TutorialStep {
   title: string;
   body: string;                       // one or two short sentences
   level: Level;                       // 4x4 to 6x6, hand-built, in code
-  start?: Board;                      // pre-placed faces and ✕ for the step
-  goal: { cell: number; kind: "face" | "mark" }[];   // actions that complete the step
-  highlight?: number[];               // cells to ring (the "look here" cue)
+  how: { mark: string; face: string };  // the gesture, per input mode
+  start: Board;                       // pre-placed (locked) faces for the step
+  goal: { cell: number; kind: "face" | "mark" | "wrong" | "undone" }[];   // all must hold to complete the step
+  highlight: number[];                // cells to ring (the "look here" cue)
+  controls?: ("undo" | "redo" | "hint")[];   // action buttons and keys the step introduces
+  showHearts?: boolean;               // display-only hearts (steps 5 and 6)
   onWrong: string;                    // explanation shown when the player breaks the lesson
 }
 export const STEPS: readonly TutorialStep[];
@@ -231,15 +236,15 @@ Planned steps (text is draft, copy is edited in review):
 2. **Rows and columns.** A face already stands; the row and column are shaded; place the face that fits.
 3. **No touching.** Show that a diagonal neighbour is also forbidden; the player marks an impossible cell with a tap (teaches ✕).
 4. **Notes and undo.** Place two ✕ notes, undo one.
-5. **Hearts.** A guided wrong tap: the player is told which cell is wrong, taps it, loses a (display-only) heart and sees the red ✕ and what it means, then places the right one.
-6. **Hint.** Shows the Hint button, its heart cost, and (once M5-07 lands, §9.4) the explanation text.
+5. **Hearts.** A guided wrong tap: the player is told which cell is wrong, places a face there, loses a (display-only) heart and sees the red ✕ and what it means, then places the right one (a `wrong` goal, then a `face` goal).
+6. **Hint.** Shows the Hint button and its heart cost (the goal is the cell `nextHint` returns), and (once M5-07 lands, §9.4) the explanation text.
 
 The tutorial boards are below the app's 7..11 size range (`MIN_SIZE` is a *loader* rule in `validate.ts`; the store, `rules.ts` and `judgeTap` have no such limit, and the steps never go through `loadLevel`). Instead, a test asserts every step's `level` is uniquely solvable with `countSolutions` and that the `goal` is consistent with `solution` (§10).
 
 ### 7.3 Components
 
 ```
-<App>  settings.seenTutorial ? <GameScreen/> : <Tutorial/>
+<App>  replaying || !seenTutorial ? <Tutorial/> : (finished && idle ? <Finale/> : <GameScreen/>)
  └─ <Tutorial>                   owns the step index and a private game store
      ├─ <TutorialCard>           title · body · Skip · progress "2 of 6"
      ├─ <Board …/>               the same Board component, fed by the private store
@@ -258,6 +263,15 @@ The tutorial boards are below the app's 7..11 size range (`MIN_SIZE` is a *loade
 ### 7.5 Wiring changes
 
 `seenRules` → `seenTutorial`; `GameScreen`'s `firstRules` logic and the `RulesDialog` auto-open are removed (the tutorial replaces them), while `RulesDialog` and its cheat sheet remain for Pause → Rules. `playwright.config.ts` and the e2e helpers that seed `seenRules: true` seed `seenTutorial: true` instead. A dedicated spec covers the tutorial itself (§10).
+
+**Landed in M6-11:**
+- `src/tutorial/steps.ts` has the six steps (ids `region`, `lines`, `touching`, `notes`, `hearts`, `hint`; levels `tutorial-1..6`, 4x4 to 6x6, never in `LEVELS`). The `goal` kinds are `face`, `mark`, `wrong` and `undone` (a note placed and then taken back, for the Undo lesson). `src/tutorial/progress.ts` has the pure `evaluate(step, state)` giving `progress`, `complete` or `broken`; broken is a wrong tap the step did not ask for (a `wrong` goal allows its own cells) or a ✕ on a solution cell. A wrong tap never leaves a face on the board (it becomes a locked wrong ✕), so there is no "face off the solution" case.
+- `App` owns `replaying`: `replaying || !seenTutorial` shows `<Tutorial>` instead of `GameScreen` (so no duplicate subscriptions, shortcuts, clock or autosave while it shows), else the Finale or `GameScreen`. `onDone` (Skip, Finish) calls `gameStore.pause()` first, then sets `seenTutorial`, then clears `replaying`; on a replay the game is already paused, so the Pause dialog reappears with the campaign unchanged. `GameScreen` takes `onReplayTutorial`, and `PauseDialog` has the "Replay tutorial" button. `firstRules` and the `seenTutorial` pause special case in `useFeedback` are gone.
+- `Tutorial` builds its own store with `createGameStore()` and loads a step by going through `idleState` and then `startLevel` with `board = step.start`, in two `setState` calls, so the swap is never reported as a placement and `useFeedback` resets the announcer on the level change; the step text ("Step n of N: title. body") is spoken after. It never imports `gameStore`, the campaign, progress or storage (a test reads the sources to assert it).
+- Flow: `complete` waits 600 ms (0 under reduced motion) then loads the next step; `broken` shows `onWrong` in the card, speaks it after the generic "Not there", locks the board and resets the same step after 900 ms. The board is disabled outside `progress`. The last step has a single Finish button in place of Skip, so a player is never stuck. Focus goes to the card heading on each new step.
+- Generalised: `ActionBar({store?, only?})` (the input-mode toggle always shows), `useShortcuts({store, pause, only, holdOwner})` (the tutorial passes `pause: false` and the step's `controls`), `useHoldRamp(store)`. `Board` takes `highlight`, `Cell` sets `data-highlight` (a dashed ring in a fixed dark colour with a light halo, because the board is the same in both themes) and appends ", highlighted" to its label.
+- In `inputMode: "face"` a pointer cannot draw a ✕, so the ✕ steps tell the player to turn off "Tap places faces" (or press X); the toggle is always shown.
+- Copy is a first draft; polish is a separate pass. The hint explanation toast (§9.4) and the axe suites are not part of M6-11.
 
 ## 8. Theme and palette
 
@@ -338,7 +352,7 @@ The pattern index is the region index, so regions keep their pattern for the who
 
 Also announced: pause/resume, level start ("Level 3 of 20, 9 by 9"), and the tutorial's `onWrong` text. The announcer clears itself 1 s later so repeats of identical text re-announce (set to empty, then the text, one frame apart).
 
-**Landed in M6-08:** `src/ui/a11y/` holds `announce.ts` (pure; `announce(outcome, {size, elapsedMs?, bestMs?, tutorial?})` plus `announceLevelStart`, `announcePause`, `announceResume`, `announceInputMode`), `announcerStore.ts` (`say` clears, then sets the text one `requestAnimationFrame` later with a stale-frame guard, and clears 1 s after; `reset`), `<Announcer>`, and `useInputModeAnnouncement` (one `settingsStore` subscription, so all writers are covered; silent on mount and for an unchanged value). `<Announcer>` is mounted in `GameScreen` and `Dialog` leaves `role="status"` siblings un-inert, so it speaks while paused or a result is pending. `useFeedback(store, {tutorial?, describeLevel?})` writes the announcements regardless of the haptics and sound settings: level start on a new level or a restart (a fresh board, not a restore), pause and resume (a pause forced while `seenTutorial` is false is silent, with its resume), no outcome text on restore or restart, and a reset on unmount. "New best" reads `progressStore.bestMs` at event time with `elapsedMs <= bestMs`, as `ResultModal` does. Undo, redo and ✕ toggles stay silent. The tutorial card (M6-11, §7.3/7.4) calls `announcerStore.say(onWrong)` directly.
+**Landed in M6-08:** `src/ui/a11y/` holds `announce.ts` (pure; `announce(outcome, {size, elapsedMs?, bestMs?, tutorial?})` plus `announceLevelStart`, `announcePause`, `announceResume`, `announceInputMode`), `announcerStore.ts` (`say` clears, then sets the text one `requestAnimationFrame` later with a stale-frame guard, and clears 1 s after; `reset`), `<Announcer>`, and `useInputModeAnnouncement` (one `settingsStore` subscription, so all writers are covered; silent on mount and for an unchanged value). `<Announcer>` is mounted in `GameScreen` and `Dialog` leaves `role="status"` siblings un-inert, so it speaks while paused or a result is pending. `useFeedback(store, {tutorial?, describeLevel?})` writes the announcements regardless of the haptics and sound settings: level start on a new level or a restart (a fresh board, not a restore), pause and resume (every pause and resume is spoken; the first-run Rules pause no longer exists), no outcome text on restore or restart, and a reset on unmount. "New best" reads `progressStore.bestMs` at event time with `elapsedMs <= bestMs`, as `ResultModal` does. Undo, redo and ✕ toggles stay silent. The tutorial card (M6-11, §7.3/7.4) calls `announcerStore.say(onWrong)` directly.
 
 Cell labels (`Row 3, column 5, emerald region, face`) already exist. Added: the word "conflict" when `isConflict`, and "hint" is not needed since a hint places a face.
 

@@ -128,7 +128,7 @@ Interface `Storage { get, set, remove, flush }` with three adapters: `TauriStora
  └─ <Finale>            (all levels done: total of best times · Start over)
 ```
 
-There is no home screen, level select, daily card, how-to-play screen or router. A single `<Dialog>` primitive backs the pause, rules, settings and result dialogs. The interactive tutorial is milestone 6.
+There is no home screen, level select, daily card, how-to-play screen or router. A single `<Dialog>` primitive backs the pause, rules, settings and result dialogs. The first-run interactive tutorial (milestone 6, POLISH_DESIGN §7) replaces the game screen until it is skipped or finished, and is replayed from Pause.
 
 ### Component notes
 

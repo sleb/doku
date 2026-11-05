@@ -20,6 +20,8 @@ export interface CellProps {
   palette?: PaletteName;
   /** Overlay the region's pattern so color is not the only identity. Default off. */
   patterns?: boolean;
+  /** Tutorial "look here" ring; also named in the label, so it is not colour-only. */
+  highlight?: boolean;
   /** Roving tabindex: 0 on the board's active cell, -1 elsewhere. */
   tabIndex?: number;
   onToggleMark: (index: number) => void;
@@ -51,6 +53,7 @@ export const CellView = memo(function CellView({
   isWrong,
   isConflict,
   disabled,
+  highlight = false,
   inputMode,
   palette = "default",
   patterns = false,
@@ -123,8 +126,9 @@ export const CellView = memo(function CellView({
   return (
     <button
       type="button"
-      aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}, ${label}${isConflict ? ", conflict" : ""}`}
+      aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
       data-conflict={isConflict ? "true" : undefined}
+      data-highlight={highlight ? "true" : undefined}
       className={className}
       style={patterns ? patternStyle(region) : undefined}
       data-holding={hold.holding ? "true" : undefined}

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { idleState, MAX_HEARTS } from "../../store/game";
-import { gameStore } from "../../store/gameStore";
+import { createGameStore, gameStore } from "../../store/gameStore";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { ActionBar } from "./ActionBar";
 
@@ -163,5 +163,41 @@ describe("ActionBar tap-mode toggle", () => {
     gameStore.getState().pause();
     render(<ActionBar />);
     expect((toggle() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("ActionBar on a private store", () => {
+  const priv = () => {
+    const store = createGameStore();
+    store.getState().startLevel(level);
+    return store;
+  };
+
+  test("drives the given store, not the singleton", async () => {
+    const store = priv();
+    store.getState().toggleMark(1);
+    render(<ActionBar store={store} />);
+    await userEvent.click(undoBtn());
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("idle");
+    expect(s.future).toEqual([1]);
+    const g = gameStore.getState();
+    if (g.status === "idle") throw new Error("idle");
+    expect(g.future).toEqual([]);
+  });
+
+  test("only limits the action buttons; the mode toggle always shows", () => {
+    render(<ActionBar store={priv()} only={["undo"]} />);
+    expect(undoBtn()).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Hint/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Tap places faces" }),
+    ).toBeInTheDocument();
+  });
+
+  test("an empty only shows just the mode toggle", () => {
+    render(<ActionBar store={priv()} only={[]} />);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 });

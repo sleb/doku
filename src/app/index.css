@@ -135,6 +135,14 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Tutorial "look here" ring. The board is the same in both themes, so the
+   ring is a fixed dark dashed line (shape, not just colour) over a light halo. */
+.cell[data-highlight] {
+  outline: 3px dashed #1c1917;
+  outline-offset: -6px;
+  box-shadow: inset 0 0 0 8px rgb(255 255 255 / 0.55);
+}
+
 /* Responsive game layout (GameLayout). `main` is the size container. */
 .game-layout {
   display: grid;

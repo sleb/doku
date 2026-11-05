@@ -3,30 +3,38 @@ import { expect, test } from "@playwright/test";
 const fresh = { cookies: [], origins: [] };
 const rules = (page: import("@playwright/test").Page) =>
   page.getByRole("dialog", { name: "Rules" });
+const tutorial = (page: import("@playwright/test").Page) =>
+  page.getByTestId("tutorial-card");
 
 test.describe("fresh install", () => {
   test.use({ storageState: fresh });
 
-  test("Rules show once, then never again after Got it", async ({ page }) => {
+  test("the tutorial shows once, then never again after Skip", async ({
+    page,
+  }) => {
     await page.goto("/");
-    await expect(rules(page)).toBeVisible();
-    await page.getByRole("button", { name: "Got it" }).click();
+    await expect(tutorial(page)).toBeVisible();
     await expect(rules(page)).toBeHidden();
+    await page.getByRole("button", { name: "Skip tutorial" }).click();
+    await expect(tutorial(page)).toBeHidden();
     await page.reload();
     // The saved game comes back paused (M4-08).
     await page.getByRole("button", { name: "Resume" }).click();
     await expect(
       page.getByRole("grid", { name: "Puzzle board" }),
     ).toBeVisible();
+    await expect(tutorial(page)).toBeHidden();
     await expect(rules(page)).toBeHidden();
   });
 
-  test("corrupt stored settings boot with Rules shown", async ({ page }) => {
+  test("corrupt stored settings boot with the tutorial shown", async ({
+    page,
+  }) => {
     await page.addInitScript(() =>
       localStorage.setItem("doku:settings", '"garbage"'),
     );
     await page.goto("/");
-    await expect(rules(page)).toBeVisible();
+    await expect(tutorial(page)).toBeVisible();
   });
 });
 

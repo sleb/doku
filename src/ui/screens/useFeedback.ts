@@ -97,10 +97,8 @@ export function useFeedback(
             queueMicrotask(() => (levelJustAnnounced = false));
           }
         } else if (prev.status === "playing" && next.status === "paused") {
-          // The first-run Rules dialog forces a pause; it announces itself.
-          pauseAnnounced = settingsStore.getState().seenTutorial;
-          if (levelJustAnnounced) pauseAnnounced = false;
-          else if (pauseAnnounced) say(announcePause());
+          pauseAnnounced = !levelJustAnnounced;
+          if (pauseAnnounced) say(announcePause());
         } else if (prev.status === "paused" && next.status === "playing") {
           if (pauseAnnounced) say(announceResume());
           pauseAnnounced = false;

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { idleState, MAX_HEARTS } from "../../store/game";
-import { gameStore } from "../../store/gameStore";
+import { createGameStore, gameStore } from "../../store/gameStore";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { useShortcuts } from "./useShortcuts";
 
@@ -284,5 +284,36 @@ describe("useShortcuts", () => {
       expect(faces()).toBe(2);
       expect(gameStore.getState().hearts).toBe(1);
     });
+  });
+});
+
+describe("useShortcuts options", () => {
+  test("acts on the given store only", () => {
+    const store = createGameStore();
+    store.getState().startLevel(level);
+    store.getState().toggleMark(1);
+    renderHook(() => useShortcuts({ store }));
+    press({ key: "z" });
+    expect(marked()).toBe(2);
+    const s = store.getState();
+    if (s.status === "idle") throw new Error("idle");
+    expect(s.future).toEqual([1]);
+  });
+
+  test("pause: false leaves Escape alone", () => {
+    renderHook(() => useShortcuts({ pause: false }));
+    const e = press({ key: "Escape" });
+    expect(gameStore.getState().status).toBe("playing");
+    expect(e.defaultPrevented).toBe(false);
+  });
+
+  test("only limits which actions the keys trigger", () => {
+    renderHook(() => useShortcuts({ only: ["undo"] }));
+    press({ key: "h" });
+    expect(gameStore.getState().hearts).toBe(MAX_HEARTS);
+    press({ key: "Z", shiftKey: true });
+    expect(future()).toBe(0);
+    press({ key: "z" });
+    expect(future()).toBe(1);
   });
 });

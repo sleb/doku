@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { haptics } from "../../platform/haptics";
 import { idleState } from "../../store/game";
-import { gameStore } from "../../store/gameStore";
+import { createGameStore, gameStore } from "../../store/gameStore";
 import { settingsStore } from "../../store/settings";
 import { useHoldRamp } from "./useHoldRamp";
 
@@ -71,5 +71,18 @@ describe("useHoldRamp", () => {
     act(() => result.current(4));
     expect(cancels[0]).toHaveBeenCalled();
     expect(haptics.ramp).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useHoldRamp on a private store", () => {
+  test("cancels when that store leaves playing, not the singleton", () => {
+    const store = createGameStore();
+    store.getState().startLevel(level);
+    const { result } = renderHook(() => useHoldRamp(store));
+    act(() => result.current(3));
+    act(() => gameStore.getState().pause());
+    expect(cancels[0]).not.toHaveBeenCalled();
+    act(() => store.getState().pause());
+    expect(cancels[0]).toHaveBeenCalledTimes(1);
   });
 });
