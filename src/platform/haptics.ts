@@ -1,8 +1,8 @@
-export type HapticKind = "place" | "wrong" | "win" | "lose";
+import type { OutcomeKind } from "./outcome";
 
 export interface Haptics {
   /** Always resolves: a failed buzz must never break gameplay. */
-  play(kind: HapticKind): Promise<void>;
+  play(kind: OutcomeKind): Promise<void>;
 }
 
 type Plugin = Pick<

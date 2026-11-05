@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nextLevel, startOver } from "../../app/campaign";
 import { LEVELS, levelIndex } from "../../levels/campaign";
-import { feedbackFor } from "../../platform/feedback";
-import { haptics } from "../../platform/haptics";
 import { gameStore, useGameStore } from "../../store/gameStore";
 import { useProgressStore } from "../../store/progress";
 import { conflictCells } from "../../store/selectors";
@@ -17,6 +15,7 @@ import { RulesDialog } from "./RulesDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { useAutoPause } from "./useAutoPause";
 import { useClock } from "./useClock";
+import { useFeedback } from "./useFeedback";
 import { useShortcuts } from "./useShortcuts";
 
 export function GameScreen() {
@@ -41,16 +40,7 @@ export function GameScreen() {
   useClock();
   useAutoPause();
   useShortcuts({ holdOwner });
-
-  // Buzz for the outcome of each store change. Subscribed once per mount.
-  useEffect(
-    () =>
-      gameStore.subscribe((next, prev) => {
-        const kind = feedbackFor(prev, next);
-        if (kind && settingsStore.getState().haptics) void haptics.play(kind);
-      }),
-    [],
-  );
+  useFeedback();
 
   // Back from a pause, hand focus to the board's active cell if it fell to the
   // page (the board is hidden while paused, so it cannot hold focus then).

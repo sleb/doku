@@ -90,8 +90,7 @@ This introduces the adapter layer from `DESIGN.md` §8 for the first time. Only 
 
 ```ts
 // src/platform/haptics.ts
-export type HapticKind = "place" | "wrong" | "win" | "lose";
-export interface Haptics { play(kind: HapticKind): Promise<void> }
+export interface Haptics { play(kind: OutcomeKind): Promise<void> }
 export function createHaptics(deps?: { isTauri(): boolean; isMobile(): boolean; loadPlugin(): Promise<Plugin>; log(err: unknown): void }): Haptics;
 export const haptics: Haptics;   // createHaptics() with the real deps
 ```
@@ -114,14 +113,15 @@ Haptic choices follow the platform guidance that feedback confirms an outcome an
 The store stays pure. A pure function maps a state change to at most one haptic:
 
 ```ts
-// src/platform/feedback.ts
-export function feedbackFor(prev: GameState, next: GameState): HapticKind | null;
+// src/platform/outcome.ts
+export type OutcomeKind = "place" | "wrong" | "win" | "lose";
+export function outcomeFor(prev: GameState, next: GameState): Outcome | null; // { kind, cell?, faces, hearts }
 ```
 
 - `prev.status === "playing"` and `next.status === "won"` → `"win"`; `"lost"` → `"lose"` (these take precedence over place/wrong, so a winning face buzzes once, not twice).
 - Otherwise, hearts decreased → `"wrong"`; the number of faces on the board increased → `"place"`; anything else (mark toggles, restart, no-ops, same state reference) → `null`.
 
-`GameScreen` subscribes once in an effect (`gameStore.subscribe((next, prev) => { const k = feedbackFor(prev, next); if (k) void haptics.play(k) })`) and unsubscribes in the cleanup. The subscription lives in `GameScreen` rather than the store module so tests of the store and of `Board` never trigger side effects, and so it is cleaned up with the screen like the existing reset.
+`GameScreen` calls `useFeedback()` (`src/ui/screens/useFeedback.ts`), which subscribes once (`gameStore.subscribe((next, prev) => { const o = outcomeFor(prev, next); if (o) void haptics.play(o.kind) })`, gated on the haptics setting read at event time) and unsubscribes in the cleanup. The subscription lives in the `useFeedback` hook rather than the store module so tests of the store and of `Board` never trigger side effects, and so it is cleaned up with the screen like the existing reset.
 
 ### 6.3 Settings
 
@@ -142,7 +142,7 @@ export function feedbackFor(prev: GameState, next: GameState): HapticKind | null
 ## 8. Testing (strict TDD, written failing first)
 
 **Unit, node**
-- `feedbackFor`: win beats place; loss beats wrong; wrong face → `"wrong"`; correct face → `"place"`; mark toggle, restart, and an identical state → `null`; frozen inputs are not mutated.
+- `outcomeFor`: win beats place; loss beats wrong; wrong face → `"wrong"`; correct face → `"place"`; mark toggle, restart, and an identical state → `null`; frozen inputs are not mutated.
 - `haptics` adapter selection: with `window.__TAURI_INTERNALS__` absent it is a no-op; with it present and the plugin mocked, each kind maps to the right call; a rejecting plugin does not throw.
 
 **Components, jsdom**
@@ -193,7 +193,7 @@ Status: done for everything that landed in M3-01 to M3-05 (iOS). Items marked *p
 
 1. **Input is unchanged on mobile**: tap = ✕, hold with the 250 ms delay and glow = face. No tool toggle; click-only placement is #57, separate.
 2. **Container queries for one layout** covering phones (both orientations) and desktop; no orientation lock, no separate desktop layout.
-3. **`src/platform/haptics` with a no-op default** and a pure `feedbackFor`, so feedback is testable without a device and the store stays side-effect free.
+3. **`src/platform/haptics` with a no-op default** and a pure `outcomeFor`, so feedback is testable without a device and the store stays side-effect free.
 4. **Haptics only for outcomes** (place, wrong, win, lose), never for the free ✕.
 5. **Commit `src-tauri/gen`**, ignoring build outputs.
 6. **iOS first, then Android.** This machine already has Xcode and no Android SDK, and iOS is the stricter WebView (WKWebView) for the glow and insets. This reverses the `DESIGN.md` §12 order; the two native issues are independent.

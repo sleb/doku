@@ -140,7 +140,7 @@ export function nextHint(board: Board, level: Level): number | null;   // the ce
 
 It returns the solution cell of the first row (top to bottom) that has no face yet, or `null` when every row has one. The result is always correct and always editable (a wrong ✕ can never sit on a solution cell; a player ✕ can, and `placeFace` allows it). Milestone 5 changes the return to the object form with `technique` and `explanation` and changes which cell is chosen; callers read only the cell until then.
 
-**A hint costs one heart** (`DESIGN.md` §13 decision 2 holds: 3 hearts, no recovery), so hints are naturally capped at two per level and trade directly against mistakes. The Hint button is disabled on the last heart. The count is recorded and shown on the result. `feedbackFor` reads a `hintsUsed` increase as `place` (a hint is a deliberate, correct face), checked after win/lose and before the heart-drop check so it is not mistaken for `wrong`.
+**A hint costs one heart** (`DESIGN.md` §13 decision 2 holds: 3 hearts, no recovery), so hints are naturally capped at two per level and trade directly against mistakes. The Hint button is disabled on the last heart. The count is recorded and shown on the result. `outcomeFor` reads a `hintsUsed` increase as `place` (a hint is a deliberate, correct face), checked after win/lose and before the heart-drop check so it is not mistaken for `wrong`.
 
 ## 5. Persistence
 
