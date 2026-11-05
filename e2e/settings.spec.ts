@@ -58,7 +58,7 @@ for (const [w, h] of [
     await page.goto("/");
     await page.getByRole("button", { name: "Pause" }).click();
     await page.getByRole("button", { name: "Settings" }).click();
-    const body = page.getByTestId("settings-body");
+    const body = page.getByTestId("dialog-body");
     await expect(body).toBeVisible();
     const panel = page.getByRole("dialog", { name: "Settings" });
     const box = await panel.boundingBox();
@@ -77,3 +77,22 @@ for (const [w, h] of [
     await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
   });
 }
+
+test("Rules stays inside its panel at 667x300", async ({ page }) => {
+  await page.setViewportSize({ width: 667, height: 300 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Pause" }).click();
+  await page.getByRole("button", { name: "Rules" }).click();
+  const panel = page.getByRole("dialog", { name: "Rules" });
+  await expect(panel).toBeVisible();
+  const p = await panel.boundingBox();
+  expect(p).not.toBeNull();
+  expect(p!.y).toBeGreaterThanOrEqual(0);
+  expect(p!.y + p!.height).toBeLessThanOrEqual(300);
+  const body = page.getByTestId("dialog-body");
+  const b = await body.boundingBox();
+  expect(b!.y + b!.height).toBeLessThanOrEqual(p!.y + p!.height);
+  expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
+    true,
+  );
+});

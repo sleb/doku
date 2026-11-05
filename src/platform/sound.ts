@@ -4,8 +4,9 @@ import type { OutcomeKind } from "./outcome";
 export interface Sound {
   /** Always resolves: a failed sound must never break gameplay. */
   play(kind: OutcomeKind, faces: number, size: number): Promise<void>;
-  /** Call from a user gesture; creates the context on first use. */
-  unlock(): void;
+  /** Call from a user gesture; creates the context on first use. Resolves
+   * true once the context is running. */
+  unlock(): Promise<boolean>;
   suspend(): void;
   resume(): void;
 }
@@ -82,10 +83,16 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
   }
 
   return {
-    unlock() {
+    async unlock() {
       ensure();
       const c = ctx;
-      if (c) safe(() => c.resume());
+      if (!c) return false;
+      try {
+        await c.resume();
+      } catch (err) {
+        deps.log(err);
+      }
+      return c.state === "running";
     },
     suspend() {
       const c = ctx;
@@ -99,11 +106,18 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
       const c = ctx;
       const m = master;
       if (!c || !m) return;
+      if (c.state !== "running") {
+        // currentTime is frozen; scheduling now would pile up and burst later.
+        safe(() => c.resume());
+        return;
+      }
+      let voice: Voice | null = null;
       try {
         const notes = cueFor(kind, faces, size);
         while (voices.length >= MAX_VOICES) dropOldest();
-        const voice: Voice = { oscs: [], live: notes.length };
-        voices.push(voice);
+        const v: Voice = { oscs: [], live: notes.length };
+        voice = v;
+        voices.push(v);
         const t0 = c.currentTime;
         for (const n of notes) {
           const osc = c.createOscillator();
@@ -120,14 +134,19 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
           osc.connect(g);
           g.connect(m);
           osc.onended = () => {
-            if (--voice.live <= 0) voices = voices.filter((v) => v !== voice);
+            if (--v.live <= 0) voices = voices.filter((x) => x !== v);
           };
-          voice.oscs.push(osc);
+          v.oscs.push(osc);
           osc.start(start);
           osc.stop(end + 0.01);
         }
       } catch (err) {
         deps.log(err);
+        const failed = voice;
+        if (failed) {
+          voices = voices.filter((x) => x !== failed);
+          for (const o of failed.oscs) safe(() => o.stop());
+        }
       }
     },
   };

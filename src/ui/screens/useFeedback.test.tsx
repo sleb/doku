@@ -15,7 +15,7 @@ vi.mock("../../platform/haptics", () => ({
 vi.mock("../../platform/sound", () => ({
   sound: {
     play: vi.fn().mockResolvedValue(undefined),
-    unlock: vi.fn(),
+    unlock: vi.fn().mockResolvedValue(false),
     suspend: vi.fn(),
     resume: vi.fn(),
   },
@@ -31,6 +31,7 @@ const play = () => vi.mocked(haptics.play);
 beforeEach(() => {
   play().mockClear();
   for (const f of Object.values(sound)) vi.mocked(f).mockClear();
+  vi.mocked(sound.unlock).mockResolvedValue(false);
   settingsStore.getState().set({ haptics: true, sound: true });
   gameStore.setState(idleState, false);
   gameStore.getState().startLevel(level);
@@ -138,25 +139,45 @@ describe("useFeedback sound", () => {
     expect(sound.play).not.toHaveBeenCalled();
   });
 
-  test("unlocks once on the first pointerdown", () => {
+  const gestures = ["pointerup", "touchend", "click", "keydown"];
+
+  test.each(gestures)("unlocks on %s", (type) => {
+    renderHook(() => useFeedback());
+    window.dispatchEvent(new Event(type));
+    expect(sound.unlock).toHaveBeenCalledTimes(1);
+  });
+
+  test("pointerdown alone does not unlock", () => {
     renderHook(() => useFeedback());
     window.dispatchEvent(new Event("pointerdown"));
-    window.dispatchEvent(new Event("pointerdown"));
+    expect(sound.unlock).not.toHaveBeenCalled();
+  });
+
+  test("stops listening once the context is running", async () => {
+    vi.mocked(sound.unlock).mockResolvedValue(true);
+    renderHook(() => useFeedback());
+    await act(async () => {
+      window.dispatchEvent(new Event("click"));
+    });
+    window.dispatchEvent(new Event("click"));
     window.dispatchEvent(new Event("keydown"));
     expect(sound.unlock).toHaveBeenCalledTimes(1);
   });
 
-  test("unlocks once on the first keydown", () => {
+  test("keeps listening while the context is not running", async () => {
+    vi.mocked(sound.unlock).mockResolvedValue(false);
     renderHook(() => useFeedback());
-    window.dispatchEvent(new Event("keydown"));
-    window.dispatchEvent(new Event("pointerdown"));
-    expect(sound.unlock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      window.dispatchEvent(new Event("touchend"));
+    });
+    window.dispatchEvent(new Event("click"));
+    expect(sound.unlock).toHaveBeenCalledTimes(2);
   });
 
   test("removes the unlock listeners on unmount", () => {
     const { unmount } = renderHook(() => useFeedback());
     unmount();
-    window.dispatchEvent(new Event("pointerdown"));
+    window.dispatchEvent(new Event("click"));
     expect(sound.unlock).not.toHaveBeenCalled();
   });
 

@@ -42,8 +42,12 @@ class FakeCtx {
   state = "suspended";
   gains: FakeGain[] = [];
   oscs: FakeOsc[] = [];
-  resume = vi.fn().mockResolvedValue(undefined);
-  suspend = vi.fn().mockResolvedValue(undefined);
+  resume = vi.fn(async () => {
+    this.state = "running";
+  });
+  suspend = vi.fn(async () => {
+    this.state = "suspended";
+  });
   createGain() {
     const g = new FakeGain();
     this.gains.push(g);
@@ -75,6 +79,14 @@ describe("unlock", () => {
     expect(ctx.resume).toHaveBeenCalled();
   });
 
+  it("resolves whether the context is running", async () => {
+    const { ctx, s } = setup();
+    expect(await s.unlock()).toBe(true);
+    ctx.resume.mockImplementationOnce(async () => {});
+    ctx.state = "suspended";
+    expect(await s.unlock()).toBe(false);
+  });
+
   it("master gain is 0.18 into the destination", () => {
     const { ctx, s } = setup();
     s.unlock();
@@ -84,6 +96,35 @@ describe("unlock", () => {
 });
 
 describe("play", () => {
+  it("does not schedule while the context is not running, and tries resume", async () => {
+    const { ctx, s } = setup();
+    s.unlock();
+    ctx.state = "suspended";
+    ctx.resume.mockClear();
+    await s.play("place", 1, 7);
+    expect(ctx.oscs).toHaveLength(0);
+    expect(ctx.resume).toHaveBeenCalled();
+  });
+
+  it("releases the voice when building a cue throws partway", async () => {
+    const { ctx, s } = setup();
+    s.unlock();
+    const orig = ctx.createOscillator.bind(ctx);
+    let calls = 0;
+    ctx.createOscillator = () => {
+      if (++calls === 2) throw new Error("boom");
+      return orig();
+    };
+    await s.play("win", 1, 7);
+    expect(ctx.oscs[0].stops.length).toBeGreaterThan(1);
+    ctx.createOscillator = orig;
+    // Voice slots are free: four more plays never need to drop anything.
+    for (let i = 0; i < 4; i++) await s.play("place", 1, 7);
+    const stopsBefore = ctx.oscs[0].stops.length;
+    await s.play("place", 1, 7);
+    expect(ctx.oscs[0].stops.length).toBe(stopsBefore);
+  });
+
   it("is a silent no-op before unlock", async () => {
     const { ctx, createContext, s } = setup();
     await s.play("place", 1, 7);

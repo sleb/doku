@@ -85,10 +85,7 @@ export function SettingsDialog({
       title="Settings"
       onClose={confirming ? () => setConfirming(false) : onClose}
     >
-      <div
-        data-testid="settings-body"
-        className="flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto"
-      >
+      <>
         <Section title="Feedback">
           {haptics.supported() && (
             <SwitchRow
@@ -176,7 +173,7 @@ export function SettingsDialog({
         >
           Done
         </button>
-      </div>
+      </>
     </Dialog>
   );
 }

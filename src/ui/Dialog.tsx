@@ -85,7 +85,12 @@ export function Dialog({
         <h2 id={titleId} className="text-xl font-semibold">
           {title}
         </h2>
-        {children}
+        <div
+          data-testid="dialog-body"
+          className="flex min-h-0 w-full flex-1 flex-col items-center gap-4 overflow-y-auto"
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

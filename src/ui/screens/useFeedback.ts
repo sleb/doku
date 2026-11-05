@@ -21,23 +21,26 @@ export function useFeedback(store: StoreApi<GameStore> = gameStore) {
     [store],
   );
 
-  // Browsers start audio suspended until a gesture; unlock on the first one.
+  // Audio starts suspended until a user-activation gesture (pointerdown is
+  // not one on touch). Keep trying until the context is actually running.
   useEffect(() => {
-    const unlock = () => {
-      sound.unlock();
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
+    const events = ["pointerup", "touchend", "click", "keydown"] as const;
+    const remove = () => {
+      for (const e of events) window.removeEventListener(e, unlock);
     };
-    window.addEventListener("pointerdown", unlock);
-    window.addEventListener("keydown", unlock);
+    const unlock = () => {
+      void sound.unlock().then((running) => {
+        if (running) remove();
+      });
+    };
+    for (const e of events) window.addEventListener(e, unlock);
     const suspend = () => sound.suspend();
     const onVisibility = () =>
       document.visibilityState === "hidden" ? sound.suspend() : sound.resume();
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", suspend);
     return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
+      remove();
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", suspend);
     };
