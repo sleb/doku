@@ -1,7 +1,8 @@
 import { memo, type RefObject, useEffect, useRef } from "react";
 import { Cell } from "../../engine";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
-import { REGION_BG, REGION_NAMES } from "./palette";
+import { type PaletteName, regionClass } from "./palette";
+import { patternStyle } from "./patterns";
 import { useHold } from "./useHold";
 
 export interface CellProps {
@@ -15,6 +16,10 @@ export interface CellProps {
   disabled: boolean;
   /** "face": a click, Enter or Space places a face (no timed hold needed). Default "mark". */
   inputMode?: "mark" | "face";
+  /** Region color set. Default "default". */
+  palette?: PaletteName;
+  /** Overlay the region's pattern so color is not the only identity. Default off. */
+  patterns?: boolean;
   /** Roving tabindex: 0 on the board's active cell, -1 elsewhere. */
   tabIndex?: number;
   onToggleMark: (index: number) => void;
@@ -47,6 +52,8 @@ export const CellView = memo(function CellView({
   isConflict,
   disabled,
   inputMode,
+  palette = "default",
+  patterns = false,
   tabIndex,
   onToggleMark,
   onPlaceFace,
@@ -68,17 +75,22 @@ export const CellView = memo(function CellView({
       else if (holdOwner.current === index) holdOwner.current = null;
     },
   );
+  // A second finger or palm on a neighbor must not mark it mid-hold.
+  const free = () => {
+    const owner = holdOwner?.current;
+    return owner == null || owner === index;
+  };
+  // A cell that does not own the board's hold never starts one, so a second
+  // finger cannot move the glow ring or restart the haptic ramp.
+  const startHold = (source: "pointer" | "key") => {
+    if (free()) hold.start(source);
+  };
   const holding = hold.holding;
   useEffect(() => {
     if (!holding || !onGlow) return;
     onGlow(index);
     return () => onGlow(null, index);
   }, [holding, onGlow, index]);
-  // A second finger or palm on a neighbor must not mark it mid-hold.
-  const free = () => {
-    const owner = holdOwner?.current;
-    return owner == null || owner === index;
-  };
   const toggleMark = () => {
     if (!disabled && free()) onToggleMark(index);
   };
@@ -91,7 +103,7 @@ export const CellView = memo(function CellView({
   const label = stateLabel(state, isWrong);
   const className = [
     "cell relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
-    REGION_BG[region],
+    regionClass(palette, region),
     // Thin grid lines only; thick region edges are drawn by Board's overlay.
     "border-r border-b",
     // Keyboard focus: an outline inset past the 4px conflict ring so both read.
@@ -111,9 +123,10 @@ export const CellView = memo(function CellView({
   return (
     <button
       type="button"
-      aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}${isConflict ? ", conflict" : ""}`}
+      aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}, ${label}${isConflict ? ", conflict" : ""}`}
       data-conflict={isConflict ? "true" : undefined}
       className={className}
+      style={patterns ? patternStyle(region) : undefined}
       data-holding={hold.holding ? "true" : undefined}
       aria-disabled={disabled ? "true" : undefined}
       tabIndex={tabIndex}
@@ -124,7 +137,7 @@ export const CellView = memo(function CellView({
         // pointerleave; release so dragging off cancels the hold.
         if (e.currentTarget.hasPointerCapture?.(e.pointerId))
           e.currentTarget.releasePointerCapture(e.pointerId);
-        hold.start("pointer");
+        startHold("pointer");
       }}
       onPointerUp={hold.cancel}
       onPointerCancel={hold.cancel}
@@ -150,7 +163,7 @@ export const CellView = memo(function CellView({
         if (e.repeat) return; // a held key must not flicker or restart
         if (isX) toggleMark();
         else if (inputMode === "face") placeNow();
-        else hold.start("key");
+        else startHold("key");
       }}
       onKeyUp={(e) => {
         if (e.ctrlKey || e.metaKey || e.altKey) return;

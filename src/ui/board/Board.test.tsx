@@ -10,7 +10,6 @@ import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
 import { HOLD_DELAY_MS, HOLD_TOTAL_MS } from "./hold";
-import { REGION_NAMES } from "./palette";
 
 const n = level.size;
 const none: ReadonlySet<number> = new Set();
@@ -55,7 +54,7 @@ describe("Board", () => {
       [3, 0],
       [6, 6],
     ]) {
-      const name = `Row ${r + 1}, column ${c + 1}, ${REGION_NAMES[level.regions[r][c]]} region, empty`;
+      const name = `Row ${r + 1}, column ${c + 1}, region ${level.regions[r][c] + 1}, empty`;
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
   });
@@ -443,7 +442,7 @@ describe("Board", () => {
       expect(onHoldGlow).not.toHaveBeenCalled();
     });
 
-    test("a released cell does not clear another cell's glow", () => {
+    test("a second overlapping hold leaves the owner's glow alone", () => {
       const { cell, onHoldGlow } = setup();
       vi.useFakeTimers();
       try {
@@ -453,14 +452,14 @@ describe("Board", () => {
         act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
         fireEvent.pointerDown(b, { button: 0, pointerId: 2 });
         act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
-        expect(onHoldGlow).toHaveBeenLastCalledWith(3 * n + 3);
+        expect(onHoldGlow).toHaveBeenCalledTimes(1);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(0);
         onHoldGlow.mockClear();
-        fireEvent.pointerUp(a, { button: 0, pointerId: 1 });
+        fireEvent.pointerUp(b, { button: 0, pointerId: 2 });
         expect(glows()).toHaveLength(1);
         expect(onHoldGlow).not.toHaveBeenCalled();
-        fireEvent.pointerUp(b, { button: 0, pointerId: 2 });
+        fireEvent.pointerUp(a, { button: 0, pointerId: 1 });
         expect(glows()).toHaveLength(0);
-        expect(onHoldGlow).toHaveBeenCalledTimes(1);
         expect(onHoldGlow).toHaveBeenLastCalledWith(null);
       } finally {
         vi.useRealTimers();

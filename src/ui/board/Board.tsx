@@ -14,6 +14,7 @@ import { fxStore } from "../fx/fxStore";
 import { CellView } from "./Cell";
 import { type CellGeometry, cellGeometry } from "./geometry";
 import { HoldGlow } from "./HoldGlow";
+import type { PaletteName } from "./palette";
 import { useNoDoubleTapLoupe } from "./useNoDoubleTapLoupe";
 
 export interface BoardProps {
@@ -27,6 +28,10 @@ export interface BoardProps {
   celebrate?: boolean;
   /** "face": a click places a face. Defaults to "mark". */
   inputMode?: "mark" | "face";
+  /** Region color set. Defaults to "default". */
+  palette?: PaletteName;
+  /** Overlay a pattern per region. Defaults to off. */
+  patterns?: boolean;
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
   /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
@@ -43,6 +48,8 @@ export function Board({
   disabled,
   celebrate,
   inputMode,
+  palette,
+  patterns,
   onToggleMark,
   onPlaceFace,
   holdOwner: sharedHoldOwner,
@@ -152,6 +159,8 @@ export function Board({
                 isConflict={conflicts.has(g.index)}
                 disabled={disabled || isLocked(board, wrong, g.index)}
                 inputMode={inputMode}
+                palette={palette}
+                patterns={patterns}
                 tabIndex={g.index === active ? 0 : -1}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}

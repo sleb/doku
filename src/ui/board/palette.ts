@@ -1,5 +1,7 @@
+export type PaletteName = "default" | "accessible";
+
 // Tailwind only generates classes it can see statically, so these are literals.
-export const REGION_BG = [
+const DEFAULT_BG = [
   "bg-region-0",
   "bg-region-1",
   "bg-region-2",
@@ -13,7 +15,26 @@ export const REGION_BG = [
   "bg-region-10",
 ] as const;
 
-// Same order as the --color-region-N tokens in app/index.css.
+const ACCESSIBLE_BG = [
+  "bg-region-a-0",
+  "bg-region-a-1",
+  "bg-region-a-2",
+  "bg-region-a-3",
+  "bg-region-a-4",
+  "bg-region-a-5",
+  "bg-region-a-6",
+  "bg-region-a-7",
+  "bg-region-a-8",
+  "bg-region-a-9",
+  "bg-region-a-10",
+] as const;
+
+/** Background class for a region under the chosen palette. */
+export function regionClass(palette: PaletteName, region: number): string {
+  return (palette === "accessible" ? ACCESSIBLE_BG : DEFAULT_BG)[region];
+}
+
+// Same order as the --color-region-N tokens (the accessible palette's --color-region-a-N tokens differ in hue, but the names are the shared region identity) in app/index.css.
 export const REGION_NAMES = [
   "red",
   "orange",

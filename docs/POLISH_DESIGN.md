@@ -293,7 +293,7 @@ export type PaletteName = "default" | "accessible";
 export function regionClass(palette: PaletteName, region: number): string; // "bg-region-3" or "bg-region-a-3"
 ```
 
-`index.css` defines both token sets (`--color-region-*` and `--color-region-a-*`). The class names remain literals in the lookup arrays so Tailwind still emits them (`BOARD_DESIGN.md` §4.4). `Board` reads `palette` and `patterns` once and passes them down; `Cell` gets two primitives, so a settings change re-renders the board once.
+`index.css` defines both token sets (`--color-region-*` and `--color-region-a-*`). The class names remain literals in the lookup arrays so Tailwind still emits them (`BOARD_DESIGN.md` §4.4). `GameScreen` reads `palette` and `patterns` from the settings store and passes them as props `GameScreen → Board → CellView` (like `inputMode`); `CellView` gets two primitives, so a settings change re-renders each cell once. `REGION_BG` is gone; `regionClass(palette, region)` indexes two literal arrays (**landed in M6-09**).
 
 ### 8.3 Accessible palette
 
@@ -302,11 +302,13 @@ The default 11-color palette cannot be made color-blind-safe by hue alone: relia
 1. **`accessible` palette:** Okabe–Ito-derived hues plus lightness variants to reach 11, chosen so that under simulated deuteranopia, protanopia and tritanopia no two **adjacent-capable** colors fall below a ΔE threshold, and the glyph still reaches 3:1.
 2. **Patterns (§8.4)** carry the identity that color cannot, so even where two accessible colors look similar to a given player, their patterns differ.
 
-Test (node, extending `palette.test.ts`): for both palettes, glyph contrast ≥ 3:1 on every region; for the accessible palette, pairwise ΔE (CIEDE2000 on the simulated color) ≥ a threshold for every pair that differs in pattern *and* a lower floor for all pairs. The thresholds are chosen empirically when the palette is built and recorded in the test, not guessed here (§12 Q2). Simulation matrices for the three deficiencies are plain constants in the test file.
+Tests (node): in `palette.test.ts`, for both palettes, glyph, wrong-tap and hold-ring contrast ≥ 3:1 on every region and pairwise RGB distance ≥ 40. In `palette.cvd.test.ts`, test-only Machado 2009 (severity 1.0) simulation in linear RGB, then sRGB → Lab and CIEDE2000 (sanity-tested against Sharma's reference pairs). Patterns can be switched off, so colour alone must separate the regions: one ΔE floor per simulation over **all** 55 pairs, not only pairs that differ in pattern.
+
+**Landed in M6-09:** the accessible hexes (`--color-region-a-0..10`) were found by a constrained search maximizing the minimum ΔE over normal vision and the three simulations, subject to wrong-tap ≥ 3:1. Measured minimum ΔE (CIEDE2000): protanopia 13.44, deuteranopia 13.24, tritanopia 13.32 (normal vision about 13.4); the asserted floor is 12.5 for each. For reference, the default palette's minimum is 14.0 under normal vision and only 1.58 under deuteranopia. Cell `aria-label` names regions by number ("region 3"), never by colour, so the spoken label cannot contradict either palette. The final "real eyes" check (play 7×7, 9×9, 11×11 and use a deficiency simulator) is a manual step.
 
 ### 8.4 Patterns
 
-`patterns.ts` maps region index → one of 11 distinct fills: solid, dots, horizontal lines, vertical lines, diagonal `/`, diagonal `\`, grid, crosshatch, checker, zigzag, rings. Implemented as CSS `background-image` layers on the cell using inline SVG data URIs (strokes in a dark tint at ~25 % alpha so the glyph remains the highest-contrast thing on the cell), sized in `em` of `--cell` so they scale with the board. With `patterns` off, nothing is applied. The pattern is decoration: cell `aria-label` already names the region, and `aria-hidden` is not needed since it is CSS.
+`patterns.ts` maps region index → one of 11 distinct fills: solid, dots, horizontal lines, vertical lines, diagonal `/`, diagonal `\`, grid, crosshatch, checker, zigzag, rings. Implemented as CSS `background-image` layers on the cell using inline SVG data URIs (strokes in a dark tint at ~25 % alpha so the glyph remains the highest-contrast thing on the cell), sized as a fraction of `--cell` (`calc(var(--cell) / 4)`, origin `border-box` so tiles align across the 1px grid borders) so they scale with the board. With `patterns` off, nothing is applied. The pattern is decoration: cell `aria-label` already identifies the region by number, and `aria-hidden` is not needed since it is CSS.
 
 The pattern index is the region index, so regions keep their pattern for the whole level. (Assigning patterns by region-adjacency to maximize difference is possible but unnecessary: all 11 are distinct.)
 
@@ -392,7 +394,7 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 ## 12. Open questions
 
 1. **Resolved: hint UI ownership (§9.4).** The highlight-and-explain toast belongs here, conditional on M5-07 returning the object form. If M5-07 is expanded to include it, drop that story.
-2. **Accessible palette thresholds.** The ΔE floors are set when the palette is tuned, from simulated renderings, not decided in advance.
+2. **Resolved: accessible palette thresholds.** Floors set when tuned (M6-09): ΔE 12.5 per simulation over all pairs (§8.3).
 3. **Reduced-motion switch.** Only the OS preference is honoured. Add an in-app "Reduce motion" setting only if someone needs animations off on a platform whose OS flag is not reachable (older WebViews).
 4. **Dark board.** The board is the same in both themes (§8.1). If a bright board in a dark frame is jarring in play, a dark region palette is a follow-up with its own glyph/contrast pass.
 5. **Resolved: window theme sync.** The native title bar follows the OS; no `setTheme` grant. The in-app theme override affects the web content only.
