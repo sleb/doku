@@ -1,6 +1,7 @@
+import { rate } from "./difficulty";
 import { makeRng, type Rng } from "./seed";
 import { solutions } from "./solver";
-import type { Level } from "./types";
+import type { Level, Tier } from "./types";
 import { MAX_SIZE, MIN_SIZE } from "./validate";
 
 export interface ShapeLimits {
@@ -240,18 +241,23 @@ export interface GenerateOptions {
   /** Attempts before giving up; the only budget, so results never depend on time. */
   maxAttempts?: number;
   shape?: Partial<ShapeLimits>;
+  /** Keep only levels `rate` puts in this tier; omitted means never rate. */
+  tier?: Tier;
   /** Checked once per attempt; abort returns null. */
   signal?: AbortSignal;
 }
 
-export type CandidateResult = { level: Level } | { reject: "repair" | "shape" };
+export type CandidateResult =
+  | { level: Level }
+  | { reject: "repair" | "shape" | "tier" | "unrated" };
 
-// One attempt: solution, regions, uniqueness repair, shape filter, reporting
-// which filter rejected it. The level has an empty id and no seed.
+// One attempt: solution, regions, uniqueness repair, shape filter and, when
+// `tier` is given, the rating filter, reporting which filter rejected it. The level has an empty id and no seed.
 export function tryCandidate(
   size: number,
   rng: Rng,
   shape?: Partial<ShapeLimits>,
+  tier?: Tier,
 ): CandidateResult {
   const limits = { ...defaultShape(size), ...shape };
   const solution = randomSolution(size, rng);
@@ -263,6 +269,12 @@ export function tryCandidate(
   );
   if (!repaired) return { reject: "repair" };
   if (!passesShape(repaired.regions, limits)) return { reject: "shape" };
+  if (tier) {
+    const rating = rate(repaired);
+    if (rating === "unrated") return { reject: "unrated" };
+    if (rating !== tier) return { reject: "tier" };
+    return { level: { ...repaired, tier } };
+  }
   return { level: repaired };
 }
 
@@ -271,8 +283,9 @@ export function generateCandidate(
   size: number,
   rng: Rng,
   shape?: Partial<ShapeLimits>,
+  tier?: Tier,
 ): Level | null {
-  const result = tryCandidate(size, rng, shape);
+  const result = tryCandidate(size, rng, shape, tier);
   return "level" in result ? result.level : null;
 }
 
@@ -280,7 +293,7 @@ export function generateCandidate(
 // that survives. id and seed are both the attempt seed, so
 // generateCandidate(size, makeRng(level.seed)) reproduces the level.
 export function generate(options: GenerateOptions): Level | null {
-  const { size, seed, shape, signal } = options;
+  const { size, seed, shape, tier, signal } = options;
   if (!Number.isInteger(size) || size < MIN_SIZE || size > MAX_SIZE) {
     throw new RangeError(
       `size must be an integer in ${MIN_SIZE}..${MAX_SIZE}, got ${size}`,
@@ -290,7 +303,12 @@ export function generate(options: GenerateOptions): Level | null {
   for (let k = 0; k < maxAttempts; k++) {
     if (signal?.aborted) return null;
     const attemptSeed = `${seed}#${k}`;
-    const candidate = generateCandidate(size, makeRng(attemptSeed), shape);
+    const candidate = generateCandidate(
+      size,
+      makeRng(attemptSeed),
+      shape,
+      tier,
+    );
     if (candidate) return { ...candidate, id: attemptSeed, seed: attemptSeed };
   }
   return null;

@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { multiSolutionLevel7 } from "./__fixtures__/levels";
+import * as difficulty from "./difficulty";
+import { rate } from "./difficulty";
 import {
   defaultShape,
   generate,
@@ -342,6 +344,44 @@ describe("generate", () => {
   });
 });
 
+describe("generate with a tier", () => {
+  it.each(["easy", "medium"] as const)(
+    "returns unique %s levels at 7x7 over 10 seeds",
+    (tier) => {
+      for (let s = 0; s < 10; s++) {
+        const level = generate({ size: 7, tier, seed: `tier${s}` });
+        expect(level, `seed ${s}`).not.toBeNull();
+        if (!level) continue;
+        expect(rate(level)).toBe(tier);
+        expect(level.tier).toBe(tier);
+        expect(countSolutions(level)).toBe(1);
+      }
+    },
+    60_000,
+  );
+
+  it("is deterministic", () => {
+    expect(generate({ size: 7, tier: "medium", seed: "d" })).toEqual(
+      generate({ size: 7, tier: "medium", seed: "d" }),
+    );
+  });
+
+  it("never calls rate without a tier, and does when tiered", () => {
+    const spy = vi.spyOn(difficulty, "rate");
+    generate({ size: 7, seed: "spy" });
+    expect(spy).not.toHaveBeenCalled();
+    generate({ size: 7, tier: "easy", seed: "spy" });
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("returns null for a tier it cannot fill within the budget", () => {
+    expect(
+      generate({ size: 7, tier: "hard", seed: "h", maxAttempts: 20 }),
+    ).toBeNull();
+  });
+});
+
 describe("tryCandidate", () => {
   const reasons = (shape?: Parameters<typeof tryCandidate>[2]) =>
     new Set(
@@ -356,6 +396,18 @@ describe("tryCandidate", () => {
 
   it("reports a failed shape filter", () => {
     expect(reasons({ maxRegion: 8 }).has("shape")).toBe(true);
+  });
+
+  it("reports tier and unrated rejects only when a tier is asked for", () => {
+    const seen = new Set<string>();
+    for (let k = 0; k < 60; k++) {
+      const r = tryCandidate(7, makeRng(`t${k}`), undefined, "easy");
+      if ("reject" in r) seen.add(r.reject);
+      else expect(r.level.tier).toBe("easy");
+    }
+    expect(seen.has("tier")).toBe(true);
+    expect(reasons().has("tier")).toBe(false);
+    expect(reasons().has("unrated")).toBe(false);
   });
 
   it("agrees with generateCandidate", () => {
