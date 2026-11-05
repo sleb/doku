@@ -1,6 +1,6 @@
 # Doku
 
-A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley face per colored region, row and column, with no two faces touching. Desktop first. The full app is implemented: a fixed campaign of 8 seed levels with hearts, hints, undo/redo, pause and timer, settings, keyboard play, and autosave that resumes after a quit; the iOS project builds and runs on the simulator. Still to come: the Android build (#64), the level generator and difficulty tiers (milestone 5), and polish (milestone 6). Manual desktop and iOS checks of persistence and window-state restore are outstanding (`docs/APP_DESIGN.md` §9).
+A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley face per colored region, row and column, with no two faces touching. Desktop first. The full app is implemented: a fixed campaign of 109 generated levels in four difficulty tiers (Easy, Medium, Hard, Expert) with hearts, hints, undo/redo, pause and timer, settings, keyboard play, and autosave that resumes after a quit; the iOS project builds and runs on the simulator. Still to come: the Android build (#64) and polish (milestone 6). Manual desktop and iOS checks of persistence and window-state restore are outstanding (`docs/APP_DESIGN.md` §9).
 
 ## Docs
 
@@ -8,6 +8,7 @@ A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley f
 - [`docs/ENGINE_DESIGN.md`](docs/ENGINE_DESIGN.md): low-level engine design (data structures, algorithms, tests, build order).
 - [`docs/BOARD_DESIGN.md`](docs/BOARD_DESIGN.md): low-level design for the milestone 2 playable board (store, Board/Cell, HUD, result modal, tests), with the milestone 4 changes noted inline.
 - [`docs/MOBILE_DESIGN.md`](docs/MOBILE_DESIGN.md): low-level design for milestone 3 (responsive layout, haptics, Android and iOS builds).
+- [`docs/GENERATOR_DESIGN.md`](docs/GENERATOR_DESIGN.md): low-level design for milestone 5 (level generator, technique ladder, difficulty tiers, pack tool, as built).
 - [`docs/APP_DESIGN.md`](docs/APP_DESIGN.md): low-level design for milestone 4 (full app: level progression, persistence, undo/redo, hints, settings, keyboard, desktop window), including the outstanding manual checks.
 - Milestone 1 user stories are GitHub issues in the "engine" milestone.
 

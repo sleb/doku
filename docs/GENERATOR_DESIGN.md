@@ -1,8 +1,8 @@
 # Doku: Milestone 5 low-level design (generator)
 
-Companion to `DESIGN.md` §4, §4.1, §10 and §12 for milestone 5 ("Generator + level packs + difficulty tiers"). It expands `docs/ENGINE_DESIGN.md` §9, which stays the short reference; if the two disagree, this document wins on the generator and `ENGINE_DESIGN.md` wins on the technique ladder (§6) and solvers (§7). Sync both when this lands.
+Companion to `DESIGN.md` §4, §4.1, §10 and §12 for milestone 5 ("Generator + level packs + difficulty tiers"). It expands `docs/ENGINE_DESIGN.md` §9, which stays the short reference; if the two disagree, this document wins on the generator and `ENGINE_DESIGN.md` wins on the technique ladder (§6) and solvers (§7). `DESIGN.md` and `ENGINE_DESIGN.md` were synced in M5-08.
 
-**Status:** draft for review. M5-01 (`seed.ts`), M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) and M5-03 (the pack tool and generated campaign), M5-04 (`rate`, Easy and Medium), M5-05 (tiered generation and the tiered campaign), M5-06 (Hard) and M5-07 (Expert, lookahead) are implemented; see §13 to §18 for what differs from this text.
+**Status:** implemented (M5-01 to M5-07); docs synced in M5-08. §13 to §18 record what differs from the design text above, and where they disagree they win.
 
 ## 1. Goals and non-goals
 
@@ -198,7 +198,7 @@ bun tools/generate-levels.ts [--pack N] [--stats] [--only size:tier] [--max-atte
 
 Two seeds can yield the same board. Within a run the tool keeps a set of **canonical forms**: for each of the 8 grid symmetries, relabel regions by first appearance in row-major order, join the grid to a string; the canonical form is the lexicographically smallest. A level whose form was seen is skipped (next `i`). The check lives in the tool, not the engine, because it only matters across a pack.
 
-### 8.4 Replacing the seed pack
+### 8.4 Replacing the seed pack (done in M5-03)
 
 Pre-MVP, so no migration (CLAUDE.md): delete `tools/seed-pack.ts`; the generated `pack-1.json` replaces the hand-built one outright (the hand-built `demo-7` and `demo-11` go with it). Anything that names a seed id (`demo-7`, `seed-3`, in e2e specs, tests or docs) is updated to read the id from `LEVELS` instead of hard-coding it. Saved progress is an index clamped by `parseProgress`; a stranger's old save lands on a different level, which is acceptable now. `tools/` stays out of the app bundle.
 
@@ -242,17 +242,17 @@ Titled `M5-NN`, each strictly TDD (CLAUDE.md), each plannable with `/doku-plan`.
 | 05 | Tiered generation | `GenerateOptions.tier` wired to `rate`; tier tests; curriculum gets tiers |
 | 06 | Hard techniques and ladder hints | `ENGINE_DESIGN.md` §6 rows 4 to 6; hints replace the stub |
 | 07 | Expert (lookahead) or drop it | decided from `--stats`: shipped (§18) |
-| 08 | Docs sync | `DESIGN.md` §4, §4.1, §10, §12, §13; `ENGINE_DESIGN.md` §9; `APP_DESIGN.md` §3.1, §11 |
+| 08 | Docs sync (done) | `DESIGN.md` §4, §4.1, §10, §12, §13; `ENGINE_DESIGN.md` §9; `APP_DESIGN.md` §3.1, §11 |
 
 Stories 01 to 03 deliver value on their own (a real, varied, all-sizes pack) before any technique exists, which also retires the 11×11 gap.
 
 ## 12. Open questions
 
-1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16) for Hard by M5-06 (§17: all five sizes fill) and for Expert by M5-07 (§18: all five sizes fill, three levels per size shipped).
+1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16) for Hard by M5-06 (§17: all five sizes fill) and for Expert by M5-07 (§18: all five sizes fill, three levels per size shipped). Decided; recorded in `DESIGN.md` §13 item 19.
 2. **Shape defaults** (`minRegion = 2`, `maxSingletons` 1 for 7 to 8 and 2 for 9 to 11, `maxRegion = 35%`): guesses; tune by playing generated packs.
 3. **Curve design:** M5-05 ships all Easy first (sizes 7 to 10), then Medium (7 to 11) (§16). Whether to interleave sizes and tiers for variety stays a game-design decision to revisit after playing it.
 4. **Seed string format for the daily puzzle** (milestone 6): date-derived, e.g. `daily/2026-11-04`; nothing in this design blocks it.
-5. **Retire `Level.seed`?** Kept for reproduction and debugging; it grows the pack JSON slightly. Revisit if pack size matters.
+5. **Retire `Level.seed`?** Kept for reproduction and debugging; it grows the pack JSON slightly. Revisit if pack size matters. Decision (M5-08): kept; the 109-level pack is small enough that it does not matter yet.
 
 ## 13. As built in M5-02
 

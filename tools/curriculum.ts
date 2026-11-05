@@ -1,7 +1,7 @@
 import type { CurriculumRow } from "./pack";
 
 // The campaign, in play order: row order is the difficulty curve. Only cells
-// the generator fills (docs/GENERATOR_DESIGN.md §16, §17): Easy 7 to 10,
+// the generator fills (docs/GENERATOR_DESIGN.md §16 to §18): Easy 7 to 10,
 // Medium 7 to 11, Hard 7 to 11, Expert 7 to 11. Easy 11x11 fills 16 of 20
 // stats seeds, below the 18 of 20 criterion, and is dropped. Every Hard and
 // Expert cell fills 20 of 20; Expert is three levels per size to keep the 11x11
