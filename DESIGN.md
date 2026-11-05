@@ -51,7 +51,7 @@ doku/
 │  ├─ levels/            # campaign.ts (ordered LEVELS) + pack-*.json
 │  └─ app/               # boot, autosave, campaign flow, index.css (theme tokens)
 ├─ e2e/                  # Playwright specs
-└─ tools/                # offline level scripts (seed-pack.ts today; generate-levels.ts in M5)
+└─ tools/                # offline level scripts (generate-levels.ts, pack.ts, curriculum.ts; see `docs/GENERATOR_DESIGN.md` §8)
 ```
 
 Engine modules marked planned in §4 (`generator`, `techniques`, `difficulty`, `seed`) do not exist yet; `hints.ts` is a stub (see `docs/APP_DESIGN.md` §4.4).
@@ -161,8 +161,8 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 
 ## 10. Content pipeline
 
-- Today: `src/levels/pack-1.json` holds 8 seed levels (sizes 7 to 11; only one 11x11), produced by the throwaway `tools/seed-pack.ts` (`bun tools/seed-pack.ts [size:count ...]`, naive rejection sampling, prints Level JSON to append by hand). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
-- Milestone 5: `tools/generate-levels.ts` runs the engine generator offline, verifies uniqueness, assigns difficulty, writes `src/levels/pack-*.json`, and replaces the seed script.
+- Today: `src/levels/pack-1.json` holds 42 untiered generated levels (8 each at 7 to 10, 10 at 11), written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
+- Milestone 5: the tool has landed (M5-03); assigning difficulty (`tier`) arrives with the technique ladder and tiered generation (M5-04, M5-05).
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 
 ## 11. Testing
