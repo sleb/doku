@@ -121,3 +121,24 @@ test("animates in with a class only: focus and input are unaffected", async () =
   await user.keyboard("{Escape}");
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+test("buttons with tabindex -1 are not first, last or initial focus", async () => {
+  render(
+    <Dialog title="T">
+      <button type="button" tabIndex={-1}>
+        skipped-first
+      </button>
+      <button type="button">real-first</button>
+      <button type="button">real-last</button>
+      <button type="button" tabIndex={-1}>
+        skipped-last
+      </button>
+    </Dialog>,
+  );
+  expect(screen.getByRole("button", { name: "real-first" })).toHaveFocus();
+  screen.getByRole("button", { name: "real-last" }).focus();
+  await userEvent.tab();
+  expect(screen.getByRole("button", { name: "real-first" })).toHaveFocus();
+  await userEvent.tab({ shift: true });
+  expect(screen.getByRole("button", { name: "real-last" })).toHaveFocus();
+});

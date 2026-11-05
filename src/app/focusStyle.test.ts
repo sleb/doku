@@ -39,19 +39,28 @@ test("no component hard-codes a focus colour or its own focus style", () => {
 
 test("Cell keeps its inset focus offset with the token colour", () => {
   const cell = readFileSync(join(src, "ui/board/Cell.tsx"), "utf8");
-  expect(cell).toContain("focus-visible:outline-focus");
+  expect(cell).toContain("focus-visible:outline-cell-focus");
+  expect(cell).not.toContain("focus-visible:outline-focus");
 });
 
-test("buttons give pressed feedback, removed under reduced motion", () => {
+test("buttons give non-geometric pressed feedback, removed under reduced motion", () => {
   const rules =
     css.match(/button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*\}/g) ?? [];
-  expect(rules.join("\n")).toContain("scale(0.97)");
-  expect(rules.join("\n")).toMatch(/80ms/);
-  expect(rules.join("\n")).toContain(":not(.cell)");
+  const joined = rules.join("\n");
+  expect(joined).toContain("brightness(");
+  expect(joined).not.toMatch(/transform|scale\(/);
+  expect(joined).toMatch(/80ms/);
+  expect(joined).toContain(":not(.cell)");
   const reduced = css.slice(
     css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
   );
   expect(reduced).toMatch(
-    /button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*(transform: none|transition: none)/,
+    /button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*(filter: none|transition: none)/,
   );
+});
+
+test("the tutorial highlight leaves the outline free for the focus ring", () => {
+  const rule = css.match(/\.cell\[data-highlight\]\s*\{[^}]*\}/)?.[0] ?? "";
+  expect(rule).not.toContain("outline");
+  expect(css).toMatch(/\.cell\[data-highlight\]::after\s*\{[^}]*dashed/);
 });

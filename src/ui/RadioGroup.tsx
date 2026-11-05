@@ -31,6 +31,7 @@ export function RadioGroup<T extends string>({
       Home: 0,
       End: options.length - 1,
     };
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key in next) {
       e.preventDefault();
       move(next[e.key]);

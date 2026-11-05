@@ -77,3 +77,14 @@ test("Space and Enter select the focused option", async () => {
   await userEvent.keyboard("{Enter}");
   expect(onChange).toHaveBeenCalledWith("b");
 });
+
+test("arrows with Alt, Ctrl or Meta held are left alone", async () => {
+  const onChange = setup("b");
+  radio("Beta").focus();
+  for (const mod of ["Alt", "Control", "Meta"]) {
+    await userEvent.keyboard(`{${mod}>}{ArrowRight}{/${mod}}`);
+  }
+  await userEvent.keyboard("{Alt>}{Home}{/Alt}");
+  expect(onChange).not.toHaveBeenCalled();
+  expect(radio("Beta")).toHaveFocus();
+});

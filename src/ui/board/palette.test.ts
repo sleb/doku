@@ -98,6 +98,14 @@ describe.each(PALETTES)("%s palette", (p) => {
     });
   });
 
+  test("the cell focus ring reaches 3:1 on every region color", () => {
+    const m = css.match(/--color-cell-focus:\s*(#[0-9a-fA-F]{6})\s*;/);
+    if (!m) throw new Error("--color-cell-focus missing");
+    REGIONS.forEach((i) => {
+      expect(contrast(m[1], tokenHex(i, p))).toBeGreaterThanOrEqual(3);
+    });
+  });
+
   test("the hold ring reaches 3:1 on every region color", () => {
     REGIONS.forEach((i) => {
       expect(contrast(HOLD_RING_COLOR, tokenHex(i, p))).toBeGreaterThanOrEqual(

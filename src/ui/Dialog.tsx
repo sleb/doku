@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 
 const FOCUSABLE =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'button:not([disabled]):not([tabindex="-1"]), [href], input:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Modal dialog: focus moves in on open and is restored on close, Tab cycles
@@ -92,7 +92,7 @@ export function Dialog({
         </h2>
         <div
           data-testid="dialog-body"
-          className="flex min-h-0 -mx-1 w-[calc(100%+0.5rem)] flex-1 flex-col items-center gap-4 overflow-y-auto px-1"
+          className="flex min-h-0 -m-2 w-[calc(100%+1rem)] flex-1 flex-col items-center gap-4 overflow-y-auto p-2"
         >
           {children}
         </div>
