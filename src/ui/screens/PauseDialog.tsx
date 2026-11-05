@@ -5,12 +5,14 @@ export function PauseDialog({
   onResume,
   onRestart,
   onRules,
+  onReplayTutorial,
   onSettings,
 }: {
   open: boolean;
   onResume: () => void;
   onRestart: () => void;
   onRules: () => void;
+  onReplayTutorial: () => void;
   onSettings: () => void;
 }) {
   if (!open) return null;
@@ -38,6 +40,13 @@ export function PauseDialog({
         className={`${button} border border-line`}
       >
         Rules
+      </button>
+      <button
+        type="button"
+        onClick={onReplayTutorial}
+        className={`${button} border border-line`}
+      >
+        Replay tutorial
       </button>
       <button
         type="button"
