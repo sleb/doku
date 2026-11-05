@@ -3,10 +3,12 @@
 import {
   countSolutions,
   type Level,
+  makeRng,
   solve,
   type Tier,
   validateLevel,
 } from "../src/engine";
+import { tryCandidate } from "../src/engine/generator";
 
 export interface CurriculumRow {
   pack: number;
@@ -173,4 +175,76 @@ export function buildPack(
     }
   });
   return { levels, json: `${JSON.stringify({ levels }, null, 2)}\n`, failures };
+}
+
+export interface SizeStats {
+  size: number;
+  seeds: number;
+  /** Seeds that never produced a level within the attempt cap. */
+  failed: number;
+  /** Candidates drawn over all seeds, successes included. */
+  attempts: number;
+  medianAttempts: number;
+  p90Attempts: number;
+  rejects: { repair: number; shape: number };
+  wallMs: number;
+}
+
+const STATS_MAX_ATTEMPTS = 2000;
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  return sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)];
+}
+
+/** Attempts to first success over `seeds` fixed seeds `stats/<size>/<k>`. */
+export function computeStats(size: number, seeds = 20): SizeStats {
+  const started = performance.now();
+  const perSeed: number[] = [];
+  const rejects = { repair: 0, shape: 0 };
+  let attempts = 0;
+  let failed = 0;
+  for (let k = 0; k < seeds; k++) {
+    let used = 0;
+    let ok = false;
+    while (!ok && used < STATS_MAX_ATTEMPTS) {
+      const result = tryCandidate(size, makeRng(`stats/${size}/${k}#${used}`));
+      used++;
+      if ("level" in result) ok = true;
+      else rejects[result.reject]++;
+    }
+    attempts += used;
+    if (ok) perSeed.push(used);
+    else failed++;
+  }
+  perSeed.sort((a, b) => a - b);
+  return {
+    size,
+    seeds,
+    failed,
+    attempts,
+    medianAttempts: percentile(perSeed, 0.5),
+    p90Attempts: percentile(perSeed, 0.9),
+    rejects,
+    wallMs: Math.round(performance.now() - started),
+  };
+}
+
+export function formatStats(rows: readonly SizeStats[]): string {
+  const head = "size  median  p90  repair-rej  shape-rej  failed  ms/level";
+  const lines = rows.map((s) => {
+    const pct = (n: number) => `${((100 * n) / s.attempts).toFixed(0)}%`;
+    const perLevel =
+      s.seeds > s.failed ? Math.round(s.wallMs / (s.seeds - s.failed)) : 0;
+    return [
+      String(s.size).padStart(4),
+      String(s.medianAttempts).padStart(6),
+      String(s.p90Attempts).padStart(4),
+      pct(s.rejects.repair).padStart(10),
+      pct(s.rejects.shape).padStart(9),
+      String(s.failed).padStart(6),
+      String(perLevel).padStart(8),
+    ].join("  ");
+  });
+  return `${[head, ...lines].join("\n")}\n`;
 }
