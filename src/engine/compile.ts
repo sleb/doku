@@ -25,7 +25,7 @@ export function compile(level: Level): Puzzle {
   }
   const members: number[][] = Array.from({ length: 3 * n }, () => []);
   for (let i = 0; i < n * n; i++) {
-    for (const u of unitIndexes({ n, regionOf, units: [] }, i)) {
+    for (const u of unitIndexes({ n, regionOf }, i)) {
       members[u].push(i);
     }
   }

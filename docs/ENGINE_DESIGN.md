@@ -41,24 +41,23 @@ type Tier = 'easy' | 'medium' | 'hard' | 'expert';
 
 ### Compiled puzzle (derived, not serialized)
 
-`compile(level)` precomputes everything the algorithms need so they never recompute geometry:
+`compile(level)` (M5-04) precomputes the geometry the technique solver needs. It is deliberately minimal: only what the Easy and Medium techniques read.
 
 ```ts
 interface Puzzle {
   n: number;
   regionOf: Uint8Array;              // cell → region id
-  solution: Uint8Array;              // cell-indexed: 1 if in solution (for judging taps)
-  solutionByRow: Uint8Array;         // = level.solution
-  neighbors: Uint8Array[];           // cell → indices of the ≤8 adjacent cells
-  units: Unit[];                     // 3N units: N rows, N cols, N regions
+  units: Unit[];                     // 3N units: N rows, then N cols, then N regions
 }
 
 interface Unit {
   kind: 'row' | 'col' | 'region';
   id: number;                        // row index, col index, or region id
-  cells: Uint8Array;                 // member cell indices
+  cells: Uint8Array;                 // member cell indices, ascending
 }
 ```
+
+The unit index of row r is `r`, of column c is `n + c`, of region g is `2n + g` (`unitIndexes(p, cell)` returns the three). `neighborsOf(p, cell)` computes the ≤8 adjacent cells arithmetically. `solution`, `solutionByRow` and a stored `neighbors` table from the first draft were dropped: nothing needs them (taps are judged from the `Level`).
 
 `validateLevel(level): LevelIssue[]` (pure, never throws) checks: size in 7..11 (`size`), `regions` is N×N (`regions-shape`), ids 0..N-1 each used (`region-count`), every region 4-connected (`region-connected`), and the solution is a valid placement: `solution-shape`, then `col`, `region`, `adjacent` (consecutive rows with column difference ≤ 1). `row` is not checked since `solution` is column-per-row. `LevelIssue = { rule, message, cells: Coord[] }`. Structural failures (size, shape, count) short-circuit the rest; connectivity and solution issues report together.
 
@@ -73,9 +72,9 @@ engine/
   validate.ts     validateLevel(), loadLevel(), LevelError
   board.ts        emptyBoard(), setCell(), facesOf() (immutable helpers)
   rules.ts        findConflicts(), isSolved(), judgeTap()
-  candidates.ts   Candidates type, fromBoard(), placeFace(), contradiction()
+  candidates.ts   Candidates type, fromBoard(), placeFace(), eliminate() (contradiction() arrives with lookahead)
   techniques.ts   TECHNIQUES ladder, Deduction type
-  solver.ts       solveByTechniques(), solve(), countSolutions()
+  solver.ts       solveByTechniques(), solve(), countSolutions(), solutions()
   difficulty.ts   rate()
   hints.ts        nextHint()
   generator.ts    generate()
@@ -114,9 +113,9 @@ interface Candidates {
 ```
 
 - `fromBoard(p, board)`: start with every cell alive, then `placeFace` each `Face` on the board. **Marks are ignored.** Because wrong faces are never placed (§4), every face on the board is a true solution cell, so candidates derived from faces are always sound.
-- `placeFace(p, cand, cell)` returns a new `Candidates` with: the cell placed, and every other cell in its row, column, and region, plus its ≤8 neighbors, eliminated. This is the **basic propagation** (the "Easy" tier's elimination rule).
+- `placeFace(p, cand, cell)` returns a new `Candidates` with: the cell placed (and still alive, so a satisfied unit shows `aliveCount == 1`; techniques skip satisfied units), and every other cell in its row, column, and region, plus its ≤8 neighbors, eliminated. This is the **basic propagation** (the "Easy" tier's elimination rule).
 - `eliminate(p, cand, cells)` clears `alive` for the given cells and updates counters.
-- `contradiction(cand)`: true if some unsatisfied unit has `aliveCount == 0`. Used by lookahead.
+- `contradiction(cand)` *(not built yet; arrives with lookahead, #93)*: true if some unsatisfied unit has `aliveCount == 0`. Used by lookahead.
 - Candidate sets are cloned per lookahead branch (N² + 3N bytes; trivial).
 
 ## 6. Techniques (techniques.ts)
@@ -139,6 +138,8 @@ type Technique = (p: Puzzle, c: Candidates) => Deduction | null;
 
 const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[];  // ordered simplest → hardest
 ```
+
+**As built (M5-04):** `TechniqueId` is the union of the three implemented ids (`single-candidate`, `region-in-line`, `line-in-region`) and grows with each technique. Eliminations never include placed cells, and a technique that would eliminate nothing returns `null` so the solver always makes progress.
 
 Returning one deduction at a time (not all of them) is deliberate: the solver restarts from the simplest technique after each step, which is what makes the tier rating the *minimum* hardest technique (see §7).
 
@@ -164,7 +165,7 @@ Notes:
 
 Two independent solvers, with different jobs.
 
-### 7.1 `solveByTechniques(p, board?)` — the human-style solver
+### 7.1 `solveByTechniques(level, board?)` — the human-style solver
 
 ```ts
 interface SolveTrace {
@@ -197,9 +198,9 @@ Why two solvers: the backtracker proves uniqueness and finds the solution; the t
 ## 8. Difficulty (difficulty.ts) and hints (hints.ts)
 
 ```ts
-function rate(p: Puzzle): Tier | 'unrated';
+function rate(level: Level): Tier | 'unrated';
 ```
-`trace = solveByTechniques(p)`; `trace.solved ? trace.hardest : 'unrated'`. The generator rejects `unrated` puzzles.
+`rate` takes a `Level` and compiles it internally (as built in M5-04; `DESIGN.md` §4 already says `rate(level)`). `trace = solveByTechniques(level)`; `trace.solved ? trace.hardest : 'unrated'`. The generator rejects `unrated` puzzles.
 
 ```ts
 interface Hint {
@@ -242,7 +243,7 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (not yet implemented), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (kept internal, see §2), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate` (exported in M5-04; `solveByTechniques` and the technique types stay internal), `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 
@@ -267,7 +268,7 @@ Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/en
 
 1. `types`, `compile`, `board`, `rules` + tests, with 2–3 hand-written fixtures.
 2. `seed`, `countSolutions` + uniqueness tests.
-3. `candidates`, then techniques 1–3 and `solveByTechniques`, `rate` (Easy/Medium working end to end).
+3. `candidates` (done in M5-04, with `compile`), then techniques 1–3 and `solveByTechniques`, `rate` (Easy/Medium working end to end).
 4. `hints` (cheap once the ladder exists).
 5. Techniques 4–6 (Hard), with soundness property tests running throughout.
 6. `generator` with Easy/Medium; extend as techniques land.
