@@ -27,7 +27,7 @@ Companion to `DESIGN.md` §7 (Theming), §8 (`audio` adapter) and §12 for miles
 gameStore ──subscribe──▶ outcomeFor(prev, next) ──▶ Outcome | null        (pure, src/platform/outcome.ts)
                                    │
                   useFeedback() in GameScreen ─┬─▶ haptics.play(kind)       if settings.haptics
-                                               ├─▶ sound.play(kind, step)   if settings.sound
+                                               ├─▶ sound.play(kind, faces, size)   if settings.sound
                                                ├─▶ fxStore.set(outcome)     → Board/Cell animation classes
                                                └─▶ announcer.say(text)      → <Announcer aria-live>
 
@@ -105,7 +105,7 @@ Same shape and discipline as `haptics.ts`: injected deps, always resolves, never
 
 ```ts
 export interface Sound {
-  play(kind: OutcomeKind, faces: number): Promise<void>;   // always resolves, like Haptics.play; callers may ignore it
+  play(kind: OutcomeKind, faces: number, size: number): Promise<void>;   // always resolves, like Haptics.play; callers may ignore it
   unlock(): void;                                 // call from a user gesture
   suspend(): void; resume(): void;                // visibility
 }
@@ -120,7 +120,7 @@ export const sound: Sound;
 - **Autoplay policy.** Browsers and WKWebView start an `AudioContext` suspended until a user gesture. The context is created lazily and `unlock()` (`ctx.resume()`) runs on the first `pointerdown` or `keydown` anywhere, installed by `useFeedback`. `play` before unlock is a silent no-op, not a queued sound (the first move is always a gesture, so nothing audible is lost).
 - **Silent switch.** On iOS, Web Audio is muted by the hardware ringer switch, which is the behaviour a game should have (`DESIGN.md` §8 says "respect silent switch"). This is believed, not verified in WKWebView: it is item one on the manual list (§11). If it turns out not to hold, the fallback is a native audio-session category via a Tauri plugin, which would be a deliberate scope change.
 - **Backgrounding.** `suspend()` on `visibilitychange → hidden` and `pagehide`, `resume()` on visible, so a sound never leaks over another app or plays from a paused game.
-- **Voice limit.** At most 4 live voices; a new `play` while at the limit drops the oldest. Holding down Space and mashing cannot stack into noise.
+- **Voice limit.** At most 4 live voices (one voice = one `play` call, however many notes); a new `play` while at the limit stops the oldest. A voice is freed when its last oscillator ends. Holding down Space and mashing cannot stack into noise.
 - Only outcomes sound. Nothing plays while `status !== "playing"` (the outcome function already guarantees it), and the free ✕ and undo/redo are silent.
 
 ### 5.3 Cues: `src/platform/cues.ts` (pure)
@@ -128,7 +128,7 @@ export const sound: Sound;
 Each cue is data, so the sound design is unit-testable without audio:
 
 ```ts
-interface Note { freq: number; at: number; dur: number; type: OscillatorType; gain: number } // seconds
+interface Note { freq: number; at: number; dur: number; gain: number; type?: OscillatorType; endFreq?: number } // seconds; type defaults to sine, endFreq is a glide target
 export function cueFor(kind: OutcomeKind, faces: number, size: number): Note[];
 ```
 
