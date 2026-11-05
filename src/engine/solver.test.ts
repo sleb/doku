@@ -6,7 +6,7 @@ import {
 } from "./__fixtures__/levels";
 import * as engine from "./index";
 import { findConflicts, isSolved } from "./rules";
-import { countSolutions, solve } from "./solver";
+import { countSolutions, solutions, solve } from "./solver";
 import { Cell, type Level } from "./types";
 
 const toBoard = (level: Level, placement: number[]) => {
@@ -111,5 +111,35 @@ describe("countSolutions vs brute force", () => {
     expect(countSolutions(multiSolutionLevel7, Number.POSITIVE_INFINITY)).toBe(
       bruteForceCount(multiSolutionLevel7),
     );
+  });
+});
+
+describe("solutions", () => {
+  it("returns up to `limit` distinct valid placements", () => {
+    const found = solutions(multiSolutionLevel7, 2);
+    expect(found).toHaveLength(2);
+    expect(found[0]).not.toEqual(found[1]);
+    for (const placement of found) {
+      expect(
+        findConflicts(
+          toBoard(multiSolutionLevel7, placement),
+          multiSolutionLevel7,
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it("returns copies, not the live search buffer", () => {
+    const found = solutions(multiSolutionLevel7, 2);
+    expect(found[0]).not.toBe(found[1]);
+    expect(found.every((p) => p.length === 7)).toBe(true);
+  });
+
+  it("returns [] for limit 0", () => {
+    expect(solutions(multiSolutionLevel7, 0)).toEqual([]);
+  });
+
+  it("returns the stored solution of a unique level", () => {
+    expect(solutions(uniqueLevel7, 2)).toEqual([uniqueLevel7.solution]);
   });
 });
