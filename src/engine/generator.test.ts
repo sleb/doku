@@ -184,6 +184,24 @@ describe("repairUniqueness", () => {
     expect(offered).toBeGreaterThan(0);
   });
 
+  it("polls shouldStop before every move and returns null as soon as it fires", () => {
+    let polls = 0;
+    const result = repairUniqueness(
+      level,
+      makeRng(REPAIR_SEED),
+      60,
+      () => ++polls >= 3,
+    );
+    expect(result).toBeNull();
+    expect(polls).toBe(3);
+  });
+
+  it("does not change the repair when shouldStop never fires", () => {
+    expect(
+      repairUniqueness(level, makeRng(REPAIR_SEED), 60, () => false),
+    ).toEqual(repairUniqueness(level, makeRng(REPAIR_SEED), 60));
+  });
+
   it("returns null with maxMoves = 0 on a non-unique level", () => {
     expect(repairUniqueness(level, makeRng("z"), 0)).toBeNull();
   });
@@ -192,6 +210,14 @@ describe("repairUniqueness", () => {
     const fixed = repairUniqueness(level, makeRng(REPAIR_SEED), 60);
     if (!fixed) throw new Error("repair failed");
     expect(repairUniqueness(fixed, makeRng("q"), 0)).toBe(fixed);
+  });
+});
+
+describe("tryCandidate", () => {
+  it("reports a stop requested between steps", () => {
+    expect(
+      tryCandidate(7, makeRng("s"), undefined, undefined, () => true),
+    ).toEqual({ reject: "stopped" });
   });
 });
 
@@ -244,9 +270,29 @@ describe("generate", () => {
     expect(generate({ size: 11, seed: NEEDS_RETRY })).not.toBeNull();
   });
 
-  it("returns null for a pre-aborted signal", () => {
-    const signal = AbortSignal.abort();
-    expect(generate({ size: 7, seed: "x", signal })).toBeNull();
+  it("returns null when shouldStop is true from the start, doing no work", () => {
+    let polls = 0;
+    const shouldStop = () => {
+      polls++;
+      return true;
+    };
+    expect(generate({ size: 11, seed: "x", shouldStop })).toBeNull();
+    expect(polls).toBe(1);
+  });
+
+  it("returns null once shouldStop turns true after some polls", () => {
+    let polls = 0;
+    const shouldStop = () => ++polls > 20;
+    expect(
+      generate({ size: 11, seed: NEEDS_RETRY, shouldStop }),
+    ).toBeNull();
+    expect(polls).toBe(21);
+  });
+
+  it("does not change the level when shouldStop never fires", () => {
+    expect(generate({ size: 8, seed: "det", shouldStop: () => false })).toEqual(
+      generate({ size: 8, seed: "det" }),
+    );
   });
 
   it.each([6, 12, 7.5, Number.NaN])("throws RangeError for size %s", (size) => {
