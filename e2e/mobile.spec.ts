@@ -155,3 +155,29 @@ test("the action bar row fits at 320px", async ({ page }) => {
   expect(tap.height).toBeGreaterThanOrEqual(44);
   await expectBoardInViewport(page);
 });
+
+test.describe("tutorial", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const [w, h] of [
+    [375, 667],
+    [320, 568],
+  ] as const) {
+    test(`step 1 fits ${w}x${h} and a touch hold completes it`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto("/");
+      await expect(page.getByTestId("tutorial-card")).toBeVisible();
+      await expectBoardInViewport(page);
+      expect(
+        (await box(page, "[role=grid] button")).width,
+      ).toBeGreaterThanOrEqual(44);
+      await touchHold(cell(page, 3, 1));
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+        "Rows and columns",
+      );
+      await expectBoardInViewport(page);
+    });
+  }
+});
