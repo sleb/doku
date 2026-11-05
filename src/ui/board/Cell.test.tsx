@@ -7,11 +7,18 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { Cell, REGION_NAMES } from "../../engine";
+import { Cell } from "../../engine";
 import { holdCell } from "../../test/hold";
 import { CellView } from "./Cell";
+import { HINT_RING_MS } from "./hintRing";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
-import { GLYPH_COLOR, regionClass, WRONG_COLOR } from "./palette";
+import {
+  GLYPH_COLOR,
+  HINT_RING_COLOR,
+  HINT_RING_UNDERSTROKE_COLOR,
+  regionClass,
+  WRONG_COLOR,
+} from "./palette";
 import { patternStyle } from "./patterns";
 
 type Props = Parameters<typeof CellView>[0];
@@ -40,7 +47,7 @@ function renderCell(over: Partial<Props> = {}) {
 }
 
 const REGION = 5;
-const NAME = `${REGION_NAMES[REGION]} region`;
+const NAME = "teal region"; // default palette, no patterns: colour name
 
 const icon = (b: HTMLElement) => b.querySelector("[data-icon]");
 
@@ -48,6 +55,15 @@ describe("CellView", () => {
   test("labels each state with row, column, region and state", () => {
     expect(renderCell().getAttribute("aria-label")).toBe(
       `Row 2, column 3, ${NAME}, empty`,
+    );
+  });
+
+  test.each([
+    [{ palette: "accessible" }, "region 6"],
+    [{ patterns: true }, "region 6"],
+  ] as const)("%j names the region by number: %s", (over, name) => {
+    expect(renderCell(over).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${name}, empty`,
     );
   });
 
@@ -825,6 +841,32 @@ describe("CellView hint markers", () => {
 
   test("does not change the accessible name", () => {
     expect(renderCell({ hint: "target" }).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${NAME}, empty`,
+    );
+  });
+});
+
+describe("CellView hint ring", () => {
+  test("has no ring by default", () => {
+    expect(renderCell().querySelector("[data-hint-ring]")).toBeNull();
+  });
+
+  test("a placed hint draws one ring for HINT_RING_MS, hidden from assistive tech", () => {
+    const ring = renderCell({ hintRing: 3 }).querySelector(
+      "[data-hint-ring]",
+    ) as HTMLElement;
+    expect(ring).not.toBeNull();
+    expect(ring.getAttribute("aria-hidden")).toBe("true");
+    expect(ring.style.animationDuration).toBe(`${HINT_RING_MS}ms`);
+    const probe = document.createElement("i");
+    probe.style.borderColor = HINT_RING_COLOR;
+    probe.style.boxShadow = `0 0 0 2px ${HINT_RING_UNDERSTROKE_COLOR}`;
+    expect(ring.style.borderColor).toBe(probe.style.borderColor);
+    expect(ring.style.boxShadow).toBe(probe.style.boxShadow);
+  });
+
+  test("is not in the accessible name", () => {
+    expect(renderCell({ hintRing: 3 }).getAttribute("aria-label")).toBe(
       `Row 2, column 3, ${NAME}, empty`,
     );
   });

@@ -36,6 +36,11 @@ export function announce(outcome: Outcome, ctx: AnnounceContext): string {
     return `Solved in ${spokenTime(ctx.elapsedMs ?? 0)}.${best}`;
   }
   if (outcome.kind === "lose") return "Out of hearts. Retry is available.";
+  if (outcome.kind === "hint") {
+    if (outcome.cell === undefined) return outcome.message;
+    const r = Math.floor(outcome.cell / ctx.size) + 1;
+    return `${outcome.message} Face placed, row ${r}, column ${(outcome.cell % ctx.size) + 1}.`;
+  }
   const where = `row ${Math.floor(outcome.cell / ctx.size) + 1}, column ${(outcome.cell % ctx.size) + 1}`;
   if (outcome.kind === "place")
     return `Face placed, ${where}. ${outcome.faces} of ${ctx.size} placed.`;

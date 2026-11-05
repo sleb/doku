@@ -50,6 +50,25 @@ beforeEach(() => {
 });
 
 describe("Board fx", () => {
+  test("a placement hint pops its cell like a place; an elimination hint has no cell", () => {
+    const { container } = render(view());
+    act(() =>
+      fxStore
+        .getState()
+        .set({ kind: "hint", cell: 5, message: "m", faces: 1, hearts: 2 }),
+    );
+    expect(fxCells(container)).toEqual(["5"]);
+    expect(container.querySelector("[data-fx]")?.getAttribute("data-fx")).toBe(
+      "place",
+    );
+    act(() =>
+      fxStore
+        .getState()
+        .set({ kind: "hint", message: "m", faces: 1, hearts: 1 }),
+    );
+    expect(fxCells(container)).toEqual([]);
+  });
+
   test("only the outcome's cell gets the effect", () => {
     const { container } = render(view());
     act(() =>

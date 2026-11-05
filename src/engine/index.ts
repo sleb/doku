@@ -4,6 +4,8 @@ export type { GenerateOptions, ShapeLimits } from "./generator";
 export { generate } from "./generator";
 export type { Hint } from "./hints";
 export { nextHint } from "./hints";
+export type { RegionNamer } from "./hintText";
+export { explain } from "./hintText";
 export { REGION_NAMES } from "./regionNames";
 export type { Conflict, ConflictReason, TapJudgement } from "./rules";
 export { findConflicts, isSolved, judgeTap } from "./rules";

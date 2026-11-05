@@ -629,6 +629,11 @@ describe("hint", () => {
     expect(shown?.message).toMatch(/only one cell left/);
   });
 
+  it("a placement hint records the placed cell; an elimination does not", () => {
+    expect(afterPlace().hintShown?.placed).toBe(first);
+    expect(live(hint(afterPlace())).hintShown?.placed).toBeUndefined();
+  });
+
   it("an elimination hint highlights and explains but writes no marks", () => {
     const s1 = afterPlace();
     const h = elimHint();
@@ -642,6 +647,7 @@ describe("hint", () => {
       cells: h.deduction.because.cells,
       targets: h.deduction.eliminate,
       message: h.message,
+      deduction: h.deduction,
     });
   });
 
@@ -661,6 +667,7 @@ describe("hint", () => {
       cells: steps[at].because.cells,
       targets: steps[at].eliminate,
       message: expect.stringMatching(/after the forced moves/),
+      deduction: steps[at],
     });
   });
 

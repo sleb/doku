@@ -254,7 +254,7 @@ Tailwind only generates classes it can see statically, so region colors are decl
 
 ```ts
 export function regionClass(palette: "default" | "accessible", region: number): string; // "bg-region-3" | "bg-region-a-3"
-// REGION_NAMES (["red", "orange", ..., ], same order as the tokens) lives in src/engine/regionNames.ts, so hint text can use it too; Cell.tsx imports it from the engine
+// REGION_NAMES (["red", "orange", ..., ], same order as the tokens) lives in src/engine/regionNames.ts, so hint text can use it; cell labels use them too on the default palette without patterns ("red region") and "region N" otherwise, via the shared rule in src/ui/board/regionNaming.ts (M6-12)
 ```
 
 Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. (M2 history) The demo level became the first generated level in `src/levels/pack-1.json` (the original `demo-7` was replaced in M5-03), available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
@@ -322,7 +322,7 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 **Components, jsdom**
 
 - `CellView`: renders empty/face/wrong with the right label (wrong shows the red ✕); single click calls `onToggleMark(index)`, a `HOLD_TOTAL_MS` press calls `onPlaceFace(index)` once (fake timers), with no glow before `HOLD_DELAY_MS` and no placement at `HOLD_MS`; early release, leave, cancel and blur do not; double-click toggles twice; `x` on a focused cell calls `onToggleMark(index)` and a held `Space` calls `onPlaceFace(index)` without a click; `disabled` blocks both, and face and wrong cells are disabled while the player's ✕ is not; `isConflict` adds the ring; re-render with identical props does not re-render (spy via a render counter in a wrapper).
-- `Board`: N rows × N gridcells; labels carry row, column, region name; region-border classes appear where `geometry` says; tapping one cell re-renders only that `CellView`.
+- `Board`: N rows × N gridcells; labels carry row, column and region number; region-border classes appear where `geometry` says; tapping one cell re-renders only that `CellView`.
 - `Hearts`: `aria-label` for 3/2/0 remaining; correct number of filled icons.
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
 - `GameScreen` (real store): holding each solution cell shows the win dialog; three wrong holds show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; focusing a solution cell and holding `Space` places a face, `x` toggles a ✕; Retry returns to a fresh board with 3 hearts.

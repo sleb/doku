@@ -181,3 +181,10 @@ test.describe("tutorial", () => {
     });
   }
 });
+
+test("a placement hint rings the new face on touch", async ({ page }) => {
+  await open(page, 375, 667, levelBySize(7).id);
+  await page.getByRole("button", { name: "Hint, costs one heart" }).tap();
+  await expect(page.locator("[data-hint-ring]")).toBeVisible();
+  await expect(page.getByTestId("hint-banner")).toHaveText(/\S/);
+});

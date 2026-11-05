@@ -93,4 +93,28 @@ describe("explain", () => {
   ])("%s", (_name, deduction, expected) => {
     expect(explain(deduction)).toBe(expected);
   });
+
+  it("a namer replaces the colour names; undefined falls back to region numbers", () => {
+    const none = () => undefined;
+    expect(
+      explain(make("single-candidate", [region(0)], { place: 5 }), none),
+    ).toBe("Region 1 has only one cell left, so its face goes there.");
+    expect(
+      explain(
+        make("subset-regions-lines", [region(0), region(2), row(2), row(3)]),
+        none,
+      ),
+    ).toBe(
+      "Regions 1 and 3 only fit in rows 3 and 4, so those rows belong to them and the rest of their cells cannot hold a face.",
+    );
+  });
+
+  it("a namer can supply its own names", () => {
+    expect(
+      explain(
+        make("single-candidate", [region(1)], { place: 5 }),
+        () => "teal",
+      ),
+    ).toBe("The teal region has only one cell left, so its face goes there.");
+  });
 });

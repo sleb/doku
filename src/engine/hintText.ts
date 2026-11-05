@@ -7,8 +7,15 @@ import type { Deduction, TechniqueId, UnitRef } from "./techniques";
 // ("the red region"), falling back to a number past the end of the name list.
 
 const noun = (u: UnitRef) => (u.kind === "col" ? "column" : u.kind);
+/** Names a region by id, or undefined to fall back to its number. */
+export type RegionNamer = (region: number) => string | undefined;
+
+const colourNames: RegionNamer = (id) => REGION_NAMES[id];
+
+// The explanation currently being built; set by `explain` for its synchronous run.
+let namer: RegionNamer = colourNames;
 const regionName = (u: UnitRef): string | undefined =>
-  u.kind === "region" ? REGION_NAMES[u.id] : undefined;
+  u.kind === "region" ? namer(u.id) : undefined;
 const label = (u: UnitRef) => {
   const name = regionName(u);
   return name ? `the ${name} region` : `${noun(u)} ${u.id + 1}`;
@@ -57,6 +64,15 @@ function subsetText(units: UnitRef[]): string {
   return `${capital(group(subset))} only fit in ${group(owned)}, so those ${plural(owned[0].kind)} belong to them and the rest of their cells cannot hold a face.`;
 }
 
-export function explain(d: Deduction): string {
-  return TEMPLATES[d.technique](d.because.units);
+/** The hint text for a deduction; regions are named by `names` (colours by default). */
+export function explain(
+  d: Deduction,
+  names: RegionNamer = colourNames,
+): string {
+  namer = names;
+  try {
+    return TEMPLATES[d.technique](d.because.units);
+  } finally {
+    namer = colourNames;
+  }
 }

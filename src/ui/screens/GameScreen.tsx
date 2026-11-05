@@ -91,6 +91,11 @@ export function GameScreen({
     [hintShown],
   );
 
+  const hintRing =
+    hintShown?.placed === undefined
+      ? undefined
+      : { cell: hintShown.placed, key: hintsUsed };
+
   if (status === "idle" || !level || !board || !wrong) return null;
 
   const levelNumber = levelIndex(level.id) + 1;
@@ -123,6 +128,7 @@ export function GameScreen({
               conflicts={conflicts}
               causes={hintCells}
               targets={hintTargets}
+              hintRing={hintRing}
               disabled={finished || paused}
               inputMode={inputMode}
               palette={palette}

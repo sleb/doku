@@ -239,6 +239,26 @@ body {
   animation: fx-ring 220ms ease-out forwards;
 }
 
+/* Hint ring (POLISH_DESIGN 9.4): holds, then fades over the last 30%. Opacity
+   only, so reduced motion needs no variant. Duration is HINT_RING_MS, set inline. */
+.hint-ring {
+  border-radius: 9999px;
+  margin: 8%;
+  border: 3px solid;
+  animation: hint-ring 2000ms linear forwards;
+}
+
+@keyframes hint-ring {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 [data-pop="true"] {
   animation: heart-pop 280ms ease-out;
 }

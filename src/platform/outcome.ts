@@ -12,7 +12,9 @@ interface Counts {
 
 export type Outcome =
   | ({ kind: "win" } & Counts)
-  | ({ kind: "place" | "wrong" | "lose"; cell: number } & Counts);
+  | ({ kind: "place" | "wrong" | "lose"; cell: number } & Counts)
+  /** A hint taken: `cell` is the placed face, absent for an elimination. */
+  | ({ kind: "hint"; cell?: number; message: string } & Counts);
 
 function faceCount(state: GameState): number {
   return state.board ? state.board.filter((c) => c === Cell.Face).length : 0;
@@ -44,13 +46,20 @@ export function outcomeFor(prev: GameState, next: GameState): Outcome | null {
   if (prev.status !== "playing") return null;
   const after = { faces: faceCount(next), hearts: next.hearts };
   if (next.status === "won") return { kind: "win", ...after };
+  if (hinted(prev, next)) {
+    const cell = changedCell(prev, next);
+    const message = "hintShown" in next ? (next.hintShown?.message ?? "") : "";
+    return {
+      kind: "hint",
+      ...(cell === undefined ? {} : { cell }),
+      message,
+      ...after,
+    };
+  }
   const failed = next.status === "lost" || next.hearts < prev.hearts;
-  const isHint = hinted(prev, next);
-  const cell =
-    failed && !isHint ? newWrongCell(prev, next) : changedCell(prev, next);
+  const cell = failed ? newWrongCell(prev, next) : changedCell(prev, next);
   if (cell === undefined) return null;
   if (next.status === "lost") return { kind: "lose", cell, ...after };
-  if (isHint) return { kind: "place", cell, ...after };
   if (next.hearts < prev.hearts) return { kind: "wrong", cell, ...after };
   if (after.faces > faceCount(prev)) return { kind: "place", cell, ...after };
   return null;

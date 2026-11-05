@@ -65,7 +65,7 @@ export interface Outcome {
 export function outcomeFor(prev: GameState, next: GameState): Outcome | null;
 ```
 
-The decision order is exactly `feedbackFor`'s today (`prev` not `playing` → null; won; lost; hint → place; heart drop → wrong; more faces → place), because that order already handles the corner cases the M4 reviews found (a hint is `place`, not `wrong`; a restore is not an outcome). What is new is `cell`: the single index whose value changed between `prev.board` and `next.board` (for a hint, the committed cell; for a heart drop, the new locked ✕). The order above still returns `lose` before the heart-drop branch, but a `lose` produced by a wrong tap (the last heart) keeps that `cell`, so the shake and red ✕ of §6.2 still target it; only `win` has no cell. `HapticKind` is removed in favour of `OutcomeKind`; `haptics.ts` imports it from the new module and `GameScreen` calls the `useFeedback` hook. `feedback.ts` and its test are deleted and ported (fearless refactor, no shim).
+The decision order is exactly `feedbackFor`'s today (`prev` not `playing` → null; won; lost; hint (kind `hint`, M6-12, §9.4); heart drop → wrong; more faces → place), because that order already handles the corner cases the M4 reviews found (a hint is `hint`, not `wrong`; a restore is not an outcome). What is new is `cell`: the single index whose value changed between `prev.board` and `next.board` (for a hint, the committed cell; for a heart drop, the new locked ✕). The order above still returns `lose` before the heart-drop branch, but a `lose` produced by a wrong tap (the last heart) keeps that `cell`, so the shake and red ✕ of §6.2 still target it; only `win` has no cell. The `hint` kind is an `Outcome` kind only (it also carries `message`); haptics and sound take `OutcomeKind` and receive `place` for it. `HapticKind` is removed in favour of `OutcomeKind`; `haptics.ts` imports it from the new module and `GameScreen` calls the `useFeedback` hook. `feedback.ts` and its test are deleted and ported (fearless refactor, no shim).
 
 Why one function: three channels disagreeing about what just happened (a buzz for a hint but a "wrong" sound) is the bug to design out. It is also why the tests for "what counts as an outcome" stay in one place (§10).
 
@@ -271,7 +271,7 @@ The tutorial boards are below the app's 7..11 size range (`MIN_SIZE` is a *loade
 - Flow: `complete` waits 600 ms (0 under reduced motion) then loads the next step; `broken` shows `onWrong` in the card, speaks it after the generic "Not there", locks the board and resets the same step after 900 ms. The board is disabled outside `progress`. The last step has a single Finish button in place of Skip, so a player is never stuck. Focus goes to the card heading on each new step.
 - Generalised: `ActionBar({store?, only?})` (the input-mode toggle always shows), `useShortcuts({store, pause, only, holdOwner})` (the tutorial passes `pause: false` and the step's `controls`), `useHoldRamp(store)`. `Board` takes `highlight`, `Cell` sets `data-highlight` (a dashed ring in a fixed dark colour with a light halo, because the board is the same in both themes) and appends ", highlighted" to its label.
 - In `inputMode: "face"` a pointer cannot draw a ✕, so the ✕ steps tell the player to turn off "Tap places faces" (or press X); the toggle is always shown.
-- Copy is a first draft; polish is a separate pass. The hint explanation toast (§9.4) and the axe suites are not part of M6-11.
+- Copy is a first draft; polish is a separate pass. The hint presentation (§9.4) and the axe suites are not part of M6-11.
 
 ## 8. Theme and palette
 
@@ -317,7 +317,7 @@ The default 11-color palette cannot be made color-blind-safe by hue alone: relia
 
 Tests (node): in `palette.test.ts`, for both palettes, glyph, wrong-tap and hold-ring contrast ≥ 3:1 on every region and pairwise RGB distance ≥ 40. In `palette.cvd.test.ts`, test-only Machado 2009 (severity 1.0) simulation in linear RGB, then sRGB → Lab and CIEDE2000 (sanity-tested against Sharma's reference pairs). Patterns can be switched off, so colour alone must separate the regions: one ΔE floor per simulation over **all** 55 pairs, not only pairs that differ in pattern.
 
-**Landed in M6-09:** the accessible hexes (`--color-region-a-0..10`) were found by a constrained search maximizing the minimum ΔE over normal vision and the three simulations, subject to wrong-tap ≥ 3:1. Measured minimum ΔE (CIEDE2000): protanopia 13.44, deuteranopia 13.24, tritanopia 13.32 (normal vision about 13.4); the asserted floor is 12.5 for each. For reference, the default palette's minimum is 14.0 under normal vision and only 1.58 under deuteranopia. Cell `aria-label` names regions by number ("region 3"), never by colour, so the spoken label cannot contradict either palette. The final "real eyes" check (play 7×7, 9×9, 11×11 and use a deficiency simulator) is a manual step.
+**Landed in M6-09:** the accessible hexes (`--color-region-a-0..10`) were found by a constrained search maximizing the minimum ΔE over normal vision and the three simulations, subject to wrong-tap ≥ 3:1. Measured minimum ΔE (CIEDE2000): protanopia 13.44, deuteranopia 13.24, tritanopia 13.32 (normal vision about 13.4); the asserted floor is 12.5 for each. For reference, the default palette's minimum is 14.0 under normal vision and only 1.58 under deuteranopia. M6-09 first labelled cells by number only; M6-12 superseded that so the label matches the hint text (§9.4). The final "real eyes" check (play 7×7, 9×9, 11×11 and use a deficiency simulator) is a manual step.
 
 ### 8.4 Patterns
 
@@ -346,6 +346,7 @@ The pattern index is the region index, so regions keep their pattern for the who
 |---|---|
 | place | "Face placed, row 3, column 5. 4 of 8 placed." |
 | wrong | "Not there. Row 3, column 5 is wrong. 2 hearts left." |
+| hint | The hint message, then for a placement "Face placed, row 3, column 5." (no heart or progress count). The banner is not live, so this is the only speaker. |
 | win | "Solved in 1 minute 23 seconds." (with "New best" when it is) |
 | lose | "Out of hearts. Retry is available." |
 | inputMode change | "Tapping now places faces." / "Tapping now marks cells." |
@@ -366,7 +367,12 @@ Cell labels (`Row 3, column 5, emerald region, face`) already exist. Added: the 
 
 ### 9.4 Hint presentation (conditional on M5)
 
-`DESIGN.md` §7 plans a `<HintToast>` (highlight the cell and explain the technique). M5-07 changes `nextHint` to `{ cell, technique, explanation }` but its stories do not include UI. If M5 ships first, polish adds: the hinted cell gets the `place` effect plus a 2-second ring, and a toast near the action bar shows `explanation` (also sent to the announcer). If M5 slips, this story is skipped and the stub hint stays; the rest of the milestone has no dependency on it. (§12 Q1.)
+**Delivered (M6-12).** M5 landed (`nextHint` returns `{ deduction, message }`; `HintBanner`, `causes`/`targets` markers). There is no separate `<HintToast>`: the banner above the action bar is the explanation surface and does not auto-dismiss (WCAG 2.2.1); only the ring is timed.
+
+- **Outcome.** `outcomeFor` reports a rise in `hintsUsed` as kind `hint` (after win/lose, before the heart-drop check), carrying `message` and, for a placement, the `cell` (absent for an elimination). A placement that wins is still `win`. Haptics and sound treat `hint` as `place` (mapped in `useFeedback`); `Board` gives a `hint` with a cell the `place` effect. This also gives an elimination hint haptic, sound and an announcement, which it lacked.
+- **One speaker.** `HintBanner` is not a live region; the announcer speaks the message plus, for a placement, "Face placed, row r, column c." A free re-ask changes no state, so nothing is spoken or rung.
+- **Ring.** `HintShown.placed` (never saved) names the placed cell; `Board` takes `hintRing {cell, key}` (key = `hintsUsed`, so a new hint restarts it) and the cell renders a `hint-ring` span: palette ring plus white under-stroke, holds then fades over `HINT_RING_MS` (2000, `src/ui/board/hintRing.ts`). The animation is opacity-only, so reduced motion needs no variant and the ring still shows its full time. Causes and targets keep their persistent markers; an elimination hint has no timed ring.
+- **Region naming.** Cell labels and hint text share one palette-aware rule (`regionNamer`/`regionLabel`, `src/ui/board/regionNaming.ts`): colour names ("red region") on the default palette without patterns, "region N" (1-based) when the accessible palette or patterns are on, so a screen-reader user never hears a colour the board does not name. Hint text: `explain(deduction, namer?)` uses colour names on the default palette and "region N" when the accessible palette or patterns are on (`hintMessage`, `src/ui/screens/hintMessage.ts`). `HintShown` keeps the `deduction` so the text renders at read time; `message` stays the default-naming text used to tell hints apart.
 
 ## 10. Testing
 
@@ -406,7 +412,7 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 
 ## 12. Open questions
 
-1. **Resolved: hint UI ownership (§9.4).** The highlight-and-explain toast belongs here, conditional on M5-07 returning the object form. If M5-07 is expanded to include it, drop that story.
+1. **Resolved: hint UI ownership (§9.4).** Presentation (ring, banner, announcement) belongs here and shipped as M6-12 once M5 landed.
 2. **Resolved: accessible palette thresholds.** Floors set when tuned (M6-09): ΔE 12.5 per simulation over all pairs (§8.3).
 3. **Reduced-motion switch.** Only the OS preference is honoured. Add an in-app "Reduce motion" setting only if someone needs animations off on a platform whose OS flag is not reachable (older WebViews).
 4. **Dark board.** The board is the same in both themes (§8.1). If a bright board in a dark frame is jarring in play, a dark region palette is a follow-up with its own glyph/contrast pass.
@@ -434,7 +440,7 @@ Titled `M6-NN`, each strictly TDD, each plannable with `/doku-plan`. Order is by
 | 09 | Patterns and accessible palette | `patterns.ts`, accessible tokens, `regionClass`, palette tests with CVD simulation |
 | 10 | Theme | semantic tokens migration, `data-theme`, no-flash script, `resolveTheme`, Theme control, contrast test |
 | 11 | Interactive tutorial | `steps.ts`, `<Tutorial>`, private store, `ActionBar` store prop, `seenTutorial`, Pause → Replay |
-| 12 | Hint presentation | highlight and explanation toast (only if M5-07 has landed) |
+| 12 | Hint presentation | hint ring, banner as the explanation, announcement (M5 landed) |
 | 13 | Accessibility e2e and audit | `@axe-core/playwright` specs, 200 % zoom spec, touch-target audit, focus-ring unification, fixes |
 | 14 | Docs sync | `DESIGN.md` §7, §8, §12, §13 (and the daily-puzzle line), `APP_DESIGN.md` §1, §6, §7, `BOARD_DESIGN.md` §4.3, §4.4 and §8.8 (overlay replaces the border trace), `MOBILE_DESIGN.md` §3, §6 and non-goals (ramp, `place` style), README |
 
