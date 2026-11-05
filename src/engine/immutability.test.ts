@@ -3,7 +3,7 @@ import { type Fixture, fixtures } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
 import { nextHint } from "./hints";
 import { findConflicts, isSolved, judgeTap } from "./rules";
-import { countSolutions, solve } from "./solver";
+import { countSolutions, solutions, solve } from "./solver";
 import { type Board, Cell, type Level } from "./types";
 import { LevelError, loadLevel, validateLevel } from "./validate";
 
@@ -109,6 +109,7 @@ describe.each(fixtures)(
         solve: () => solve(level),
         countSolutions: () => countSolutions(level),
         "countSolutions(limit 10)": () => countSolutions(level, 10),
+        "solutions(limit 3)": () => solutions(level, 3),
         validateLevel: () => validateLevel(level),
         loadLevel: () => {
           if (name !== EXPECTED_REJECTED) return loadLevel(level);
@@ -159,6 +160,10 @@ describe.each(fixtures)(
         for (const conflict of findConflicts(readOnlyBoard(cells), level)) {
           expect(arrays).not.toContain(conflict.cells);
         }
+      }
+
+      for (const placement of solutions(level, 3)) {
+        expect(arrays).not.toContain(placement);
       }
 
       const issues = validateLevel(level);

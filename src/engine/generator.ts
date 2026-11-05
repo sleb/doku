@@ -1,6 +1,7 @@
-import type { Rng } from "./seed";
+import { makeRng, type Rng } from "./seed";
 import { solutions } from "./solver";
 import type { Level } from "./types";
+import { MAX_SIZE, MIN_SIZE } from "./validate";
 
 export interface ShapeLimits {
   /** Smallest size of any region beyond the allowed singletons. */
@@ -227,4 +228,57 @@ export function repairUniqueness(
     regions[Math.floor(chosen.cell / n)][chosen.cell % n] = chosen.to;
     current = { ...current, regions };
   }
+}
+
+// Repair moves allowed per candidate.
+const MAX_MOVES = 60;
+const DEFAULT_MAX_ATTEMPTS = 2000;
+
+export interface GenerateOptions {
+  size: number;
+  seed: string;
+  /** Attempts before giving up; the only budget, so results never depend on time. */
+  maxAttempts?: number;
+  shape?: Partial<ShapeLimits>;
+  /** Checked once per attempt; abort returns null. */
+  signal?: AbortSignal;
+}
+
+// One attempt: solution, regions, uniqueness repair, shape filter. The result
+// has an empty id and no seed; generate() fills those in.
+export function generateCandidate(
+  size: number,
+  rng: Rng,
+  shape?: Partial<ShapeLimits>,
+): Level | null {
+  const limits = { ...defaultShape(size), ...shape };
+  const solution = randomSolution(size, rng);
+  const regions = growRegions(size, solution, rng, limits);
+  const repaired = repairUniqueness(
+    { id: "", size, regions, solution },
+    rng,
+    MAX_MOVES,
+  );
+  if (!repaired || !passesShape(repaired.regions, limits)) return null;
+  return repaired;
+}
+
+// Runs attempts `${seed}#0`, `${seed}#1`, ... and returns the first candidate
+// that survives. id and seed are both the attempt seed, so
+// generateCandidate(size, makeRng(level.seed)) reproduces the level.
+export function generate(options: GenerateOptions): Level | null {
+  const { size, seed, shape, signal } = options;
+  if (!Number.isInteger(size) || size < MIN_SIZE || size > MAX_SIZE) {
+    throw new RangeError(
+      `size must be an integer in ${MIN_SIZE}..${MAX_SIZE}, got ${size}`,
+    );
+  }
+  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  for (let k = 0; k < maxAttempts; k++) {
+    if (signal?.aborted) return null;
+    const attemptSeed = `${seed}#${k}`;
+    const candidate = generateCandidate(size, makeRng(attemptSeed), shape);
+    if (candidate) return { ...candidate, id: attemptSeed, seed: attemptSeed };
+  }
+  return null;
 }

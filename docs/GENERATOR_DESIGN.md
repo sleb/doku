@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §4, §4.1, §10 and §12 for milestone 5 ("Generator + level packs + difficulty tiers"). It expands `docs/ENGINE_DESIGN.md` §9, which stays the short reference; if the two disagree, this document wins on the generator and `ENGINE_DESIGN.md` wins on the technique ladder (§6) and solvers (§7). Sync both when this lands.
 
-**Status:** draft for review. Nothing here is implemented.
+**Status:** draft for review. M5-01 (`seed.ts`) and M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) are implemented; see §13 for what differs from this text. The rest is not.
 
 ## 1. Goals and non-goals
 
@@ -253,3 +253,23 @@ Stories 01 to 03 deliver value on their own (a real, varied, all-sizes pack) bef
 3. **Curve design:** the order of the curriculum (all Easy first, or interleaving sizes and tiers for variety) is a game-design decision made once real levels exist.
 4. **Seed string format for the daily puzzle** (milestone 6): date-derived, e.g. `daily/2026-11-04`; nothing in this design blocks it.
 5. **Retire `Level.seed`?** Kept for reproduction and debugging; it grows the pack JSON slightly. Revisit if pack size matters.
+
+## 13. As built in M5-02
+
+Deviations and measurements from the first implementation (`src/engine/generator.ts`).
+
+- **API.** `generate` takes no `tier` yet (arrives with `rate`). `generateCandidate` returns a level with `id: ""` and no `seed`; `generate` sets `id = seed = "${seed}#${k}"`. `index.ts` exports `generate`, `solutions` and the types `GenerateOptions`, `ShapeLimits`; the other steps are exported from `generator.ts` for tests only. A non-integer or out-of-range `size` throws `RangeError` before any work; an aborted signal returns `null`.
+- **Repair looks at 8 rivals, not 1** (`RIVALS`). With one rival, all its differing faces can sit mid-region (cut vertices), leaving no legal move and a dead end; examining 8 rivals per move widens the candidate set. Candidates are deduplicated `(cell, to)` pairs; the pick is still uniform. `maxMoves` is 60 (internal). On the pathological `multiSolutionLevel7` fixture (row regions, 646 placements) only about 1 seed in 75 converges within 60 moves, so its test uses a scanned seed; real candidates converge far more often (below).
+- **Region size targets** are the simple version: `k` singletons (`k` uniform in `[0, maxSingletons]`), every other region starts at `minRegion`, and the spare cells are handed out one at a time to a random region still below `maxRegion`. Growth then picks a region weighted by its remaining target, falling back to any region with a frontier.
+- **Shape defaults** unchanged (`minRegion` 2, `maxSingletons` 1 for n <= 8 and 2 for n >= 9, `maxRegion` = ceil(0.35 n^2)). `growRegions` meets them in at least 90% of draws (tested).
+- **Measured** with `generate({ size, seed: "p0".."p24" })`, `maxAttempts` 2000 (attempts to first success; acceptance = successes / attempts overall):
+
+| size | median attempts | p90 | max | acceptance | ms per level |
+|---|---|---|---|---|---|
+| 7 | 2 | 6 | 11 | 35% | 1 |
+| 8 | 3 | 9 | 14 | 23% | 3 |
+| 9 | 5 | 17 | 21 | 16% | 10 |
+| 10 | 6 | 24 | 32 | 11% | 62 |
+| 11 | 10 | 24 | 63 | 7.6% | 450 |
+
+  Repair converges well enough at 11x11 that the §10 fallbacks were not needed. The cost at 11x11 is the full-tree `solutions` call on surviving candidates; the property test (25 seeds x 5 sizes) takes about 12 s, mostly size 11, and has a 60 s timeout.

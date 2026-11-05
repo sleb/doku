@@ -2,17 +2,21 @@ import { describe, expect, it } from "vitest";
 import { multiSolutionLevel7 } from "./__fixtures__/levels";
 import {
   defaultShape,
+  generate,
+  generateCandidate,
   growRegions,
   passesShape,
   randomSolution,
   repairUniqueness,
 } from "./generator";
 import { makeRng, type Rng } from "./seed";
-import { countSolutions } from "./solver";
+import { countSolutions, solve } from "./solver";
 import type { Level } from "./types";
 import { validateLevel } from "./validate";
 
 const SIZES = [7, 8, 9, 10, 11];
+// A seed whose first attempt (#0) fails; found by scanning.
+const NEEDS_RETRY = "retry";
 
 describe("randomSolution", () => {
   it.each(SIZES)("is a spaced permutation for n=%i", (n) => {
@@ -185,5 +189,154 @@ describe("repairUniqueness", () => {
     const fixed = repairUniqueness(level, makeRng(REPAIR_SEED), 60);
     if (!fixed) throw new Error("repair failed");
     expect(repairUniqueness(fixed, makeRng("q"), 0)).toBe(fixed);
+  });
+});
+
+describe("generateCandidate", () => {
+  it("returns null or a valid, uniquely solvable level", () => {
+    let made = 0;
+    for (let s = 0; s < 20; s++) {
+      const level = generateCandidate(8, makeRng(`c${s}`));
+      if (!level) continue;
+      made++;
+      expect(validateLevel(level)).toEqual([]);
+      expect(countSolutions(level, 5)).toBe(1);
+      expect(solve(level)).toEqual(level.solution);
+      expect(passesShape(level.regions, defaultShape(8))).toBe(true);
+    }
+    expect(made).toBeGreaterThan(0);
+  });
+});
+
+describe("generate", () => {
+  it.each(SIZES)(
+    "is valid and unique for n=%i over 25 seeds",
+    (size) => {
+      for (let s = 0; s < 25; s++) {
+        const level = generate({ size, seed: `p${s}` });
+        expect(level).not.toBeNull();
+        if (!level) continue;
+        expect(validateLevel(level)).toEqual([]);
+        expect(countSolutions(level)).toBe(1);
+        expect(solve(level)).toEqual(level.solution);
+      }
+    },
+    60_000,
+  );
+
+  it("is deterministic and reproducible from level.seed", () => {
+    const a = generate({ size: 8, seed: "det" });
+    expect(a).toEqual(generate({ size: 8, seed: "det" }));
+    if (!a) throw new Error("no level");
+    expect(a.id).toBe(a.seed);
+    expect(a.seed).toMatch(/^det#\d+$/);
+    const candidate = generateCandidate(8, makeRng(a.seed as string));
+    expect(candidate).toEqual({ ...a, id: "", seed: undefined });
+  });
+
+  it("returns null when the attempt budget is spent", () => {
+    expect(
+      generate({ size: 11, seed: NEEDS_RETRY, maxAttempts: 1 }),
+    ).toBeNull();
+    expect(generate({ size: 11, seed: NEEDS_RETRY })).not.toBeNull();
+  });
+
+  it("returns null for a pre-aborted signal", () => {
+    const signal = AbortSignal.abort();
+    expect(generate({ size: 7, seed: "x", signal })).toBeNull();
+  });
+
+  it.each([6, 12, 7.5, Number.NaN])("throws RangeError for size %s", (size) => {
+    expect(() => generate({ size, seed: "x" })).toThrow(RangeError);
+  });
+
+  it("does not mutate its options", () => {
+    const shape = Object.freeze({ maxSingletons: 2 });
+    const options = Object.freeze({ size: 7, seed: "imm", shape });
+    expect(() => generate(options)).not.toThrow();
+  });
+
+  it("matches the golden 7x7 level", () => {
+    expect(generate({ size: 7, seed: "golden" })).toMatchInlineSnapshot(`
+      {
+        "id": "golden#1",
+        "regions": [
+          [
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+          ],
+          [
+            0,
+            0,
+            1,
+            1,
+            2,
+            1,
+            2,
+          ],
+          [
+            0,
+            0,
+            0,
+            1,
+            2,
+            2,
+            2,
+          ],
+          [
+            3,
+            3,
+            3,
+            1,
+            2,
+            2,
+            5,
+          ],
+          [
+            3,
+            3,
+            3,
+            4,
+            6,
+            2,
+            5,
+          ],
+          [
+            3,
+            3,
+            3,
+            6,
+            6,
+            5,
+            5,
+          ],
+          [
+            3,
+            3,
+            3,
+            6,
+            6,
+            5,
+            5,
+          ],
+        ],
+        "seed": "golden#1",
+        "size": 7,
+        "solution": [
+          0,
+          2,
+          5,
+          1,
+          3,
+          6,
+          4,
+        ],
+      }
+    `);
   });
 });
