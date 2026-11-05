@@ -73,7 +73,7 @@ export function Dialog({
   return (
     <div
       ref={root}
-      className="fixed inset-0 z-10 flex items-center justify-center bg-black/50 safe-padding"
+      className="dialog-in fixed inset-0 z-10 flex items-center justify-center bg-black/50 safe-padding"
     >
       <div
         onKeyDown={onKeyDown}

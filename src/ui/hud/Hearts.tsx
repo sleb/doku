@@ -1,20 +1,33 @@
+import { useStore } from "zustand";
+import { fxStore } from "../fx/fxStore";
+
 export function Hearts({ remaining, max }: { remaining: number; max: number }) {
+  // Narrow selector: only Hearts re-renders on an outcome, and only when the popped index changes.
+  const popped = useStore(fxStore, (s) =>
+    s.last && (s.last.kind === "wrong" || s.last.kind === "lose")
+      ? s.last
+      : null,
+  );
   return (
     <div role="img" aria-label={`${remaining} of ${max} hearts`}>
       {Array.from({ length: max }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, order-stable list
-        <HeartIcon key={i} filled={i < remaining} />
+        <HeartIcon
+          key={popped?.hearts === i ? `pop${popped.seq}` : i}
+          filled={i < remaining}
+          pop={popped?.hearts === i}
+        />
       ))}
     </div>
   );
 }
 
-function HeartIcon({ filled }: { filled: boolean }) {
+function HeartIcon({ filled, pop }: { filled: boolean; pop: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
       data-filled={filled}
+      data-pop={pop ? "true" : undefined}
       className={`inline-block size-6 stroke-2 transition-[scale,fill,stroke] duration-200 motion-reduce:transition-none ${
         filled
           ? "fill-current stroke-red-500 text-red-500"

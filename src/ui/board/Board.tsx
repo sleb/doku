@@ -5,8 +5,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { useStore } from "zustand";
 import type { Board as BoardData, Level } from "../../engine";
 import { isLocked } from "../../store/game";
+import { fxStore } from "../fx/fxStore";
 import { CellView } from "./Cell";
 import { type CellGeometry, cellGeometry } from "./geometry";
 import { useNoDoubleTapLoupe } from "./useNoDoubleTapLoupe";
@@ -44,6 +46,16 @@ export function Board({
     setActiveLevel(level);
     setActive(0);
   }
+  const last = useStore(fxStore, (s) => s.last);
+  // A lose is the final wrong tap; a win has no cell here (the wave is separate).
+  const fxKind =
+    last?.cell === undefined
+      ? undefined
+      : last.kind === "place"
+        ? "place"
+        : last.kind === "wrong" || last.kind === "lose"
+          ? "wrong"
+          : undefined;
   const gridRef = useNoDoubleTapLoupe<HTMLDivElement>();
   const geometry = useMemo(() => cellGeometry(level), [level]);
   const style = {
@@ -110,6 +122,8 @@ export function Board({
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
                 holdOwner={holdOwner}
+                fx={g.index === last?.cell ? fxKind : undefined}
+                fxSeq={g.index === last?.cell ? last?.seq : undefined}
               />
             </div>
           ))}
