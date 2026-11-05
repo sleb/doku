@@ -8,6 +8,7 @@ import {
   passesShape,
   randomSolution,
   repairUniqueness,
+  tryCandidate,
 } from "./generator";
 import { makeRng, type Rng } from "./seed";
 import { countSolutions, solve } from "./solver";
@@ -338,5 +339,25 @@ describe("generate", () => {
         ],
       }
     `);
+  });
+});
+
+describe("tryCandidate", () => {
+  const results = Array.from({ length: 200 }, (_, k) =>
+    tryCandidate(9, makeRng(`t${k}`)),
+  );
+
+  it("reports why a candidate was rejected", () => {
+    const rejects = new Set(
+      results.flatMap((r) => ("reject" in r ? [r.reject] : [])),
+    );
+    expect(rejects).toEqual(new Set(["repair", "shape"]));
+  });
+
+  it("agrees with generateCandidate", () => {
+    results.slice(0, 40).forEach((r, k) => {
+      const c = generateCandidate(9, makeRng(`t${k}`));
+      expect(c).toEqual("level" in r ? r.level : null);
+    });
   });
 });
