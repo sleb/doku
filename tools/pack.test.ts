@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { type Level, makeRng } from "../src/engine";
-import { multiSolutionLevel7, uniqueLevel7 } from "../src/engine/__fixtures__/levels";
-import { generateCandidate } from "../src/engine/generator";
+import { generate, type Level } from "../src/engine";
+import {
+  multiSolutionLevel7,
+  uniqueLevel7,
+} from "../src/engine/__fixtures__/levels";
 import {
   buildPack,
-  canonicalForm,
   type CurriculumRow,
+  canonicalForm,
   collectRow,
   levelId,
   rowStartIndexes,
@@ -14,7 +16,8 @@ import {
 
 const rotate = (g: number[][]): number[][] =>
   g[0].map((_, c) => g.map((row) => row[c]).reverse());
-const mirror = (g: number[][]): number[][] => g.map((row) => [...row].reverse());
+const mirror = (g: number[][]): number[][] =>
+  g.map((row) => [...row].reverse());
 
 function symmetries(g: number[][]): number[][][] {
   const out: number[][][] = [];
@@ -36,7 +39,9 @@ describe("canonicalForm", () => {
 
   it("ignores region relabelling", () => {
     const n = uniqueLevel7.size;
-    const regions = uniqueLevel7.regions.map((row) => row.map((id) => n - 1 - id));
+    const regions = uniqueLevel7.regions.map((row) =>
+      row.map((id) => n - 1 - id),
+    );
     expect(canonicalForm({ ...uniqueLevel7, regions })).toBe(
       canonicalForm(uniqueLevel7),
     );
@@ -65,11 +70,9 @@ describe("levelId", () => {
   });
 });
 
-// Real candidates for stubbing: `generate` replacement over seeds.
-const stubGenerate = ({ size, seed }: { size: number; seed: string }) => {
-  const level = generateCandidate(size, makeRng(seed));
-  return level ? { ...level, id: seed, seed } : null;
-};
+// Real 7x7 generation, the same call the CLI makes.
+const stubGenerate = ({ size, seed }: { size: number; seed: string }) =>
+  generate({ size, seed });
 
 describe("collectRow", () => {
   const row: CurriculumRow = { pack: 1, size: 7, count: 2 };
@@ -89,25 +92,13 @@ describe("collectRow", () => {
 
   it("skips a duplicate and moves to the next seed", () => {
     const calls: string[] = [];
-    const gen = ({ seed }: { size: number; seed: string }): Level => {
-      calls.push(seed);
-      return { ...uniqueLevel7, id: seed, seed };
-    };
-    const { levels } = collectRow({ ...row, count: 1 }, 1, new Set(), gen);
-    expect(levels).toHaveLength(1);
     const seen = new Set([canonicalForm(uniqueLevel7)]);
-    calls.length = 0;
-    const alt = collectRow(
-      { ...row, count: 1 },
-      1,
-      seen,
-      ({ size, seed }) => {
-        calls.push(seed);
-        return calls.length < 3
-          ? { ...uniqueLevel7, id: seed, seed }
-          : stubGenerate({ size, seed });
-      },
-    );
+    const alt = collectRow({ ...row, count: 1 }, 1, seen, ({ size, seed }) => {
+      calls.push(seed);
+      return calls.length < 3
+        ? { ...uniqueLevel7, id: seed, seed }
+        : stubGenerate({ size, seed });
+    });
     expect(calls).toEqual([
       "pack-1/7/any/0",
       "pack-1/7/any/1",
@@ -168,7 +159,9 @@ describe("buildPack", () => {
   });
 
   it("refuses an id already used by another pack", () => {
-    const other = [{ ...uniqueLevel7, id: "any-07-002" }];
+    const other = [
+      { pack: 9, levels: [{ ...uniqueLevel7, id: "any-07-002" }] },
+    ];
     expect(() => buildPack(curriculum, 1, other, { generate: gen })).toThrow(
       /any-07-002/,
     );
@@ -177,9 +170,9 @@ describe("buildPack", () => {
   it("skips boards already in lower-numbered packs", () => {
     const first = buildPack(curriculum, 1, [], { generate: gen });
     const two = buildPack(
-      [{ pack: 2, size: 7, count: 2 }],
+      [...curriculum, { pack: 2, size: 7, count: 2 }],
       2,
-      first.levels,
+      [{ pack: 1, levels: first.levels }],
       { generate: gen },
     );
     const forms = new Set(first.levels.map(canonicalForm));
