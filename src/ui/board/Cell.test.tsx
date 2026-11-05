@@ -496,3 +496,31 @@ describe("CellView", () => {
     });
   });
 });
+
+describe("CellView hint markers", () => {
+  test("has no marker by default", () => {
+    expect(renderCell().getAttribute("data-hint")).toBeNull();
+  });
+
+  test.each([
+    ["cause", "dashed"],
+    ["target", "solid"],
+  ] as const)(
+    "%s is drawn with a %s outline, not colour alone",
+    (hint, kind) => {
+      const b = renderCell({ hint });
+      expect(b.getAttribute("data-hint")).toBe(hint);
+      const marker = b.querySelector("[data-hint-marker]");
+      expect(marker?.className).toMatch(
+        kind === "dashed" ? /border-dashed/ : /border-solid/,
+      );
+      expect(b.getAttribute("aria-description")).toMatch(/hint/i);
+    },
+  );
+
+  test("does not change the accessible name", () => {
+    expect(renderCell({ hint: "target" }).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${NAME} region, empty`,
+    );
+  });
+});

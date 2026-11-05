@@ -13,6 +13,8 @@ export interface CellProps {
   state: Cell;
   isWrong: boolean;
   isConflict: boolean;
+  /** A hint on display: `cause` cells force it, `target` cells it rules out. */
+  hint?: "cause" | "target";
   disabled: boolean;
   /** Roving tabindex: 0 on the board's active cell, -1 elsewhere. */
   tabIndex?: number;
@@ -38,6 +40,7 @@ export const CellView = memo(function CellView({
   state,
   isWrong,
   isConflict,
+  hint,
   disabled,
   tabIndex,
   onToggleMark,
@@ -76,6 +79,14 @@ export const CellView = memo(function CellView({
       type="button"
       aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}`}
       data-conflict={isConflict ? "true" : undefined}
+      data-hint={hint}
+      aria-description={
+        hint === "cause"
+          ? "Hint: part of the reason"
+          : hint === "target"
+            ? "Hint: cannot hold a face"
+            : undefined
+      }
       className={className}
       data-holding={hold.holding ? "true" : undefined}
       aria-disabled={disabled ? "true" : undefined}
@@ -125,6 +136,15 @@ export const CellView = memo(function CellView({
         if (!hold.swallowClick()) toggleMark();
       }}
     >
+      {hint ? (
+        <span
+          data-hint-marker
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-1 rounded-sm border-2 border-blue-700 ${
+            hint === "cause" ? "border-dashed" : "border-solid bg-blue-700/15"
+          }`}
+        />
+      ) : null}
       {hold.holding ? (
         <svg
           data-hold-glow

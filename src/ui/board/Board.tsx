@@ -16,6 +16,10 @@ export interface BoardProps {
   board: BoardData;
   wrong: ReadonlySet<number>;
   conflicts: ReadonlySet<number>;
+  /** Cells that force the hint on display (drawn dashed). */
+  highlight?: ReadonlySet<number>;
+  /** Cells the hint on display rules out (drawn solid, tinted). */
+  targets?: ReadonlySet<number>;
   /** True when the game is not `playing`; locks the whole board. */
   disabled: boolean;
   onToggleMark: (index: number) => void;
@@ -29,6 +33,8 @@ export function Board({
   board,
   wrong,
   conflicts,
+  highlight,
+  targets,
   disabled,
   onToggleMark,
   onPlaceFace,
@@ -105,6 +111,13 @@ export function Board({
                 state={board[g.index]}
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
+                hint={
+                  targets?.has(g.index)
+                    ? "target"
+                    : highlight?.has(g.index)
+                      ? "cause"
+                      : undefined
+                }
                 disabled={disabled || isLocked(board, wrong, g.index)}
                 tabIndex={g.index === active ? 0 : -1}
                 onToggleMark={onToggleMark}

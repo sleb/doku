@@ -4,7 +4,7 @@ const button =
   "min-h-11 min-w-11 rounded border border-stone-300 px-3 disabled:opacity-40";
 
 /**
- * Undo/Redo for note toggles, and Hint (places a correct face for a heart).
+ * Undo/Redo for note toggles, and Hint (explains the next deduction for a heart).
  * Three 44px buttons in one row so the bar does not grow taller.
  */
 export function ActionBar() {
