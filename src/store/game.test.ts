@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Cell, isSolved, type Level } from "../engine";
+import { Cell, isSolved, type Level, nextHint } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import {
   type GameState,
@@ -602,28 +602,84 @@ describe("hint", () => {
   const wrongCell = Array.from({ length: size * size }, (_, i) => i).find(
     (i) => !sol.includes(i),
   ) as number;
+  // uniqueLevel7: the first ladder step places (4,2); the next two eliminate.
+  const first = 4 * size + 2;
+  const afterPlace = (): Started => live(hint(begin()));
+  const elimHint = () => {
+    const h = nextHint(afterPlace().board, uniqueLevel7);
+    if (!h || h.deduction.place !== undefined) throw new Error("unreachable");
+    return h;
+  };
 
-  it("places a correct face in the first open row and costs a heart", () => {
-    const s0 = begin();
-    const s1 = live(hint(s0));
-    expect(s1.board[sol[0]]).toBe(Cell.Face);
+  it("places the ladder's first face and costs a heart", () => {
+    const s1 = afterPlace();
+    expect(s1.board[first]).toBe(Cell.Face);
     expect(s1.hearts).toBe(MAX_HEARTS - 1);
     expect(s1.hintsUsed).toBe(1);
-    expect(s1.wrong.has(sol[0])).toBe(false);
+    expect(s1.wrong.has(first)).toBe(false);
     expect(s1.status).toBe("playing");
-    const s2 = live(hint(s1));
-    expect(s2.board[sol[1]]).toBe(Cell.Face);
-    expect(s2.hintsUsed).toBe(2);
   });
 
-  it("leaves time and other cells alone", () => {
-    const s0 = live(tick(toggleMark(begin(), 3), 900));
-    const s1 = live(hint(s0));
-    expect(s1.elapsedMs).toBe(900);
-    const changed = Array.from(s1.board).flatMap((v, i) =>
-      v === s0.board[i] ? [] : [i],
-    );
-    expect(changed).toEqual([sol[0]]);
+  it("explains a placement, highlighting the forcing cells", () => {
+    const shown = afterPlace().hintShown;
+    expect(shown?.cells).toEqual([first]);
+    expect(shown?.targets).toEqual([]);
+    expect(shown?.message).toMatch(/only one cell left/);
+  });
+
+  it("an elimination hint highlights and explains but writes no marks", () => {
+    const s1 = afterPlace();
+    const h = elimHint();
+    const s2 = live(hint(s1));
+    expect(s2.board).toEqual(s1.board);
+    expect(s2.history).toEqual(s1.history);
+    expect(s2.future).toEqual(s1.future);
+    expect(s2.hearts).toBe(MAX_HEARTS - 2);
+    expect(s2.hintsUsed).toBe(2);
+    expect(s2.hintShown).toEqual({
+      cells: h.deduction.because.cells,
+      targets: h.deduction.eliminate,
+      message: h.message,
+    });
+  });
+
+  it("asking again for the hint on display spends nothing", () => {
+    const s2 = live(hint(afterPlace()));
+    expect(hint(s2)).toBe(s2);
+  });
+
+  it("advances once the player has marked the eliminations", () => {
+    const h = elimHint();
+    let s: GameState = afterPlace();
+    for (const c of h.deduction.eliminate) s = toggleMark(s, c);
+    const next = live(hint(s));
+    expect(next.hintShown?.message).not.toBe(h.message);
+    expect(next.hearts).toBe(MAX_HEARTS - 2);
+  });
+
+  it("clears the display on a mark, a face, undo, redo, restart and pause", () => {
+    const shown = live(hint(afterPlace()));
+    expect(shown.hintShown).not.toBeNull();
+    const cell = shown.hintShown?.targets[0] as number;
+    const marked = live(toggleMark(shown, cell));
+    expect(marked.hintShown).toBeNull();
+    expect(live(undo(marked)).hintShown).toBeNull();
+    expect(live(placeFace(shown, sol[0])).hintShown).toBeNull();
+    expect(live(pause(shown)).hintShown).toBeNull();
+    expect(live(restart(shown)).hintShown).toBeNull();
+    const redone = live(redo(undo(marked)));
+    expect(redone.hintShown).toBeNull();
+    // A no-op tap keeps it.
+    expect(placeFace(shown, first)).toBe(shown);
+  });
+
+  it("starts with nothing shown", () => {
+    expect(begin().hintShown).toBeNull();
+  });
+
+  it("leaves time alone", () => {
+    const s0 = live(tick(begin(), 900));
+    expect(live(hint(s0)).elapsedMs).toBe(900);
   });
 
   it("can win with one row left and spare hearts", () => {
@@ -652,7 +708,7 @@ describe("hint", () => {
     }
   });
 
-  it("is a no-op when no row is open", () => {
+  it("is a no-op when there is nothing to hint", () => {
     const full = live(
       sol.reduce<GameState>((s, c) => placeFace(s, c), begin()),
     );
@@ -662,10 +718,10 @@ describe("hint", () => {
 
   it("overwrites the player's note and prunes it from both stacks", () => {
     let s: GameState = begin();
-    for (const c of [sol[0], 7, sol[0], 8]) s = toggleMark(s, c);
-    s = undo(undo(s)); // history [sol0, 7], future [8, sol0]
+    for (const c of [first, 7, first, 8]) s = toggleMark(s, c);
+    s = undo(undo(s)); // history [first, 7], future [8, first]
     const h = live(hint(s));
-    expect(h.board[sol[0]]).toBe(Cell.Face);
+    expect(h.board[first]).toBe(Cell.Face);
     expect(h.history).toEqual([7]);
     expect(h.future).toEqual([8]);
   });

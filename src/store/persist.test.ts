@@ -30,6 +30,7 @@ describe("toSaved", () => {
       hintsUsed: 1,
       elapsedMs: 4200,
       wrong: new Set([9, 5]),
+      hintShown: { cells: [1], targets: [2], message: "not saved" },
     };
     expect(toSaved(playing)).toEqual({
       levelId: uniqueLevel7.id,
@@ -39,6 +40,15 @@ describe("toSaved", () => {
       elapsedMs: 4200,
       hintsUsed: 1,
     });
+  });
+});
+
+describe("fromSaved hint display", () => {
+  test("restores with no hint on display", () => {
+    const { s } = played();
+    const saved = toSaved(s);
+    const back = fromSaved(saved, uniqueLevel7);
+    expect(back?.hintShown).toBeNull();
   });
 });
 

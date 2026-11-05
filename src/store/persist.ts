@@ -75,5 +75,6 @@ export function fromSaved(raw: unknown, level: Level): Started | null {
     elapsedMs: r.elapsedMs,
     history: [],
     future: [],
+    hintShown: null,
   };
 }
