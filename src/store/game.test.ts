@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Cell, isSolved, type Level, nextHint } from "../engine";
+import { Cell, isSolved, judgeTap, type Level, nextHint } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
 import { expertLevel1 } from "../engine/__fixtures__/rated";
 import { solveByTechniques } from "../engine/solver";
@@ -709,6 +709,26 @@ describe("hint", () => {
     expect(redone.hintShown).toBeNull();
     // A no-op tap keeps it.
     expect(placeFace(shown, first)).toBe(shown);
+  });
+
+  it("every action that changes the board clears the display, so a stale hint is never mistaken for the one on screen", () => {
+    const shown = live(hint(afterPlace()));
+    expect(shown.hintShown).not.toBeNull();
+    const wrongCell = Array.from({ length: shown.board.length }, (_, i) => i)
+      .filter((i) => !isLocked(shown.board, shown.wrong, i))
+      .find((i) => judgeTap(shown.level, i) === "wrong") as number;
+    const actions: [string, GameState][] = [
+      ["wrong face", placeFace(shown, wrongCell)],
+      ["mark", toggleMark(shown, shown.hintShown?.targets[0] as number)],
+      ["correct face", placeFace(shown, sol[0])],
+    ];
+    for (const [name, after] of actions) {
+      const s = live(after);
+      expect(s.board, name).not.toBe(shown.board);
+      expect(s.hintShown, name).toBeNull();
+    }
+    // A clock tick leaves the board and the display alone.
+    expect(live(tick(shown, 16)).hintShown).toBe(shown.hintShown);
   });
 
   it("starts with nothing shown", () => {

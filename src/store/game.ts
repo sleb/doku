@@ -165,7 +165,8 @@ const sameCells = (a: readonly number[], b: readonly number[]) =>
  * Ask for the simplest deduction the player has not acted on, for a heart. A
  * placement puts the face down; an elimination only highlights and explains
  * (it writes no marks and nothing to history). Asking again for the hint
- * already on display is free. Refused (same state) unless playing with a spare
+ * already on display is free (every board change clears `hintShown`, which
+ * `game.test.ts` locks in, so a stale display never matches). Refused (same state) unless playing with a spare
  * heart: a hint can win but never lose.
  */
 export function hint(state: GameState): GameState {
