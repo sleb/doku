@@ -345,7 +345,7 @@ describe("generate", () => {
 });
 
 describe("generate with a tier", () => {
-  it.each(["easy", "medium"] as const)(
+  it.each(["easy", "medium", "hard"] as const)(
     "returns unique %s levels at 7x7 over 10 seeds",
     (tier) => {
       for (let s = 0; s < 10; s++) {
@@ -377,7 +377,7 @@ describe("generate with a tier", () => {
 
   it("returns null for a tier it cannot fill within the budget", () => {
     expect(
-      generate({ size: 7, tier: "hard", seed: "h", maxAttempts: 20 }),
+      generate({ size: 7, tier: "expert", seed: "h", maxAttempts: 20 }),
     ).toBeNull();
   });
 });

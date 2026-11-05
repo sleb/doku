@@ -18,6 +18,9 @@ describe("rate goldens", () => {
           true,
         );
       }
+      if (tier === "hard") {
+        expect(steps.some((s) => s.tier === "hard")).toBe(true);
+      }
       if (tier === "medium") {
         expect(steps.some((s) => s.tier === "medium")).toBe(true);
       }
