@@ -26,7 +26,7 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
 ┌───────────────┴──────────── Frontend (TypeScript + React) ─────────────────┐
 │  UI components  →  Game store (state machine)  →  Engine (pure TS)         │
 │                                    │                  └ Worker: generator  │
-│                                    └→ Storage adapter → plugin-store           │
+│                                    └→ Storage adapter → plugin-store       │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
