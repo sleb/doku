@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { uniqueLevel7, uniqueLevel11 } from "./__fixtures__/levels";
-import { compile, neighborsOf, unitIndexes } from "./compile";
+import {
+  compile,
+  neighborsOf,
+  orthogonalNeighborsOf,
+  unitIndexes,
+} from "./compile";
 
 describe("compile", () => {
   const p = compile(uniqueLevel7);
@@ -48,5 +53,11 @@ describe("compile", () => {
     expect(neighborsOf(p, 0).sort((a, b) => a - b)).toEqual([1, 7, 8]);
     expect(neighborsOf(p, 24)).toHaveLength(8);
     expect(neighborsOf(p, 6).sort((a, b) => a - b)).toEqual([5, 12, 13]);
+  });
+
+  it("orthogonalNeighborsOf lists up, down, left, right, edges clipped", () => {
+    expect(orthogonalNeighborsOf(p, 24)).toEqual([17, 31, 23, 25]);
+    expect(orthogonalNeighborsOf(p, 0)).toEqual([7, 1]);
+    expect(orthogonalNeighborsOf(p, 48)).toEqual([41, 47]);
   });
 });
