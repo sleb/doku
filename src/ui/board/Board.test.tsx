@@ -374,3 +374,28 @@ describe("Board", () => {
     });
   });
 });
+
+describe("Board hint markers", () => {
+  test("marks causes and targets by index", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        highlight={new Set([3, 4])}
+        targets={new Set([10])}
+        disabled={false}
+        {...handlers()}
+      />,
+    );
+    const marked = Array.from(document.querySelectorAll("[data-hint]")).map(
+      (e) => [e.getAttribute("data-index"), e.getAttribute("data-hint")],
+    );
+    expect(marked).toEqual([
+      ["3", "cause"],
+      ["4", "cause"],
+      ["10", "target"],
+    ]);
+  });
+});

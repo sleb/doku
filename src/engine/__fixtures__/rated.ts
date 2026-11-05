@@ -2,8 +2,9 @@ import type { Level } from "../types";
 
 // Frozen 7x7 levels with their expected rating, found with a throwaway search
 // over generate() and checked by hand against the technique trace. Easy needs
-// no region/line confinement step; medium needs at least one; unrated stalls
-// because finishing it needs a technique the ladder does not have yet.
+// no region/line confinement step; medium needs at least one; hard needs at
+// least one Hard technique; unrated stalls because finishing it needs a
+// technique the ladder does not have yet (lookahead, #93).
 
 export const easyLevel1: Level = {
   id: "golden-easy-1",
@@ -65,8 +66,8 @@ export const mediumLevel2: Level = {
   solution: [3, 5, 1, 4, 6, 2, 0],
 };
 
-export const unratedLevel1: Level = {
-  id: "golden-unrated-1",
+export const hardLevel1: Level = {
+  id: "golden-hard-1",
   size: 7,
   regions: [
     [0, 0, 0, 0, 0, 0, 0],
@@ -80,8 +81,8 @@ export const unratedLevel1: Level = {
   solution: [1, 3, 0, 6, 4, 2, 5],
 };
 
-export const unratedLevel2: Level = {
-  id: "golden-unrated-2",
+export const hardLevel2: Level = {
+  id: "golden-hard-2",
   size: 7,
   regions: [
     [1, 1, 1, 1, 1, 0, 0],
@@ -95,15 +96,47 @@ export const unratedLevel2: Level = {
   solution: [5, 2, 6, 1, 3, 0, 4],
 };
 
+export const unratedLevel1: Level = {
+  id: "golden-unrated-1",
+  size: 7,
+  regions: [
+    [0, 0, 0, 1, 1, 1, 2],
+    [0, 1, 1, 1, 1, 2, 2],
+    [0, 0, 3, 1, 2, 2, 5],
+    [3, 3, 3, 3, 2, 2, 5],
+    [3, 3, 4, 4, 4, 4, 5],
+    [3, 3, 4, 4, 4, 5, 5],
+    [3, 3, 3, 6, 4, 5, 5],
+  ],
+  solution: [0, 2, 5, 1, 4, 6, 3],
+};
+
+export const unratedLevel2: Level = {
+  id: "golden-unrated-2",
+  size: 7,
+  regions: [
+    [2, 2, 0, 0, 1, 1, 1],
+    [2, 2, 2, 0, 1, 3, 1],
+    [2, 2, 5, 5, 3, 3, 3],
+    [2, 4, 4, 5, 3, 3, 6],
+    [2, 4, 4, 5, 5, 3, 6],
+    [2, 5, 5, 5, 5, 5, 6],
+    [2, 2, 2, 2, 5, 5, 6],
+  ],
+  solution: [2, 4, 0, 5, 1, 3, 6],
+};
+
 export const rated: {
   name: string;
   level: Level;
-  tier: "easy" | "medium" | "unrated";
+  tier: "easy" | "medium" | "hard" | "unrated";
 }[] = [
   { name: "easy1", level: easyLevel1, tier: "easy" },
   { name: "easy2", level: easyLevel2, tier: "easy" },
   { name: "medium1", level: mediumLevel1, tier: "medium" },
   { name: "medium2", level: mediumLevel2, tier: "medium" },
+  { name: "hard1", level: hardLevel1, tier: "hard" },
+  { name: "hard2", level: hardLevel2, tier: "hard" },
   { name: "unrated1", level: unratedLevel1, tier: "unrated" },
   { name: "unrated2", level: unratedLevel2, tier: "unrated" },
 ];

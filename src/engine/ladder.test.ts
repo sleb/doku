@@ -70,7 +70,7 @@ describe("solveByTechniques", () => {
   it("reports the hardest tier used, or null with no steps", () => {
     const trace = solveByTechniques(uniqueLevel7);
     const tiers = trace.steps.map((s) => s.tier);
-    const order = ["easy", "medium"] as const;
+    const order = ["easy", "medium", "hard"] as const;
     const hardest = order.filter((t) => tiers.includes(t)).pop() ?? null;
     expect(trace.hardest).toBe(hardest);
 
@@ -108,7 +108,31 @@ describe("solveByTechniques", () => {
     const trace = solveByTechniques(stuck as Level);
     expect(trace.solved).toBe(false);
     expect(
-      trace.hardest === null || ["easy", "medium"].includes(trace.hardest),
+      trace.hardest === null ||
+        ["easy", "medium", "hard"].includes(trace.hardest),
     ).toBe(true);
   });
+
+  it("is sound on hard levels, and their hard steps never touch placed cells", () => {
+    let hardSteps = 0;
+    for (const size of [7, 8, 9]) {
+      for (let i = 0; i < 6; i++) {
+        const level = generate({
+          size,
+          tier: "hard",
+          seed: `soundhard/${size}/${i}`,
+        });
+        if (!level) continue;
+        const inSolution = (c: number) =>
+          level.solution[Math.floor(c / size)] === c % size;
+        for (const step of solveByTechniques(level).steps) {
+          if (step.place !== undefined)
+            expect(inSolution(step.place)).toBe(true);
+          for (const c of step.eliminate) expect(inSolution(c)).toBe(false);
+          if (step.tier === "hard") hardSteps++;
+        }
+      }
+    }
+    expect(hardSteps).toBeGreaterThan(0);
+  }, 120_000);
 });

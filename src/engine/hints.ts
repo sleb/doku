@@ -1,18 +1,26 @@
+import { explain } from "./hintText";
+import { solveByTechniques } from "./solver";
+import type { Deduction } from "./techniques";
 import type { Board, Level } from "./types";
 import { Cell } from "./types";
 
+export interface Hint {
+  deduction: Deduction; // technique, target cells, because
+  message: string; // rendered from the technique's template
+}
+
 /**
- * The solution cell of the first row (top to bottom) with no face, or null when
- * every row has one. Pure; never reads the player's marks.
+ * The simplest deduction the player has not yet acted on: the first ladder
+ * step from the board's faces that places a face, or eliminates at least one
+ * cell the player has not already marked. Marks never change what is true, only
+ * which steps are skipped. Null when the board is complete or the ladder is
+ * stuck. Pure; never reads the solution.
  */
-export function nextHint(board: Board, level: Level): number | null {
-  const { size, solution } = level;
-  for (let r = 0; r < size; r++) {
-    let hasFace = false;
-    for (let c = 0; c < size && !hasFace; c++) {
-      hasFace = board[r * size + c] === Cell.Face;
-    }
-    if (!hasFace) return r * size + solution[r];
-  }
-  return null;
+export function nextHint(board: Board, level: Level): Hint | null {
+  const { steps } = solveByTechniques(level, board);
+  const step = steps.find(
+    (s) =>
+      s.place !== undefined || s.eliminate.some((i) => board[i] !== Cell.Mark),
+  );
+  return step ? { deduction: step, message: explain(step) } : null;
 }

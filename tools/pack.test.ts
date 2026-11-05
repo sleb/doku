@@ -283,9 +283,16 @@ describe("computeStats", () => {
   });
 
   it("counts a cell it cannot fill as not filled", () => {
-    const hard = computeStats(7, "hard", 1, 30);
-    expect(hard.filled).toBe(0);
-    expect(hard.attempts).toBe(30);
+    const expert = computeStats(7, "expert", 1, 30);
+    expect(expert.filled).toBe(0);
+    expect(expert.attempts).toBe(30);
+  });
+
+  it("fills a hard cell and counts what it rejects", () => {
+    const hard = computeStats(7, "hard", 3);
+    expect(hard.tier).toBe("hard");
+    expect(hard.filled).toBe(3);
+    expect(hard.rejects.tier).toBeGreaterThanOrEqual(0);
   });
 
   it("is deterministic apart from wall time", () => {

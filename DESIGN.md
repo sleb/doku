@@ -54,7 +54,7 @@ doku/
 └─ tools/                # offline level scripts (generate-levels.ts, pack.ts, curriculum.ts; see `docs/GENERATOR_DESIGN.md` §8)
 ```
 
-Engine modules marked planned in §4 (`generator`, `techniques`, `difficulty`, `seed`) do not exist yet; `hints.ts` is a stub (see `docs/APP_DESIGN.md` §4.4).
+Every engine module in §4 exists (`hints.ts` is ladder-driven since M5-06; see `docs/APP_DESIGN.md` §4.4).
 
 ## 4. Engine (`src/engine`) — pure, no side effects
 
@@ -65,9 +65,9 @@ Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
 | `types.ts` | `Level { id, size, regions: number[][], solution: number[] }` (`solution[r]` is the column of the face in row r), `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → list of `{ reason, cells }` conflicts (`region`/`row`/`col`/`adjacent`); `isSolved(board, level)` → true iff the board holds exactly the solution's N faces; `judgeTap(level, cell)` (flat row-major `cell`; `RangeError` if out of range) → `correct`/`wrong` (the heart-cost rule below) |
 | `solver.ts` | Constraint-propagation solver; `solve(level)` and `countSolutions(level, limit=2)` share one backtracker over a `Level` (ignores `level.solution`); `countSolutions` is the uniqueness check |
-| `hints.ts` | Target: `nextHint(board, level)` → `{ cell, technique, explanation }`, running the ladder from `techniques.ts` and reporting the simplest applicable technique. **Today (M4-04) a stub** returning only the cell index: the solution cell of the first row without a face |
+| `hints.ts` | `nextHint(board, level)` → `{ deduction, message }` (`Hint`): the simplest ladder deduction the player has not yet acted on (a placement, or an elimination with at least one cell not already marked), with a message rendered from a per-technique template in `hintText.ts`. `null` when the board is complete or the ladder is stuck (M5-06; it was a first-open-row stub from M4-04) |
 | `generator.ts` *(M5)* | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
-| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Landed in M5-04 with Easy and Medium (`single-candidate`, `region-in-line`, `line-in-region`); Hard and Expert follow. Shared by the hint system and difficulty rating |
+| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Easy and Medium landed in M5-04 (`single-candidate`, `region-in-line`, `line-in-region`) and Hard in M5-06 (`adjacency-pressure`, `subset-regions-lines`, `subset-lines-regions`); Expert (`lookahead`) follows in #93. Shared by the hint system and difficulty rating |
 | `difficulty.ts` *(M5, landed M5-04)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
 | `seed.ts` *(M5)* | `makeRng(seed)` / `Rng` (`next`, `int`, `shuffle`, `pick`): mulberry32 seeded by `hashSeed` (FNV-1a + fmix32), so daily puzzles are deterministic across devices |
 
@@ -83,10 +83,10 @@ A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.
 |---|---|
 | Easy | Region with one candidate cell left; row/column with one candidate cell left; eliminate cells in the row, column and neighbors of a placed face |
 | Medium | A region confined to one row or column eliminates the rest of that line (and the reverse: a row/column confined to one region) |
-| Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. N regions confined to the same N rows or columns (pairs, triples) eliminate everything else in those lines |
+| Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. M regions confined to the same M rows or columns (pairs, triples) eliminate everything else in those lines, and the converse (M lines confined to M regions) |
 | Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
 
-Implemented so far (M5-04, M5-05): Easy and Medium as in the table; `rate` returns `unrated` for any level that needs Hard techniques until those land (#92). `generate` honours `tier` for Easy and Medium. Shipped cells: Easy 7 to 10 and Medium 7 to 11; Easy 11x11 is dropped (fewer than 18 of 20 stats seeds fill within the budget, `docs/GENERATOR_DESIGN.md` §16).
+Implemented so far (M5-04 to M5-06): Easy, Medium and Hard as in the table (adjacency pressure and both subset directions); `rate` returns `unrated` for a level that needs Expert (lookahead, #93). `generate` honours `tier` for Easy, Medium and Hard. Shipped cells: Easy 7 to 10, Medium 7 to 11 and Hard 7 to 11 (94 levels); Easy 11x11 is dropped (fewer than 18 of 20 stats seeds fill within the budget, `docs/GENERATOR_DESIGN.md` §16, §17).
 
 Rules of the system:
 - The solver applies the simplest technique that makes progress each step, so the rating is the minimum hardest technique, not whatever a particular path happened to use.
@@ -137,7 +137,7 @@ There is no home screen, level select, daily card, how-to-play screen or router.
 - **`<Board>`**: owns layout only. CSS grid whose `--cell` is derived from the board area's own container size (`cqw`/`cqh`, capped at 4.5rem), not the viewport, so it resizes on desktop and fits phones in both orientations (`docs/BOARD_DESIGN.md` §4.2, `docs/MOBILE_DESIGN.md` §4). Renders region colors from `level.regions`, draws thicker borders where adjacent cells belong to different regions. Role `grid`, cells `gridcell`, each containing a button with `aria-label` ("Row 3, column 5, emerald region, face").
 - **`<Cell>`**: pure presentational, memoized; receives `{ region, state, isConflict }` and callbacks. Never reads the store directly, so the board stays fast at N≈12.
 - **`<Hearts>`**: 3 hearts, animates loss. Zero hearts triggers `lost`.
-- **Hint button** (in `<ActionBar>`): commits the stub hint's face (the first open row's solution cell) and costs one heart; disabled on the last heart. The highlight-and-explain `<HintToast>` with technique text arrives with the technique ladder in milestone 5.
+- **Hint button** (in `<ActionBar>`): asks for the next ladder deduction and costs one heart; disabled on the last heart. A placement hint puts the face down; an elimination hint highlights the forcing cells (dashed outline) and the cells it rules out (solid outline and tint) and shows the explanation in `<HintBanner>`, writing no marks. Asking again for the hint already on display is free; any move clears it.
 - **`<ResultModal>`**: driven by `status`; a win shows time, best and hints used.
 - **Theming**: region palette is a token set with a color-blind-safe variant, plus a pattern/number overlay option, since regions are distinguished by color alone otherwise.
 
@@ -164,7 +164,7 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 ## 10. Content pipeline
 
 - Today: `src/levels/pack-1.json` holds 69 tiered generated levels (Easy 7 to 10 and Medium 7 to 10, 8 each, then 5 Medium at 11; every level satisfies `rate(level) === level.tier`), written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
-- Milestone 5: the tool (M5-03), the ladder (M5-04) and tiered generation (M5-05) have landed; Hard and Expert cells arrive with #92 and #93.
+- Milestone 5: the tool (M5-03), the ladder (M5-04), tiered generation (M5-05) and Hard techniques with ladder hints (M5-06) have landed; Expert cells arrive with #93.
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 
 ## 11. Testing
@@ -202,7 +202,7 @@ Decided:
 13. **No level select, home screen, daily puzzle or stars** in the app: levels play in a fixed order and the app opens on the current one. Progress is one integer plus best times (`next`, `bestMs`).
 14. **Undo/redo covers ✕ notes only**; faces and wrong taps are locked, so hearts are never refunded.
 15. **Hearts, wrong cells and elapsed time are persisted** and a restored game comes back paused. Saves are unversioned and validated or discarded (pre-MVP).
-16. **A hint costs one heart** and is refused on the last one; until milestone 5 it is a stub (first open row's solution cell).
+16. **A hint costs one heart** and is refused on the last one. Since M5-06 it explains the simplest deduction the player has not acted on; an elimination hint highlights and explains but writes no marks, and re-asking for the hint on display is free.
 17. **No right-click or drag-to-paint marks**: click and hold are the only pointer gestures.
 18. **One screen and one shared `<Dialog>`** for pause, rules, settings and results; the store is pure and time is injected by `useClock`.
 

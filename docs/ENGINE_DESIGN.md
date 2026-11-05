@@ -76,13 +76,14 @@ engine/
   techniques.ts   TECHNIQUES ladder, Deduction type
   solver.ts       solveByTechniques(), solve(), countSolutions(), solutions()
   difficulty.ts   rate()
-  hints.ts        nextHint()
+  hints.ts        nextHint(), Hint
+  hintText.ts     explain(): one message template per technique
   generator.ts    generate()
   seed.ts         makeRng(), Rng, hashSeed()
   index.ts        public API (only what the rest of the app may import)
 ```
 
-Dependency direction (no cycles): `types ← compile ← board ← rules`; `compile ← candidates ← techniques ← solver ← difficulty ← hints, generator`; `seed ← generator`.
+Dependency direction (no cycles): `types ← compile ← board ← rules`; `compile ← candidates ← techniques ← solver ← difficulty ← generator` and `techniques ← hintText ← hints` (`solver ← hints`); `seed ← generator`.
 
 ## 4. rules.ts
 
@@ -139,7 +140,10 @@ type Technique = (p: Puzzle, c: Candidates) => Deduction | null;
 const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[];  // ordered simplest → hardest
 ```
 
-**As built (M5-04):** `TechniqueId` is the union of the three implemented ids (`single-candidate`, `region-in-line`, `line-in-region`) and grows with each technique. Eliminations never include placed cells, and a technique that would eliminate nothing returns `null` so the solver always makes progress.
+**As built (M5-04, M5-06):** `TechniqueId` is the union of the six implemented ids (rows 1 to 6 below; `lookahead` arrives with #93). Eliminations never include placed cells, every technique skips satisfied units, and a technique that would eliminate nothing returns `null` so the solver always makes progress.
+
+- **`adjacency-pressure`** (M5-06) is a plain scan, not bitmasks (a 121-cell board does not fit a 32-bit mask): for each alive, unplaced cell X it marks the cells a face at X would remove (X's row, column, region and neighbors) and checks whether any unsatisfied unit that does not contain X has all its alive cells in that set. It returns one X per call with `because.units = [U]` and `because.cells = alive(U)`.
+- **`subset-regions-lines` / `subset-lines-regions`** (M5-06) share one routine. For rows and for columns separately it builds a bitmask per unsatisfied unit of the first kind (the lines or regions its alive cells touch), enumerates subsets of exactly M = 2 to ⌊N/2⌋ units with a depth-first search that prunes once the merged mask exceeds M bits, and acts when the merged mask has exactly M bits and at least one other alive, unplaced cell sits in those M units. `because.units` lists the M subset units, then the M owned units; `because.cells` is the subset's alive cells. M = 1 is `region-in-line` / `line-in-region`.
 
 Returning one deduction at a time (not all of them) is deliberate: the solver restarts from the simplest technique after each step, which is what makes the tier rating the *minimum* hardest technique (see §7).
 
@@ -159,7 +163,7 @@ Notes:
 - Subsets are capped at M ≤ ⌊N/2⌋ because an M-subset deduction and its (N−M)-complement are the same fact seen from the other side.
 - Each unit's "alive cells" are read from `Candidates`, never from the board, so techniques compose after eliminations.
 - `Deduction.because` is the only thing UI/hint text needs. Hint copy is a template per `TechniqueId` filled from `because` ("Region *green* only fits in *row 4*, so the rest of row 4 is out").
-- **Tier of `adjacency-pressure`:** `DESIGN.md` §4.1 does not list this technique. It is a one-step contradiction check, harder than line confinement but easier than general lookahead, so it is placed in Hard. §4.1 should be updated to include it. The `TECHNIQUES` array is the single source of truth for tier assignment.
+- **Tier of `adjacency-pressure`:** it is a one-step contradiction check, harder than line confinement but easier than general lookahead, so it is placed in Hard (`DESIGN.md` §4.1 lists it). The `TECHNIQUES` array is the single source of truth for tier assignment.
 
 ## 7. Solving (solver.ts)
 
@@ -205,13 +209,15 @@ function rate(level: Level): Tier | 'unrated';
 ```ts
 interface Hint {
   deduction: Deduction;        // technique, target cell(s), because
-  message: string;             // rendered from the template
+  message: string;             // rendered from the technique's template
 }
-function nextHint(p: Puzzle, board: Board): Hint | null;
+function nextHint(board: Board, level: Level): Hint | null;
 ```
-**Current state (M4-04):** `hints.ts` is a stub with signature `nextHint(board, level): number | null`, returning the solution cell of the first row without a face; the `Hint` object form and the ladder-driven behaviour below arrive with milestone 5.
+**As built (M5-06).** `nextHint` keeps the `(board, level)` form of the M4 stub (it compiles internally, like `rate`); the stub's `number | null` return is gone and every caller was updated. It runs `solveByTechniques(level, board)` (faces only, marks ignored) and returns the first step that either places a face or eliminates at least one cell the player has **not** already marked. So the hint is the simplest deduction the player has not acted on, and it advances as the player marks the cells it named. It is stateless, and every step is sound, so applying a hint never contradicts the solution. `null` means the board is complete or the ladder is stuck (possible only on an unrated level).
 
-`nextHint` builds candidates from the player's faces (ignoring marks), runs the ladder, and returns the first deduction. If its result is only eliminations, the UI highlights those cells and explains why; a placement deduction highlights the cell. `null` means the board is complete or the ladder cannot progress (possible only on a corrupted or unrated puzzle).
+`message` comes from `explain(deduction)` in `src/engine/hintText.ts`: one template per `TechniqueId`, pure, importing only engine types. Units are numbered from 1 for the player ("region 3", "row 4", "column 2"). `Hint`, `Deduction`, `TechniqueId` and `UnitRef` are exported from `index.ts`; `explain` stays internal.
+
+**In the app** (`docs/APP_DESIGN.md` §4.4): a placement hint commits the face; an elimination hint only highlights and explains and writes no marks (marking is the player's move, and the next hint skips what they have marked).
 
 ## 9. Generator (generator.ts, seed.ts)
 
@@ -243,7 +249,7 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (kept internal, see §2), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate` (exported in M5-04; `solveByTechniques` and the technique types stay internal), `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (kept internal, see §2), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint` and its `Hint` type (M5-06), `rate` (exported in M5-04; `solveByTechniques` and the technique types stay internal), `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 
@@ -269,8 +275,8 @@ Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/en
 1. `types`, `compile`, `board`, `rules` + tests, with 2–3 hand-written fixtures.
 2. `seed`, `countSolutions` + uniqueness tests.
 3. `candidates` (done in M5-04, with `compile`), then techniques 1–3 and `solveByTechniques`, `rate` (Easy/Medium working end to end).
-4. `hints` (cheap once the ladder exists).
-5. Techniques 4–6 (Hard), with soundness property tests running throughout.
+4. `hints` (cheap once the ladder exists; the ladder-driven version landed with Hard in M5-06).
+5. Techniques 4–6 (Hard, M5-06), with soundness property tests running throughout.
 6. `generator` with Easy/Medium; extend as techniques land.
 7. Technique 7 (lookahead) and Expert generation last; defer if Hard is already a satisfying top tier.
 
