@@ -1,6 +1,6 @@
 # Doku
 
-A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley face per colored region, row and column, with no two faces touching. Desktop first. The full app is implemented: a fixed campaign of 109 generated levels in four difficulty tiers (Easy, Medium, Hard, Expert) with hearts, hints, undo/redo, pause and timer, settings, keyboard play, and autosave that resumes after a quit; the iOS project builds and runs on the simulator. Still to come: the Android build (#64) and polish (milestone 6). Manual desktop and iOS checks of persistence and window-state restore are outstanding (`docs/APP_DESIGN.md` §9).
+A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley face per colored region, row and column, with no two faces touching. Desktop first. The full app is implemented: a fixed campaign of 109 generated levels in four difficulty tiers (Easy, Medium, Hard, Expert) with hearts, hints, undo/redo, pause and timer, settings, keyboard play, and autosave that resumes after a quit; the iOS project builds and runs on the simulator. Milestone 6 (polish) is implemented: synthesized sound, cell and win/loss animation, a finger-sized hold ring with a haptic build-up, an opt-in "Tap places faces" mode, screen-reader announcements, an accessible color palette with region patterns, light and dark themes, an interactive first-run tutorial and an axe-checked, 44 px-target accessibility audit. Still to come: the Android build (#64). Outstanding manual checks: desktop and iOS persistence and window-state restore (`docs/APP_DESIGN.md` §9), and the device and VoiceOver passes for polish (`docs/POLISH_DESIGN.md` §11), which have not been run.
 
 ## Docs
 
@@ -10,7 +10,7 @@ A Tauri 2 + React + TypeScript region-placement logic puzzle: place one smiley f
 - [`docs/MOBILE_DESIGN.md`](docs/MOBILE_DESIGN.md): low-level design for milestone 3 (responsive layout, haptics, Android and iOS builds).
 - [`docs/GENERATOR_DESIGN.md`](docs/GENERATOR_DESIGN.md): low-level design for milestone 5 (level generator, technique ladder, difficulty tiers, pack tool, as built).
 - [`docs/APP_DESIGN.md`](docs/APP_DESIGN.md): low-level design for milestone 4 (full app: level progression, persistence, undo/redo, hints, settings, keyboard, desktop window), including the outstanding manual checks.
-- [`docs/POLISH_DESIGN.md`](docs/POLISH_DESIGN.md): low-level design for milestone 6 (sound, animation, interactive tutorial, color-blind support, click-only placement, screen-reader announcements, dark theme).
+- [`docs/POLISH_DESIGN.md`](docs/POLISH_DESIGN.md): low-level design for milestone 6 (sound, animation, interactive tutorial, color-blind support, click-only placement, screen-reader announcements, dark theme), as built, with the manual verification list.
 - Milestone 1 user stories are GitHub issues in the "engine" milestone.
 
 ## Development

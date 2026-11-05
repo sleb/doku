@@ -2,13 +2,13 @@
 
 Companion to `DESIGN.md` §8, §9 and §12 for milestone 3 ("Mobile"). It covers touch hardening of the existing hold gesture, the responsive layout, mobile web-view hardening and safe areas, haptics, and the iOS and Android builds. The engine, the store and the board's gesture code (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`) are consumed as-is except where §3 says otherwise. Where this document and `DESIGN.md` disagree, this one wins until `DESIGN.md` is synced (§11).
 
-**Status:** milestone 4 has since landed on top of this (persistence, controls, settings; see `docs/APP_DESIGN.md`). M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending. The iOS simulator pass is verified; a physical-device pass is not recorded. M3-07 (#65) is synced for iOS; the Android items are pending #64 and get recorded in the final pass, which closes #65.
+**Status:** milestones 4 and 6 have since landed on top of this (persistence, controls, settings: `docs/APP_DESIGN.md`; sound, the hold ring and haptic ramp, click-only placement, announcements: `docs/POLISH_DESIGN.md`). M3-01 to M3-05 have landed (responsive layout, web-view hardening, mobile Playwright projects, haptics seam, iOS project and plugin wiring; the app builds and runs on the iOS simulator). M3-06 (Android, #64) is pending. The iOS simulator pass is verified; a physical-device pass is not recorded. M3-07 (#65) is synced for iOS; the Android items are pending #64 and get recorded in the final pass, which closes #65.
 
 ## 1. Goals and non-goals
 
 **Goal:** the existing single-level game is installable and comfortably playable on a phone: iOS first, then Android (decision 6). "Playable" means an 11×11 board fits any phone viewport with no scrolling, the existing hold-to-place gesture (250 ms delay, 500 ms glow) works unchanged under a finger, and a win or a wrong tap is felt as well as seen.
 
-**Non-goals (still later milestones):** level select, persistence and resume-after-kill, undo/redo, hints, timer and the settings screen (all delivered later in M4: autosave and resume-paused, see `docs/APP_DESIGN.md` §5), sound, store release (signing, TestFlight, Play Console), color-blind palette. Wrong-tap animation stays M6.
+**Non-goals (still later milestones):** level select, persistence and resume-after-kill, undo/redo, hints, timer and the settings screen (all delivered later in M4: autosave and resume-paused, see `docs/APP_DESIGN.md` §5), store release (signing, TestFlight, Play Console). Sound, the color-blind palette and the wrong-tap animation were deferred to M6 and landed there (`docs/POLISH_DESIGN.md`); store release is still out of scope.
 
 ## 2. What exists and what mobile breaks
 
@@ -24,7 +24,7 @@ The 30 pt cells cannot be fixed by layout alone (the grid is N columns wide on a
 
 ## 3. Input: unchanged
 
-Mobile keeps the desktop gesture exactly: tap toggles a ✕, press and hold places a face (250 ms of nothing, then the 500 ms glow, now a finger-sized ring around the cell (`docs/POLISH_DESIGN.md` §6.5), `docs/BOARD_DESIGN.md` §4.3). There is no tool toggle and no mobile-specific gesture. `useHold`, `CellView` and the glow are not changed by this milestone except for tuning found on a device (§10 question 2).
+Mobile keeps the desktop gesture exactly: tap toggles a ✕, press and hold places a face (250 ms of nothing, then the 500 ms glow, now a finger-sized ring around the cell (`docs/POLISH_DESIGN.md` §6.5), `docs/BOARD_DESIGN.md` §4.3). There is no mobile-specific gesture. `useHold` and its timings are unchanged. Milestone 6 added two things on top: the glow became a finger-sized ring (above) with a haptic build-up (§6.1), and an optional, persisted "Tap places faces" mode (`settings.inputMode`) where a tap places a face with no hold (`docs/POLISH_DESIGN.md` §9.1). The mode defaults to off, so this section's gesture is the default on every platform. Any further tuning is a device finding (§10 question 2).
 
 The work here is only verification, since #55 was never run on a touch device:
 - Touch capture release, so drag-off cancels the hold.
@@ -32,7 +32,7 @@ The work here is only verification, since #55 was never run on a touch device:
 - The glow stays visible beside a fingertip (the ring is about 3 cells wide, so the fingertip no longer hides it; physical-device check and `HOLD_RAMP` haptic tuning on 7×7 and 11×11 still to do) and paints correctly in WKWebView (the stroke/`pathLength` concern in `BOARD_DESIGN.md` §4.3).
 - The hold does not conflict with Android's long-press behaviors.
 
-Issue #57 (click-only placement for screen readers and switch control) is an accessibility issue, independent of mobile, and is not part of this milestone.
+Issue #57 (click-only placement for screen readers and switch control) was independent of mobile and landed in M6-07 as the mode above.
 
 ## 4. Responsive layout
 
@@ -90,8 +90,12 @@ This introduces the adapter layer from `DESIGN.md` §8 for the first time. Only 
 
 ```ts
 // src/platform/haptics.ts
-export interface Haptics { play(kind: OutcomeKind): Promise<void> }
-export function createHaptics(deps?: { isTauri(): boolean; isMobile(): boolean; loadPlugin(): Promise<Plugin>; log(err: unknown): void }): Haptics;
+export interface Haptics {
+  play(kind: OutcomeKind): Promise<void>;   // always resolves
+  supported(): boolean;                      // Tauri and mobile; the Settings Haptics row hides elsewhere
+  ramp(): () => void;                        // M6-06: hold build-up pulses; returns an idempotent cancel
+}
+export function createHaptics(deps?: { isTauri(): boolean; isMobile(): boolean; loadPlugin(): Promise<Plugin>; log(err: unknown): void; setTimeout?; clearTimeout? }): Haptics;
 export const haptics: Haptics;   // createHaptics() with the real deps
 ```
 
@@ -101,31 +105,38 @@ Adapters, picked by `isTauri()` (`"__TAURI_INTERNALS__" in window`):
 
 | Where | Implementation |
 |---|---|
-| Tauri (plugin registered on mobile only, M3-05) | `@tauri-apps/plugin-haptics`: `place` → `impactFeedback("light")`, `wrong` → `notificationFeedback("warning")`, `win` → `notificationFeedback("success")`, `lose` → `notificationFeedback("error")` |
+| Tauri (plugin registered on mobile only, M3-05) | `@tauri-apps/plugin-haptics`: `place` → `impactFeedback("heavy")` (it was `light` until M6-06, so the placement tap is the peak of the hold ramp), `wrong` → `notificationFeedback("warning")`, `win` → `notificationFeedback("success")`, `lose` → `notificationFeedback("error")` |
+| Hold ramp (`haptics.ramp()`, M6-06) | on mobile Tauri, `impactFeedback` per entry of `HOLD_RAMP` (`src/platform/holdRamp.ts`): `soft` at 0 and 100 ms, `light` at 200 and 300, `medium` at 400, offsets from the start of the glow (after the 250 ms delay), then `place` at 500. `useHoldRamp` starts it from `Board`'s glow report and cancels it on release, drag-off, blur, pause, game end or unmount. Intensities never decrease; a new ramp cancels the previous one. The values are a first guess to tune on a physical iPhone |
 | Tauri on desktop, web, tests | no-op (the plugin is registered only for mobile, and calls are wrapped so a rejected invoke is swallowed) |
 
 `navigator.vibrate` is deliberately not used: WKWebView does not implement it and the Android pattern is a poor match for the semantic kinds. Every call is `void`-ed and its rejection caught: a failed buzz must never break gameplay.
 
-Haptic choices follow the platform guidance that feedback confirms an outcome and should not fire for the free action: `toggleMark` is silent. Only `placeFace` outcomes and the end of the game buzz.
+Haptic choices follow the platform guidance that feedback confirms an outcome and should not fire for the free action: `toggleMark` is silent. Only `placeFace` outcomes, the end of the game and the hold build-up buzz; the ramp starts with the glow, so a tap or click still never buzzes.
+
+Sound (M6-03) is a sibling adapter, `src/platform/sound.ts` with pure `cues.ts`: synthesized Web Audio cues for the same four kinds, unlocked on the first user gesture and suspended when the page is hidden. Whether the iOS ringer switch mutes it in WKWebView is believed but unverified, and haptics plus sound on every outcome may feel doubled on a phone; both are device checks (`docs/POLISH_DESIGN.md` §11, §12 question 6).
 
 ### 6.2 Deriving feedback from the store
 
-The store stays pure. A pure function maps a state change to at most one haptic:
+The store stays pure. A pure function maps a state change to at most one outcome (`src/platform/outcome.ts`; it replaced the M3 `feedbackFor` in M6-01):
 
 ```ts
-// src/platform/outcome.ts
-export type OutcomeKind = "place" | "wrong" | "win" | "lose";
-export function outcomeFor(prev: GameState, next: GameState): Outcome | null; // { kind, cell?, faces, hearts }
+export type OutcomeKind = "place" | "wrong" | "win" | "lose";   // what haptics and sound take
+export type Outcome =  // each also carries faces and hearts after the change
+  | { kind: "win" }
+  | { kind: "place" | "wrong" | "lose"; cell: number }
+  | { kind: "hint"; cell?: number; message: string };
+export function outcomeFor(prev: GameState, next: GameState): Outcome | null;
 ```
 
-- `prev.status === "playing"` and `next.status === "won"` → `"win"`; `"lost"` → `"lose"` (these take precedence over place/wrong, so a winning face buzzes once, not twice).
-- Otherwise, hearts decreased → `"wrong"`; the number of faces on the board increased → `"place"`; anything else (mark toggles, restart, no-ops, same state reference) → `null`.
+- `prev.status` must be `playing`, else `null` (so a restore is never an outcome). Order: `won` → `win`; a rise in `hintsUsed` → `hint` (so a hint is never mistaken for `wrong`); `lost` → `lose`; hearts decreased → `wrong`; the number of faces increased → `place`; anything else (mark toggles, restart, no-ops, same state) → `null`. A winning face is `win` only, so it buzzes once, not twice.
+- `cell` is the index acted on: the changed board cell, or for `wrong`/`lose` the newly locked wrong ✕. `win` has none; a hint that only eliminates has none.
+- `useFeedback` maps `hint` to `place` for haptics and sound ("a hint is felt as a placement").
 
-`GameScreen` calls `useFeedback()` (`src/ui/screens/useFeedback.ts`), which subscribes once (`gameStore.subscribe((next, prev) => { const o = outcomeFor(prev, next); if (o) void haptics.play(o.kind) })`, gated on the haptics setting read at event time) and unsubscribes in the cleanup. The subscription lives in the `useFeedback` hook rather than the store module so tests of the store and of `Board` never trigger side effects, and so it is cleaned up with the screen like the existing reset.
+`GameScreen` calls `useFeedback()` (`src/ui/screens/useFeedback.ts`), which subscribes once to the store, calls `outcomeFor(prev, next)`, and renders the outcome: `haptics.play` (if `settings.haptics`), `sound.play` (if `settings.sound`), the effects store and the announcer. Settings are read at event time; it unsubscribes in the cleanup. It lives in a hook rather than the store module so tests of the store and of `Board` never trigger side effects.
 
 ### 6.3 Settings
 
-**Resolved in M4-06:** the `haptics` on/off setting lives in `settingsStore` (default on, persisted) and is a switch in the Settings dialog. The `GameScreen` subscription plays a buzz only when `settings.haptics` is true, read at event time; the OS-level system haptics switch still governs on top of it. Whether the toggle takes effect on a real device has not been verified.
+**Resolved in M4-06:** the `haptics` on/off setting lives in `settingsStore` (default on, persisted) and is a switch in the Settings dialog. The `useFeedback` subscription plays a buzz, and `useHoldRamp` the ramp, only when `settings.haptics` is true, read at event time; the OS-level system haptics switch still governs on top of it. Whether the toggle takes effect on a real device has not been verified.
 
 ## 7. Rust shell and native projects
 
@@ -191,7 +202,7 @@ Status: done for everything that landed in M3-01 to M3-05 (iOS). Items marked *p
 
 ## 12. Decisions
 
-1. **Input is unchanged on mobile**: tap = ✕, hold with the 250 ms delay and glow = face. No tool toggle; click-only placement is #57, separate.
+1. **Input is unchanged on mobile**: tap = ✕, hold with the 250 ms delay and glow = face. No tool toggle in M3; click-only placement (#57) later landed in M6-07 as an opt-in setting, default off.
 2. **Container queries for one layout** covering phones (both orientations) and desktop; no orientation lock, no separate desktop layout.
 3. **`src/platform/haptics` with a no-op default** and a pure `outcomeFor`, so feedback is testable without a device and the store stays side-effect free.
 4. **Haptics only for outcomes** (place, wrong, win, lose), never for the free ✕.
