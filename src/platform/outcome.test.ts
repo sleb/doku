@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { nextHint } from "../engine";
 import { uniqueLevel7 as level } from "../engine/__fixtures__/levels";
 import {
   type GameState,
@@ -125,9 +126,41 @@ describe("outcomeFor", () => {
     const prev = fresh();
     const o = outcomeFor(prev, hint(prev)) as Outcome;
     expect(o.kind).toBe("place");
-    expect(solution).toContain(o.cell);
+    expect(o.kind !== "win" && solution).toContain(
+      o.kind !== "win" ? o.cell : -1,
+    );
     expect(o.faces).toBe(1);
     expect(o.hearts).toBe(2);
+  });
+
+  it("carries the cell for a wrong face on a pre-marked cell", () => {
+    const prev = toggleMark(fresh(), wrongCells[0]);
+    const o = outcomeFor(prev, placeFace(prev, wrongCells[0])) as Outcome;
+    expect(o.kind).toBe("wrong");
+    expect("cell" in o).toBe(true);
+    expect(o.kind !== "win" && o.cell).toBe(wrongCells[0]);
+  });
+
+  it("carries the cell for a hint landing on a pre-marked cell", () => {
+    const base = fresh();
+    const target = nextHint(base.board as never, level) as number;
+    const prev = toggleMark(base, target);
+    const o = outcomeFor(prev, hint(prev)) as Outcome;
+    expect(o.kind).toBe("place");
+    expect(o.kind !== "win" && o.cell).toBe(target);
+  });
+
+  it("always has a numeric cell for non-win outcomes", () => {
+    const p = fresh();
+    for (const next of [
+      placeFace(p, solution[0]),
+      placeFace(p, wrongCells[0]),
+      hint(p),
+    ]) {
+      const o = outcomeFor(p, next) as Outcome;
+      expect("cell" in o).toBe(true);
+      expect(typeof (o as { cell: number }).cell).toBe("number");
+    }
   });
 
   it("has no cell key for a win", () => {

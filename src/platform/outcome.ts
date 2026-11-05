@@ -3,15 +3,16 @@ import type { GameState } from "../store/game";
 
 export type OutcomeKind = "place" | "wrong" | "win" | "lose";
 
-export interface Outcome {
-  kind: OutcomeKind;
-  /** The cell the player acted on; absent for a win. */
-  cell?: number;
+interface Counts {
   /** Faces on the board after the change. */
   faces: number;
   /** Hearts after the change. */
   hearts: number;
 }
+
+export type Outcome =
+  | ({ kind: "win" } & Counts)
+  | ({ kind: "place" | "wrong" | "lose"; cell: number } & Counts);
 
 function faceCount(state: GameState): number {
   return state.board ? state.board.filter((c) => c === Cell.Face).length : 0;
@@ -31,14 +32,25 @@ function changedCell(prev: GameState, next: GameState): number | undefined {
   return i < 0 ? undefined : i;
 }
 
+/** The cell newly locked as wrong; the board may not change under a mark. */
+function newWrongCell(prev: GameState, next: GameState): number | undefined {
+  if (prev.status === "idle" || next.status === "idle") return undefined;
+  for (const c of next.wrong) if (!prev.wrong.has(c)) return c;
+  return undefined;
+}
+
 /** What a state change amounted to for the player, or null. Pure. */
 export function outcomeFor(prev: GameState, next: GameState): Outcome | null {
   if (prev.status !== "playing") return null;
   const after = { faces: faceCount(next), hearts: next.hearts };
   if (next.status === "won") return { kind: "win", ...after };
-  const cell = changedCell(prev, next);
+  const failed = next.status === "lost" || next.hearts < prev.hearts;
+  const isHint = hinted(prev, next);
+  const cell =
+    failed && !isHint ? newWrongCell(prev, next) : changedCell(prev, next);
+  if (cell === undefined) return null;
   if (next.status === "lost") return { kind: "lose", cell, ...after };
-  if (hinted(prev, next)) return { kind: "place", cell, ...after };
+  if (isHint) return { kind: "place", cell, ...after };
   if (next.hearts < prev.hearts) return { kind: "wrong", cell, ...after };
   if (after.faces > faceCount(prev)) return { kind: "place", cell, ...after };
   return null;

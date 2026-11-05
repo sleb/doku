@@ -121,7 +121,7 @@ export function outcomeFor(prev: GameState, next: GameState): Outcome | null; //
 - `prev.status === "playing"` and `next.status === "won"` → `"win"`; `"lost"` → `"lose"` (these take precedence over place/wrong, so a winning face buzzes once, not twice).
 - Otherwise, hearts decreased → `"wrong"`; the number of faces on the board increased → `"place"`; anything else (mark toggles, restart, no-ops, same state reference) → `null`.
 
-`GameScreen` calls `useFeedback()` (`src/ui/screens/useFeedback.ts`), which subscribes once (`gameStore.subscribe((next, prev) => { const o = outcomeFor(prev, next); if (o) void haptics.play(o.kind) })`, gated on the haptics setting read at event time) and unsubscribes in the cleanup. The subscription lives in `GameScreen` rather than the store module so tests of the store and of `Board` never trigger side effects, and so it is cleaned up with the screen like the existing reset.
+`GameScreen` calls `useFeedback()` (`src/ui/screens/useFeedback.ts`), which subscribes once (`gameStore.subscribe((next, prev) => { const o = outcomeFor(prev, next); if (o) void haptics.play(o.kind) })`, gated on the haptics setting read at event time) and unsubscribes in the cleanup. The subscription lives in the `useFeedback` hook rather than the store module so tests of the store and of `Board` never trigger side effects, and so it is cleaned up with the screen like the existing reset.
 
 ### 6.3 Settings
 

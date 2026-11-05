@@ -2,8 +2,7 @@ import { useEffect } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import { haptics } from "../../platform/haptics";
 import { outcomeFor } from "../../platform/outcome";
-import type { GameStore } from "../../store/gameStore";
-import { gameStore } from "../../store/gameStore";
+import { type GameStore, gameStore } from "../../store/gameStore";
 import { settingsStore } from "../../store/settings";
 
 /** Plays feedback for the outcome of each store change. Subscribes once. */
