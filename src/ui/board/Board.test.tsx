@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { Cell, emptyBoard } from "../../engine";
+import { Cell, emptyBoard, REGION_NAMES } from "../../engine";
 import {
   uniqueLevel7 as level,
   multiSolutionLevel7,
@@ -75,9 +75,25 @@ describe("Board", () => {
       [3, 0],
       [6, 6],
     ]) {
-      const name = `Row ${r + 1}, column ${c + 1}, region ${level.regions[r][c] + 1}, empty`;
+      const name = `Row ${r + 1}, column ${c + 1}, ${REGION_NAMES[level.regions[r][c]]} region, empty`;
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+  });
+
+  test("labels use region numbers on the accessible palette", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        palette="accessible"
+        {...handlers()}
+      />,
+    );
+    const name = `Row 1, column 1, region ${level.regions[0][0] + 1}, empty`;
+    expect(screen.getByRole("button", { name })).toBeTruthy();
   });
 
   test("shows each cell state", () => {

@@ -254,7 +254,7 @@ Tailwind only generates classes it can see statically, so region colors are decl
 
 ```ts
 export function regionClass(palette: "default" | "accessible", region: number): string; // "bg-region-3" | "bg-region-a-3"
-// REGION_NAMES (["red", "orange", ..., ], same order as the tokens) lives in src/engine/regionNames.ts, so hint text can use it; cell labels use "region N", not these names (M6-09)
+// REGION_NAMES (["red", "orange", ..., ], same order as the tokens) lives in src/engine/regionNames.ts, so hint text can use it; cell labels use them too on the default palette without patterns ("red region") and "region N" otherwise, via the shared rule in src/ui/board/regionNaming.ts (M6-12)
 ```
 
 Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. (M2 history) The demo level became the first generated level in `src/levels/pack-1.json` (the original `demo-7` was replaced in M5-03), available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.

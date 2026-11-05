@@ -9,6 +9,7 @@ import {
   regionClass,
 } from "./palette";
 import { patternStyle } from "./patterns";
+import { regionLabel } from "./regionNaming";
 import { useHold } from "./useHold";
 
 export interface CellProps {
@@ -138,7 +139,7 @@ export const CellView = memo(function CellView({
   return (
     <button
       type="button"
-      aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
+      aria-label={`Row ${row + 1}, column ${col + 1}, ${regionLabel(region, { palette, patterns })}, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
       data-conflict={isConflict ? "true" : undefined}
       data-highlight={highlight ? "true" : undefined}
       data-hint={hint}

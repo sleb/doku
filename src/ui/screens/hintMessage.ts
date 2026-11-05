@@ -1,21 +1,11 @@
 import { explain } from "../../engine";
 import type { HintShown } from "../../store/game";
-import type { PaletteName } from "../board/palette";
-
-export interface NamingOptions {
-  palette: PaletteName;
-  patterns: boolean;
-}
+import { type NamingOptions, regionNamer } from "../board/regionNaming";
 
 /**
- * The text of a hint as the player should read or hear it. Colour names only
- * mean something on the default palette without patterns; otherwise regions go
- * by the number the cell labels use ("region 3").
+ * The text of a hint as the player should read or hear it. Regions are named by
+ * the shared rule in `regionNaming` (the same one the cell labels use).
  */
-export function hintMessage(
-  shown: HintShown,
-  { palette, patterns }: NamingOptions,
-): string {
-  if (palette === "default" && !patterns) return shown.message;
-  return explain(shown.deduction, () => undefined);
+export function hintMessage(shown: HintShown, opts: NamingOptions): string {
+  return explain(shown.deduction, regionNamer(opts));
 }

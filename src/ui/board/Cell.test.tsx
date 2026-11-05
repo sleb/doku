@@ -47,7 +47,7 @@ function renderCell(over: Partial<Props> = {}) {
 }
 
 const REGION = 5;
-const NAME = `region ${REGION + 1}`;
+const NAME = "teal region"; // default palette, no patterns: colour name
 
 const icon = (b: HTMLElement) => b.querySelector("[data-icon]");
 
@@ -55,6 +55,15 @@ describe("CellView", () => {
   test("labels each state with row, column, region and state", () => {
     expect(renderCell().getAttribute("aria-label")).toBe(
       `Row 2, column 3, ${NAME}, empty`,
+    );
+  });
+
+  test.each([
+    [{ palette: "accessible" }, "region 6"],
+    [{ patterns: true }, "region 6"],
+  ] as const)("%j names the region by number: %s", (over, name) => {
+    expect(renderCell(over).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${name}, empty`,
     );
   });
 
