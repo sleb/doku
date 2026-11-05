@@ -72,7 +72,7 @@ engine/
   validate.ts     validateLevel(), loadLevel(), LevelError
   board.ts        emptyBoard(), setCell(), facesOf() (immutable helpers)
   rules.ts        findConflicts(), isSolved(), judgeTap()
-  candidates.ts   Candidates type, fromBoard(), placeFace(), eliminate() (contradiction() arrives with lookahead)
+  candidates.ts   Candidates type, fromBoard(), placeFace(), eliminate(), emptiedUnit(), contradiction()
   techniques.ts   TECHNIQUES ladder, Deduction type
   solver.ts       solveByTechniques(), solve(), countSolutions(), solutions()
   difficulty.ts   rate()
@@ -116,7 +116,7 @@ interface Candidates {
 - `fromBoard(p, board)`: start with every cell alive, then `placeFace` each `Face` on the board. **Marks are ignored.** Because wrong faces are never placed (§4), every face on the board is a true solution cell, so candidates derived from faces are always sound.
 - `placeFace(p, cand, cell)` returns a new `Candidates` with: the cell placed (and still alive, so a satisfied unit shows `aliveCount == 1`; techniques skip satisfied units), and every other cell in its row, column, and region, plus its ≤8 neighbors, eliminated. This is the **basic propagation** (the "Easy" tier's elimination rule).
 - `eliminate(p, cand, cells)` clears `alive` for the given cells and updates counters.
-- `contradiction(cand)` *(not built yet; arrives with lookahead, #93)*: true if some unsatisfied unit has `aliveCount == 0`. Used by lookahead.
+- `contradiction(cand)` (M5-07): true if some unsatisfied unit has `aliveCount == 0`; `emptiedUnit(cand)` returns the first such unit index (or -1) so lookahead can cite it. Used by lookahead.
 - Candidate sets are cloned per lookahead branch (N² + 3N bytes; trivial).
 
 ## 6. Techniques (techniques.ts)
@@ -140,10 +140,12 @@ type Technique = (p: Puzzle, c: Candidates) => Deduction | null;
 const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[];  // ordered simplest → hardest
 ```
 
-**As built (M5-04, M5-06):** `TechniqueId` is the union of the six implemented ids (rows 1 to 6 below; `lookahead` arrives with #93). Eliminations never include placed cells, every technique skips satisfied units, and a technique that would eliminate nothing returns `null` so the solver always makes progress.
+**As built (M5-04, M5-06, M5-07):** `TechniqueId` is the union of the seven ids (rows 1 to 7 below). Eliminations never include placed cells, every technique skips satisfied units, and a technique that would eliminate nothing returns `null` so the solver always makes progress.
 
 - **`adjacency-pressure`** (M5-06) is a plain scan, not bitmasks (a 121-cell board does not fit a 32-bit mask): for each alive, unplaced cell X it marks the cells a face at X would remove (X's row, column, region and neighbors) and checks whether any unsatisfied unit that does not contain X has all its alive cells in that set. It returns one X per call with `because.units = [U]` and `because.cells = alive(U)`.
 - **`subset-regions-lines` / `subset-lines-regions`** (M5-06) share one routine. For rows and for columns separately it builds a bitmask per unsatisfied unit of the first kind (the lines or regions its alive cells touch), enumerates subsets of exactly M = 2 to ⌊N/2⌋ units with a depth-first search that prunes once the merged mask exceeds M bits, and acts when the merged mask has exactly M bits and at least one other alive, unplaced cell sits in those M units. `because.units` lists the M subset units, then the M owned units; `because.cells` is the subset's alive cells. M = 1 is `region-in-line` / `line-in-region`.
+
+- **`lookahead`** (M5-07) is depth 1 only. `propagate(p, cand)` in `techniques.ts` runs rungs 1 to 6 to a fixpoint and stops as soon as a unit empties (`solveByTechniques` shares `applyDeduction` with it). `lookahead` scans cells in index order; the first alive, unplaced X whose assumed face propagates to a contradiction yields `{ technique: "lookahead", tier: "expert", eliminate: [X], because: { units: [emptied unit], cells: [X] } }`. One per call, always an elimination. It is only reached when rungs 1 to 6 return null, so existing ratings are unchanged. The hint cites only the final emptied unit, not the chain of forced moves (a documented limitation).
 
 Returning one deduction at a time (not all of them) is deliberate: the solver restarts from the simplest technique after each step, which is what makes the tier rating the *minimum* hardest technique (see §7).
 
@@ -278,11 +280,11 @@ Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/en
 4. `hints` (cheap once the ladder exists; the ladder-driven version landed with Hard in M5-06).
 5. Techniques 4–6 (Hard, M5-06), with soundness property tests running throughout.
 6. `generator` with Easy/Medium; extend as techniques land.
-7. Technique 7 (lookahead) and Expert generation last; defer if Hard is already a satisfying top tier.
+7. Technique 7 (lookahead) and Expert generation last (done in M5-07: Expert shipped, see `GENERATOR_DESIGN.md` §18).
 
 ## 13. Open questions
 
-1. **Generator success rates:** random region growth may rarely yield some size/tier pairs (e.g. 7×7 Expert, 11×11 Easy). We learn this empirically once the generator runs; the fallback is to hide those combinations (already in `DESIGN.md` §4.1).
+1. **Generator success rates:** answered by `--stats` (`GENERATOR_DESIGN.md` §16 to §18): only Easy 11×11 is dropped; every Expert cell fills 20 of 20.
 2. **Minimum region size** and max region share (defaults above are guesses that affect puzzle feel).
-3. **Expert definition:** depth-1 lookahead as written, or allow depth 2? Depth 2 is much slower and probably unnecessary at N ≤ 11.
+3. **Expert definition:** resolved in M5-07: depth-1 lookahead, no nesting. It solved every unrated level measured, so depth 2 is unnecessary at N ≤ 11.
 4. **Pre-generated vs on-device generation:** v1 ships bundled packs; the Worker path is designed in but not required for v1.

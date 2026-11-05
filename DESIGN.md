@@ -67,7 +67,7 @@ Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
 | `solver.ts` | Constraint-propagation solver; `solve(level)` and `countSolutions(level, limit=2)` share one backtracker over a `Level` (ignores `level.solution`); `countSolutions` is the uniqueness check |
 | `hints.ts` | `nextHint(board, level)` → `{ deduction, message }` (`Hint`): the simplest ladder deduction the player has not yet acted on (a placement, or an elimination with at least one cell not already marked), with a message rendered from a per-technique template in `hintText.ts`. `null` when the board is complete or the ladder is stuck (M5-06; it was a first-open-row stub from M4-04) |
 | `generator.ts` *(M5)* | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
-| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Easy and Medium landed in M5-04 (`single-candidate`, `region-in-line`, `line-in-region`) and Hard in M5-06 (`adjacency-pressure`, `subset-regions-lines`, `subset-lines-regions`); Expert (`lookahead`) follows in #93. Shared by the hint system and difficulty rating |
+| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Easy and Medium landed in M5-04 (`single-candidate`, `region-in-line`, `line-in-region`) and Hard in M5-06 (`adjacency-pressure`, `subset-regions-lines`, `subset-lines-regions`); Expert (`lookahead`, depth 1) landed in M5-07. Shared by the hint system and difficulty rating |
 | `difficulty.ts` *(M5, landed M5-04)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
 | `seed.ts` *(M5)* | `makeRng(seed)` / `Rng` (`next`, `int`, `shuffle`, `pick`): mulberry32 seeded by `hashSeed` (FNV-1a + fmix32), so daily puzzles are deterministic across devices |
 
@@ -86,11 +86,11 @@ A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.
 | Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. M regions confined to the same M rows or columns (pairs, triples) eliminate everything else in those lines, and the converse (M lines confined to M regions) |
 | Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
 
-Implemented so far (M5-04 to M5-06): Easy, Medium and Hard as in the table (adjacency pressure and both subset directions); `rate` returns `unrated` for a level that needs Expert (lookahead, #93). `generate` honours `tier` for Easy, Medium and Hard. Shipped cells: Easy 7 to 10, Medium 7 to 11 and Hard 7 to 11 (94 levels); Easy 11x11 is dropped (fewer than 18 of 20 stats seeds fill within the budget, `docs/GENERATOR_DESIGN.md` §16, §17).
+Implemented so far (M5-04 to M5-07): all four tiers as in the table (Expert is depth-1 lookahead over rungs 1 to 6); `rate` returns `unrated` only for a level the ladder cannot finish, which the generator always rejects (none occurred in the `--stats` runs). `generate` honours `tier` for every tier. Shipped cells: Easy 7 to 10, Medium 7 to 11, Hard 7 to 11 and Expert 7 to 11 (109 levels, Expert three per size); Easy 11x11 is dropped (fewer than 18 of 20 stats seeds fill within the budget, `docs/GENERATOR_DESIGN.md` §16, §17).
 
 Rules of the system:
 - The solver applies the simplest technique that makes progress each step, so the rating is the minimum hardest technique, not whatever a particular path happened to use.
-- Players choose a size (7–11) and a tier (Easy–Expert). The generator keeps puzzles only if `rate(level)` matches the requested tier, and `countSolutions == 1`. Combinations it cannot fill reliably (e.g. 7×7 Expert, 11×11 Easy) are hidden in level select.
+- Players choose a size (7–11) and a tier (Easy–Expert). The generator keeps puzzles only if `rate(level)` matches the requested tier, and `countSolutions == 1`. Combinations it cannot fill reliably (only 11×11 Easy so far) are hidden in level select.
 - Techniques are also the hint vocabulary, so hint text ("This region only fits in row 4") needs no separate content.
 - Tier definitions are v1 starting points; adjust the ladder after playtesting.
 
@@ -164,7 +164,7 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 ## 10. Content pipeline
 
 - Today: `src/levels/pack-1.json` holds 69 tiered generated levels (Easy 7 to 10 and Medium 7 to 10, 8 each, then 5 Medium at 11; every level satisfies `rate(level) === level.tier`), written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
-- Milestone 5: the tool (M5-03), the ladder (M5-04), tiered generation (M5-05) and Hard techniques with ladder hints (M5-06) have landed; Expert cells arrive with #93.
+- Milestone 5: the tool (M5-03), the ladder (M5-04), tiered generation (M5-05) and Hard techniques with ladder hints (M5-06) and Expert lookahead with its campaign cells (M5-07) have landed.
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 
 ## 11. Testing
@@ -207,4 +207,4 @@ Decided:
 18. **One screen and one shared `<Dialog>`** for pause, rules, settings and results; the store is pure and time is injected by `useClock`.
 
 Still open:
-1. **Which size/tier combinations to ship:** answered for Easy and Medium (M5-05): Easy 7 to 10 and Medium 7 to 11 ship, Easy 11x11 is dropped; Hard and Expert pending. (The naive seed script could not find a unique 11x11 in 60 s, a first data point.)
+1. **Which size/tier combinations to ship:** answered for Easy and Medium (M5-05): Easy 7 to 10 and Medium 7 to 11 ship, Easy 11x11 is dropped; Hard and Expert fill at every size (M5-06, M5-07). (The naive seed script could not find a unique 11x11 in 60 s, a first data point.)

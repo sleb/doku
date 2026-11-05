@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §4, §4.1, §10 and §12 for milestone 5 ("Generator + level packs + difficulty tiers"). It expands `docs/ENGINE_DESIGN.md` §9, which stays the short reference; if the two disagree, this document wins on the generator and `ENGINE_DESIGN.md` wins on the technique ladder (§6) and solvers (§7). Sync both when this lands.
 
-**Status:** draft for review. M5-01 (`seed.ts`), M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) and M5-03 (the pack tool and generated campaign), M5-04 (`rate`, Easy and Medium) and M5-05 (tiered generation and the tiered campaign) are implemented; see §13 to §16 for what differs from this text. Hard and Expert are not.
+**Status:** draft for review. M5-01 (`seed.ts`), M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) and M5-03 (the pack tool and generated campaign), M5-04 (`rate`, Easy and Medium), M5-05 (tiered generation and the tiered campaign), M5-06 (Hard) and M5-07 (Expert, lookahead) are implemented; see §13 to §18 for what differs from this text.
 
 ## 1. Goals and non-goals
 
@@ -151,7 +151,7 @@ The previous script's failure at 11×11 came from growing regions with **no stee
 
 ### 7.2 Staging
 
-The generator is useful before the ladder exists, so the stories land in this order (§11): untiered generator and packs first, tiers as techniques land. In particular **Easy and Medium come first**; Expert (lookahead) last, and if Hard is a satisfying top tier the Expert tier is dropped from the curriculum rather than forced.
+The generator is useful before the ladder exists, so the stories land in this order (§11): untiered generator and packs first, tiers as techniques land. In particular **Easy and Medium come first**; Expert (lookahead) last, with the option to drop it if Hard were a satisfying top tier. M5-07 measured it and shipped Expert (§18).
 
 ### 7.3 Steering (only if measurements require it)
 
@@ -227,7 +227,7 @@ Engine tests run under Vitest with small sizes and attempt budgets so `bun run t
 1. **Repair may not converge at 11×11.** Measure rivals per attempt before and after each move. If convergence is poor, alternatives in order of cost: (a) move a *pair* of cells; (b) restart growth from a different `shape`; (c) choose which rival to break by the one that touches most regions. Do not pre-build these.
 2. **Per-attempt cost.** If `countSolutions` on large unique levels dominates, add a node counter to `search` and abandon an attempt past a budget (deterministic, unlike a timer).
 3. **Variety.** Uniform frontier growth makes blobby regions. Pack quality is judged by looking at them and playing, not by a metric; the shape defaults are the only knob in v1.
-4. **Hard to fill cells.** Expected: 7×7 Expert and 11×11 Easy (§7.3). The curriculum, not the code, adapts.
+4. **Hard to fill cells.** Expected: 7×7 Expert and 11×11 Easy (§7.3). Measured: only Easy 11×11 fails (§16); every Expert cell fills (§18). The curriculum, not the code, adapts.
 
 ## 11. Suggested issue breakdown (milestone "generator")
 
@@ -241,14 +241,14 @@ Titled `M5-NN`, each strictly TDD (CLAUDE.md), each plannable with `/doku-plan`.
 | 04 | Technique ladder, Easy and Medium, `rate` | per `ENGINE_DESIGN.md` §6 to §8 (own LLD section or plan) |
 | 05 | Tiered generation | `GenerateOptions.tier` wired to `rate`; tier tests; curriculum gets tiers |
 | 06 | Hard techniques and ladder hints | `ENGINE_DESIGN.md` §6 rows 4 to 6; hints replace the stub |
-| 07 | Expert (lookahead) or drop it | decided from `--stats` |
+| 07 | Expert (lookahead) or drop it | decided from `--stats`: shipped (§18) |
 | 08 | Docs sync | `DESIGN.md` §4, §4.1, §10, §12, §13; `ENGINE_DESIGN.md` §9; `APP_DESIGN.md` §3.1, §11 |
 
 Stories 01 to 03 deliver value on their own (a real, varied, all-sizes pack) before any technique exists, which also retires the 11×11 gap.
 
 ## 12. Open questions
 
-1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16) and for Hard by M5-06 (§17: all five sizes fill); Expert waits for #93.
+1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16) for Hard by M5-06 (§17: all five sizes fill) and for Expert by M5-07 (§18: all five sizes fill, three levels per size shipped).
 2. **Shape defaults** (`minRegion = 2`, `maxSingletons` 1 for 7 to 8 and 2 for 9 to 11, `maxRegion = 35%`): guesses; tune by playing generated packs.
 3. **Curve design:** M5-05 ships all Easy first (sizes 7 to 10), then Medium (7 to 11) (§16). Whether to interleave sizes and tiers for variety stays a game-design decision to revisit after playing it.
 4. **Seed string format for the daily puzzle** (milestone 6): date-derived, e.g. `daily/2026-11-04`; nothing in this design blocks it.
@@ -320,7 +320,7 @@ The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, 
 
 Tiered generation and the tiered campaign.
 
-- **Filter.** `generate({ size, tier, seed })` runs the same attempts `${seed}#k` as before; after a candidate survives uniqueness and shape it is rated, and kept only if `rate(candidate) === tier`. The returned level has `tier` set and `unrated` is never returned. With `tier` omitted `rate` is never called (tested with a spy), so untiered output and the golden snapshot are unchanged. `maxAttempts` stays 2000; `expert` simply exhausts it and returns `null` until #93 (`hard` fills since M5-06, §17).
+- **Filter.** `generate({ size, tier, seed })` runs the same attempts `${seed}#k` as before; after a candidate survives uniqueness and shape it is rated, and kept only if `rate(candidate) === tier`. The returned level has `tier` set and `unrated` is never returned. With `tier` omitted `rate` is never called (tested with a spy), so untiered output and the golden snapshot are unchanged. `maxAttempts` stays 2000; `expert` exhausted it and returned `null` until M5-07 (`hard` fills since M5-06, §17; `expert` since §18).
 - **`tryCandidate(size, rng, shape?, tier?)`** adds the reject reasons `tier` and `unrated`; `generate` and `--stats` share it.
 - **Pack tool.** `GenerateFn` takes `tier`; `collectRow` passes `row.tier`; `verifyLevel` additionally fails when `level.tier` is set and `rate(level) !== level.tier`. `computeStats(size, tier?, seeds = 20)` measures every size x {untiered, easy, medium} cell; `--stats` prints them. A seed that needs more than 2000 attempts or 60 s counts as not filled.
 - **Fill criterion.** A cell ships if at least 18 of the 20 stats seeds fill within 2000 attempts and 60 s each. Counts are chosen within what the cell can produce; the real regeneration run is the final check.
@@ -396,3 +396,56 @@ size  tier    filled  median   p90  repair-rej  shape-rej  tier-rej  unrated-rej
   Every Hard cell fills 20 of 20, including 11x11 at about 0.5 s per level, so no Hard cell is dropped and no steering was needed. The easy and medium attempt counts are identical to §16 (the same candidates are accepted); only the reject columns shifted.
 - **Curriculum (pack 1, 94 levels).** Appended after Medium 11 so tiers stay non-decreasing: Hard 7, 8, 9, 10 and 11, five each. Shipped cells: easy 7 to 10, medium 7 to 11, hard 7 to 11. Dropped: easy 11. Ids `hard-07-001` ... `hard-11-005`. The first 69 levels regenerate byte-for-byte (the diff is 25 appended levels only), and a second run is byte-identical. The pack is 32 easy, 37 medium and 25 hard levels.
 - **Hints** (`ENGINE_DESIGN.md` §8, `APP_DESIGN.md` §4.4): `nextHint` returns the first ladder step the player has not acted on, so the hint vocabulary is exactly the rating vocabulary. A full-board hint costs well under 1 ms on the 11x11 fixture (soft budget 10 ms).
+
+## 18. As built in M5-07
+
+Expert (lookahead): the decision, the numbers, and the campaign cells.
+
+- **Decision: ship Expert.** A throwaway spike on the #92 `measure/<n>/<i>` seeds (100 untiered levels per size, 40 at 11) showed depth-1 lookahead solving all 37 levels that were `unrated` after Hard. The real implementation reproduces it exactly (re-measured on the same seeds):
+
+| size | easy | medium | hard | expert | unrated | `rate` ms per expert level |
+|---|---|---|---|---|---|---|
+| 7 | 3 | 16 | 71 | 10 | 0 | 0.7 |
+| 8 | 5 | 16 | 74 | 5 | 0 | 0.8 |
+| 9 | 6 | 23 | 62 | 9 | 0 | 1.1 |
+| 10 | 3 | 18 | 70 | 9 | 0 | 1.8 |
+| 11 | 1 | 3 | 32 | 4 | 0 | 3.5 |
+
+  Gate (decided before building): ship if the real implementation solved at least 90% of the unrated sample and at least 3 sizes met the 18 of 20 criterion. It solved 37 of 37, and all 5 sizes fill 20 of 20, so every cell ships its criterion; `Tier` keeps `"expert"`.
+- **Ladder.** `lookahead` is rung 7, tier `expert` (`ENGINE_DESIGN.md` §6): depth 1, no nesting, propagating with rungs 1 to 6 (`propagate`) and checking `contradiction`. It is reached only when rungs 1 to 6 return null, so ratings of every non-expert level are unchanged and the first 94 pack levels regenerate byte-for-byte.
+- **Generator.** `generate({ tier: "expert" })` and `tryCandidate` needed no change. `unrated` remains a valid `rate` output (a level the ladder cannot finish) and is still always rejected; no candidate was `unrated` in any measured run (the `unrated-rej` column is 0% everywhere), so the branch is tested by cutting the ladder to rungs 1 to 6 in a test (`__fixtures__/capLadder.ts`), not by a fixture.
+- **`--stats`** (20 seeds per cell, `tools/generate-levels.ts --stats` now includes `expert`; the easy, medium and hard attempt counts are unchanged, and the former `unrated-rej` share is now counted as `tier-rej`):
+
+```
+size  tier    filled  median   p90  repair-rej  shape-rej  tier-rej  unrated-rej  ms/level
+   7  any      20/20       1      6         57%         2%        0%           0%         1
+   7  easy     20/20      16     76         62%         5%       30%           0%         9
+   7  medium   20/20      11     27         60%         6%       27%           0%         3
+   7  hard     20/20       2      6         53%         2%       12%           0%         1
+   7  expert   20/20      52    146         61%         4%       34%           0%        18
+   8  any      20/20       2      7         68%         2%        0%           0%         2
+   8  easy     20/20      84    185         70%         5%       24%           0%        75
+   8  medium   20/20      11     45         71%         3%       21%           0%        13
+   8  hard     20/20       4     13         68%         8%        7%           0%         4
+   8  expert   20/20      43    143         72%         4%       23%           0%        57
+   9  any      20/20       3      9         76%         1%        0%           0%         8
+   9  easy     20/20      64    263         79%         0%       20%           0%       235
+   9  medium   20/20      18    105         82%         0%       15%           0%        59
+   9  hard     20/20       4     13         81%         1%        3%           0%        12
+   9  expert   20/20      46    201         79%         1%       19%           0%       154
+  10  any      20/20       8     15         89%         0%        0%           0%        54
+  10  easy     20/20     243   1027         87%         0%       13%           0%      2427
+  10  medium   20/20      32    110         87%         0%       11%           0%       372
+  10  hard     20/20       7     16         86%         1%        2%           0%        72
+  10  expert   20/20      54    159         86%         0%       13%           0%       591
+  11  any      20/20      10     31         93%         0%        0%           0%       380
+  11  easy     16/20     337   1404         93%         0%        7%           0%     28075
+  11  medium   20/20      67    236         93%         0%        6%           0%      2763
+  11  hard     20/20       8     45         92%         1%        1%           0%       443
+  11  expert   20/20     241    418         93%         0%        7%           0%      6443
+```
+
+  Expert is the costliest to find (median 43 to 54 attempts at 7 to 10, 241 at 11) but every cell fills 20 of 20 and 11x11 costs about 6.4 s per level, so no steering (§7.3) was built.
+- **Curriculum (pack 1, 109 levels).** Appended after Hard 11 so tiers stay non-decreasing: Expert 7, 8, 9, 10 and 11, three each (fewer than the other tiers to keep 11x11 generation cheap). Ids `expert-07-001` ... `expert-11-003`. The diff to the previous pack is 15 appended levels only and a second run is byte-identical. The pack is 32 easy, 37 medium, 25 hard and 15 expert levels.
+- **Hints.** A `lookahead` deduction is an elimination: the hint highlights the assumed cell and costs a heart like every hint (M5-06), writing no marks. Its text cites only the final emptied unit ("A face here would leave row 5 with nowhere to go after the forced moves that follow, so this cell cannot hold one."); it does not replay the chain of forced moves. That is a known limitation.
+- **Tests.** Soundness (no `lookahead` elimination removes a solution cell) over generated levels at 7 to 11 and the expert goldens, with a throwaway mutation confirming it catches a wrong elimination; crafted-board, order and null cases in `techniques.expert.test.ts`; `rate` stays under 10 ms.
