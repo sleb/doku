@@ -245,7 +245,7 @@ describe("useShortcuts", () => {
       press({ key: "h" });
       expect(gameStore.getState().hearts).toBe(1);
       press({ key: "h" });
-      expect(faces()).toBe(2);
+      expect(faces()).toBe(1);
       expect(gameStore.getState().hearts).toBe(1);
     });
   });

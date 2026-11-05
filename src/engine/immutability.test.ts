@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { type Fixture, fixtures } from "./__fixtures__/levels";
 import { emptyBoard } from "./board";
+import { rate } from "./difficulty";
 import { nextHint } from "./hints";
 import { findConflicts, isSolved, judgeTap } from "./rules";
-import { countSolutions, solve } from "./solver";
+import { countSolutions, solutions, solve, solveByTechniques } from "./solver";
 import { type Board, Cell, type Level } from "./types";
 import { LevelError, loadLevel, validateLevel } from "./validate";
 
@@ -109,7 +110,10 @@ describe.each(fixtures)(
         solve: () => solve(level),
         countSolutions: () => countSolutions(level),
         "countSolutions(limit 10)": () => countSolutions(level, 10),
+        "solutions(limit 3)": () => solutions(level, 3),
         validateLevel: () => validateLevel(level),
+        rate: () => rate(level),
+        solveByTechniques: () => solveByTechniques(level),
         loadLevel: () => {
           if (name !== EXPECTED_REJECTED) return loadLevel(level);
           expect(() => loadLevel(level)).toThrow(LevelError);
@@ -137,6 +141,7 @@ describe.each(fixtures)(
           findConflicts: () => findConflicts(board, level),
           isSolved: () => isSolved(board, level),
           nextHint: () => nextHint(board, level),
+          "solveByTechniques(board)": () => solveByTechniques(level, board),
         };
 
         it.each(Object.keys(calls))("%s", (callName) => {
@@ -161,9 +166,18 @@ describe.each(fixtures)(
         }
       }
 
+      for (const placement of solutions(level, 3)) {
+        expect(arrays).not.toContain(placement);
+      }
+
       const issues = validateLevel(level);
       expect(arrays).not.toContain(issues);
       for (const found of issues) expect(arrays).not.toContain(found.cells);
+
+      for (const step of solveByTechniques(level).steps) {
+        expect(arrays).not.toContain(step.eliminate);
+        expect(arrays).not.toContain(step.because.cells);
+      }
 
       const empty = emptyBoard(level);
       expect(emptyBoard(level)).not.toBe(empty);

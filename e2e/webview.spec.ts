@@ -1,8 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 import { press } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 
-const { solution } = levelById("demo-7");
+const { solution } = levelBySize(7);
 
 const style = (page: Page, sel: string, prop: string) =>
   page.evaluate(

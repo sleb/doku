@@ -34,7 +34,7 @@ src/
 │  │  ├─ Board.tsx
 │  │  ├─ Cell.tsx
 │  │  ├─ icons.tsx       # FaceIcon, WrongIcon (inline SVG)
-│  │  └─ palette.ts      # region class lookup + region names
+│  │  └─ palette.ts      # region class lookup (names: engine/regionNames.ts)
 │  ├─ hud/
 │  │  ├─ Hearts.tsx
 │  │  ├─ Timer.tsx       # M4
@@ -45,7 +45,7 @@ src/
 │     ├─ ResultModal.tsx, PauseDialog.tsx, RulesDialog.tsx, SettingsDialog.tsx, Finale.tsx
 │     └─ useClock.ts, useAutoPause.ts, useShortcuts.ts
 ├─ levels/
-│  ├─ pack-1.json        # bundled level pack (M4-01); holds demo-7, the former M2 demo level
+│  ├─ pack-1.json        # bundled generated level pack (M4-01, M5-03)
 │  └─ campaign.ts        # LEVELS / levelIndex
 ├─ app/
 │  └─ index.css          # @import "tailwindcss"; @theme tokens (region palette)
@@ -56,7 +56,7 @@ e2e/
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
-`demo-7` (a copy of `uniqueLevel7`) is the first level of `src/levels/pack-1.json` (8 levels in all), loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`, `levelCount`, `levelIds`); they do not import the JSON module. That helper reads every `src/levels/pack-*.json` and orders them with the app's own `orderPackKeys` (`src/levels/packOrder.ts`, numeric suffix, so `pack-2` precedes `pack-10`), so e2e sees the same campaign as `campaign.ts`.
+The first level of `src/levels/pack-1.json` (a generated Easy 7x7, `easy-07-001`; 109 levels in all) is loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`, `levelBySize`, `levelCount`, `levelIds`); they do not import the JSON module. That helper reads every `src/levels/pack-*.json` and orders them with the app's own `orderPackKeys` (`src/levels/packOrder.ts`, numeric suffix, so `pack-2` precedes `pack-10`), so e2e sees the same campaign as `campaign.ts`.
 
 ## 3. Store (`src/store`)
 
@@ -253,10 +253,10 @@ Tailwind only generates classes it can see statically, so region colors are decl
 
 ```ts
 export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
-export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
+// REGION_NAMES (["red", "orange", ..., ], same order as the tokens) lives in src/engine/regionNames.ts, so hint text can use it too; Cell.tsx imports it from the engine
 ```
 
-Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. The demo level is `demo-7` (a copy of `uniqueLevel7`) in `src/levels/pack-1.json`, available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
+Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. (M2 history) The demo level became the first generated level in `src/levels/pack-1.json` (the original `demo-7` was replaced in M5-03), available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
 
 Hex values were chosen under two requirements: the 11 colors are pairwise distinguishable, and the face/mark glyph (dark stroke) reaches ≥ 3:1 contrast on every one. The color-blind variant and pattern overlay (`DESIGN.md` §7 Theming) are not part of milestone 3: the palette setting arrives with settings in milestone 4 and the accessibility pass is milestone 6 (`DESIGN.md` §12), but tokens plus a lookup keep that a one-file swap.
 
@@ -326,7 +326,7 @@ Fixtures: `uniqueLevel7` for most store/UI tests (solution `[1,3,5,0,2,4,6]`). H
 - `ResultModal`: nothing for `playing`; correct heading for `won`/`lost`; Retry autofocused and calls `onRetry`.
 - `GameScreen` (real store): holding each solution cell shows the win dialog; three wrong holds show the lose dialog, with a red ✕ on each wrong cell; a single click adds a ✕ and a second single click removes it; focusing a solution cell and holding `Space` places a face, `x` toggles a ✕; Retry returns to a fresh board with 3 hearts.
 
-**E2E, Playwright (`e2e/playthrough.spec.ts`)** against `demo-7` in `pack-1.json`, locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
+**E2E, Playwright (`e2e/playthrough.spec.ts`)** against the first 7x7 level in `pack-1.json` (`levelBySize(7)`), locating cells by `aria-label` and reading the solution from the JSON via `fs`/`JSON.parse`:
 
 1. Win: focus each of the 7 solution cells and hold `Space` (plus a mouse hold on one cell to cover the mouse gesture) → "You solved it" → Retry → fresh board.
 2. Lose: focus three different non-solution cells and hold `Space` (one heart each) → "Out of hearts" → Retry.

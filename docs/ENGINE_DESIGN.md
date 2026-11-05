@@ -8,7 +8,7 @@ Companion to `DESIGN.md` §4. This describes `src/engine/`: data structures, alg
 - **Unique solution:** every shipped level has exactly one solution, stored with the level.
 - **Deterministic:** no `Math.random`, no `Date`. All randomness comes from a seeded PRNG passed in, so a seed reproduces a puzzle on any device.
 - **Immutable boards:** functions return new boards; nothing mutates inputs. (A board is ≤121 bytes, so copying is cheap, and undo/redo becomes a list of boards.)
-- **Fast:** rule checks per tap < 1 ms; `rate()` < 10 ms for N=11; hint < 10 ms. Generation may take seconds and runs in a Worker.
+- **Fast:** rule checks per tap < 1 ms; `rate()` < 10 ms for N=11; hint < 10 ms. Generation may take seconds (up to ~6 s per 11×11 Expert level) and runs offline in `tools/`; a Worker is possible later (§9).
 - **Sound:** no technique may ever eliminate a cell that is in the solution. This is the central invariant and is tested directly (§9).
 
 ## 2. Data model
@@ -41,24 +41,23 @@ type Tier = 'easy' | 'medium' | 'hard' | 'expert';
 
 ### Compiled puzzle (derived, not serialized)
 
-`compile(level)` precomputes everything the algorithms need so they never recompute geometry:
+`compile(level)` (M5-04) precomputes the geometry the technique solver needs. It is deliberately minimal: only what the technique ladder reads (the units, `regionOf` and the neighbour helper; Hard and Expert needed no more geometry).
 
 ```ts
 interface Puzzle {
   n: number;
   regionOf: Uint8Array;              // cell → region id
-  solution: Uint8Array;              // cell-indexed: 1 if in solution (for judging taps)
-  solutionByRow: Uint8Array;         // = level.solution
-  neighbors: Uint8Array[];           // cell → indices of the ≤8 adjacent cells
-  units: Unit[];                     // 3N units: N rows, N cols, N regions
+  units: Unit[];                     // 3N units: N rows, then N cols, then N regions
 }
 
 interface Unit {
   kind: 'row' | 'col' | 'region';
   id: number;                        // row index, col index, or region id
-  cells: Uint8Array;                 // member cell indices
+  cells: Uint8Array;                 // member cell indices, ascending
 }
 ```
+
+The unit index of row r is `r`, of column c is `n + c`, of region g is `2n + g` (`unitIndexes(p, cell)` returns the three). `neighborsOf(p, cell)` computes the ≤8 adjacent cells arithmetically. `solution`, `solutionByRow` and a stored `neighbors` table from the first draft were dropped: nothing needs them (taps are judged from the `Level`).
 
 `validateLevel(level): LevelIssue[]` (pure, never throws) checks: size in 7..11 (`size`), `regions` is N×N (`regions-shape`), ids 0..N-1 each used (`region-count`), every region 4-connected (`region-connected`), and the solution is a valid placement: `solution-shape`, then `col`, `region`, `adjacent` (consecutive rows with column difference ≤ 1). `row` is not checked since `solution` is column-per-row. `LevelIssue = { rule, message, cells: Coord[] }`. Structural failures (size, shape, count) short-circuit the rest; connectivity and solution issues report together.
 
@@ -73,17 +72,18 @@ engine/
   validate.ts     validateLevel(), loadLevel(), LevelError
   board.ts        emptyBoard(), setCell(), facesOf() (immutable helpers)
   rules.ts        findConflicts(), isSolved(), judgeTap()
-  candidates.ts   Candidates type, fromBoard(), placeFace(), contradiction()
+  candidates.ts   Candidates type, fromBoard(), placeFace(), eliminate(), emptiedUnit(), contradiction()
   techniques.ts   TECHNIQUES ladder, Deduction type
-  solver.ts       solveByTechniques(), solve(), countSolutions()
+  solver.ts       solveByTechniques(), solve(), countSolutions(), solutions()
   difficulty.ts   rate()
-  hints.ts        nextHint()
+  hints.ts        nextHint(), Hint
+  hintText.ts     explain(): one message template per technique
   generator.ts    generate()
-  seed.ts         Rng, hashSeed(), shuffle()
+  seed.ts         makeRng(), Rng, hashSeed()
   index.ts        public API (only what the rest of the app may import)
 ```
 
-Dependency direction (no cycles): `types ← compile ← board ← rules`; `compile ← candidates ← techniques ← solver ← difficulty ← hints, generator`; `seed ← generator`.
+Dependency direction (no cycles): `types ← compile ← board ← rules`; `compile ← candidates ← techniques ← solver ← difficulty ← generator` and `techniques ← hintText ← hints` (`solver ← hints`); `seed ← generator`.
 
 ## 4. rules.ts
 
@@ -114,9 +114,9 @@ interface Candidates {
 ```
 
 - `fromBoard(p, board)`: start with every cell alive, then `placeFace` each `Face` on the board. **Marks are ignored.** Because wrong faces are never placed (§4), every face on the board is a true solution cell, so candidates derived from faces are always sound.
-- `placeFace(p, cand, cell)` returns a new `Candidates` with: the cell placed, and every other cell in its row, column, and region, plus its ≤8 neighbors, eliminated. This is the **basic propagation** (the "Easy" tier's elimination rule).
+- `placeFace(p, cand, cell)` returns a new `Candidates` with: the cell placed (and still alive, so a satisfied unit shows `aliveCount == 1`; techniques skip satisfied units), and every other cell in its row, column, and region, plus its ≤8 neighbors, eliminated. This is the **basic propagation** (the "Easy" tier's elimination rule).
 - `eliminate(p, cand, cells)` clears `alive` for the given cells and updates counters.
-- `contradiction(cand)`: true if some unsatisfied unit has `aliveCount == 0`. Used by lookahead.
+- `contradiction(cand)` (M5-07): true if some unsatisfied unit has `aliveCount == 0`; `emptiedUnit(cand)` returns the first such unit index (or -1) so lookahead can cite it. Used by lookahead.
 - Candidate sets are cloned per lookahead branch (N² + 3N bytes; trivial).
 
 ## 6. Techniques (techniques.ts)
@@ -140,6 +140,13 @@ type Technique = (p: Puzzle, c: Candidates) => Deduction | null;
 const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[];  // ordered simplest → hardest
 ```
 
+**As built (M5-04, M5-06, M5-07):** `TechniqueId` is the union of the seven ids (rows 1 to 7 below). Eliminations never include placed cells, every technique skips satisfied units, and a technique that would eliminate nothing returns `null` so the solver always makes progress.
+
+- **`adjacency-pressure`** (M5-06) is a plain scan, not bitmasks (a 121-cell board does not fit a 32-bit mask): for each alive, unplaced cell X it marks the cells a face at X would remove (X's row, column, region and neighbors) and checks whether any unsatisfied unit that does not contain X has all its alive cells in that set. It returns one X per call with `because.units = [U]` and `because.cells = alive(U)`.
+- **`subset-regions-lines` / `subset-lines-regions`** (M5-06) share one routine. For rows and for columns separately it builds a bitmask per unsatisfied unit of the first kind (the lines or regions its alive cells touch), enumerates subsets of exactly M = 2 to ⌊N/2⌋ units with a depth-first search that prunes once the merged mask exceeds M bits, and acts when the merged mask has exactly M bits and at least one other alive, unplaced cell sits in those M units. `because.units` lists the M subset units, then the M owned units; `because.cells` is the subset's alive cells. M = 1 is `region-in-line` / `line-in-region`.
+
+- **`lookahead`** (M5-07) is depth 1 only. `propagate(p, cand)` in `techniques.ts` runs rungs 1 to 6 to a fixpoint and stops as soon as a unit empties (`solveByTechniques` shares `applyDeduction` with it). `lookahead` scans cells in index order; the first alive, unplaced X whose assumed face propagates to a contradiction yields `{ technique: "lookahead", tier: "expert", eliminate: [X], because: { units: [emptied unit], cells: [X] } }`. One per call, always an elimination. It is only reached when rungs 1 to 6 return null, so existing ratings are unchanged. The hint cites only the final emptied unit, not the chain of forced moves (a documented limitation).
+
 Returning one deduction at a time (not all of them) is deliberate: the solver restarts from the simplest technique after each step, which is what makes the tier rating the *minimum* hardest technique (see §7).
 
 The ladder, with the algorithm for each:
@@ -158,13 +165,13 @@ Notes:
 - Subsets are capped at M ≤ ⌊N/2⌋ because an M-subset deduction and its (N−M)-complement are the same fact seen from the other side.
 - Each unit's "alive cells" are read from `Candidates`, never from the board, so techniques compose after eliminations.
 - `Deduction.because` is the only thing UI/hint text needs. Hint copy is a template per `TechniqueId` filled from `because` ("Region *green* only fits in *row 4*, so the rest of row 4 is out").
-- **Tier of `adjacency-pressure`:** `DESIGN.md` §4.1 does not list this technique. It is a one-step contradiction check, harder than line confinement but easier than general lookahead, so it is placed in Hard. §4.1 should be updated to include it. The `TECHNIQUES` array is the single source of truth for tier assignment.
+- **Tier of `adjacency-pressure`:** it is a one-step contradiction check, harder than line confinement but easier than general lookahead, so it is placed in Hard (`DESIGN.md` §4.1 lists it). The `TECHNIQUES` array is the single source of truth for tier assignment.
 
 ## 7. Solving (solver.ts)
 
 Two independent solvers, with different jobs.
 
-### 7.1 `solveByTechniques(p, board?)` — the human-style solver
+### 7.1 `solveByTechniques(level, board?)` — the human-style solver
 
 ```ts
 interface SolveTrace {
@@ -197,52 +204,58 @@ Why two solvers: the backtracker proves uniqueness and finds the solution; the t
 ## 8. Difficulty (difficulty.ts) and hints (hints.ts)
 
 ```ts
-function rate(p: Puzzle): Tier | 'unrated';
+function rate(level: Level): Tier | 'unrated';
 ```
-`trace = solveByTechniques(p)`; `trace.solved ? trace.hardest : 'unrated'`. The generator rejects `unrated` puzzles.
+`rate` takes a `Level` and compiles it internally (as built in M5-04; `DESIGN.md` §4 already says `rate(level)`). `trace = solveByTechniques(level)`; `trace.solved ? trace.hardest : 'unrated'`. The generator rejects `unrated` puzzles.
 
 ```ts
 interface Hint {
   deduction: Deduction;        // technique, target cell(s), because
-  message: string;             // rendered from the template
+  message: string;             // rendered from the technique's template
 }
-function nextHint(p: Puzzle, board: Board): Hint | null;
+function nextHint(board: Board, level: Level): Hint | null;
 ```
-**Current state (M4-04):** `hints.ts` is a stub with signature `nextHint(board, level): number | null`, returning the solution cell of the first row without a face; the `Hint` object form and the ladder-driven behaviour below arrive with milestone 5.
+**As built (M5-06).** `nextHint` keeps the `(board, level)` form of the M4 stub (it compiles internally, like `rate`); the stub's `number | null` return is gone and every caller was updated. It runs `solveByTechniques(level, board)` (faces only, marks ignored) and returns the first step that either places a face or eliminates at least one cell the player has **not** already marked. So the hint is the simplest deduction the player has not acted on, and it advances as the player marks the cells it named. It is stateless, and every step is sound, so applying a hint never contradicts the solution. `null` means the board is complete or the ladder is stuck (possible only on an unrated level).
 
-`nextHint` builds candidates from the player's faces (ignoring marks), runs the ladder, and returns the first deduction. If its result is only eliminations, the UI highlights those cells and explains why; a placement deduction highlights the cell. `null` means the board is complete or the ladder cannot progress (possible only on a corrupted or unrated puzzle).
+`message` comes from `explain(deduction)` in `src/engine/hintText.ts`: one template per `TechniqueId`, pure, importing only engine types. Rows and columns are numbered from 1 for the player ("row 4", "column 2"); regions go by the colour the board shows ("the red region"), using `REGION_NAMES` from `src/engine/regionNames.ts` (the single source of truth, also used by the board labels), and fall back to "region 12" past the end of the list. `Hint`, `Deduction`, `TechniqueId` and `UnitRef` are exported from `index.ts`; `explain` stays internal.
+
+**In the app** (`docs/APP_DESIGN.md` §4.4): a placement hint commits the face; an elimination hint only highlights and explains and writes no marks (marking is the player's move, and the next hint skips what they have marked).
 
 ## 9. Generator (generator.ts, seed.ts)
 
 ```ts
 interface GenerateOptions {
   size: number;
-  tier: Tier;
+  tier?: Tier;                            // omitted: no rating (M5-05)
   seed: string;
   maxAttempts?: number;                   // default 2000
-  signal?: AbortSignal;
+  shape?: Partial<ShapeLimits>;           // overrides defaultShape(size)
+  shouldStop?: () => boolean;             // polled per attempt and inside it; true returns null
 }
 function generate(o: GenerateOptions): Level | null;
+// One attempt, with the rejecting filter reported (used by --stats):
+function tryCandidate(size, rng, shape?, tier?, shouldStop?):
+  { level: Level } | { reject: 'repair' | 'shape' | 'tier' | 'unrated' | 'stopped' };
 ```
 
 Pipeline for each attempt (all randomness from `Rng` seeded by `hashSeed(seed + attempt)`):
 
-1. **Solution:** build a random valid placement row by row: random column order each row, skipping used columns and columns within 1 of the previous row's column; backtrack on dead end. Result is `solution[]` (one per row/col, non-adjacent).
-2. **Regions:** seed region `i` at the solution cell in row `i` (so each region contains exactly one solution cell). Then grow: repeatedly pick a random unassigned cell that touches an assigned cell and give it a random adjacent region (weighted toward smaller regions to avoid one giant region). This yields connected regions by construction.
-3. **Uniqueness repair:** `countSolutions(limit = 2)`. If 1, go on. If ≥ 2, take the second solution found and *mutate*: move a boundary cell (not a solution cell) from one region to an adjacent region such that (a) the source region stays connected, (b) the alternative solution becomes invalid. Re-check. Cap at ~50 mutations per attempt; then discard and restart.
-4. **Shape filter:** reject if any region has fewer than `minRegionSize` cells (default 2; a one-cell region is a free give-away) or the size spread is extreme (largest region > ~35% of the grid).
-5. **Rate:** `rate(p)` must equal the requested `tier`. Else mutate for difficulty within the same cap (merging a cell into a bigger region tends to increase difficulty; splitting off tends to decrease it), or discard.
+1. **Solution:** `randomSolution`, a row-by-row backtracking search over shuffled column order (`GENERATOR_DESIGN.md` §5.1).
+2. **Regions:** `growRegions` seeds region `i` at the solution cell of row `i` and grows size-targeted, connected regions (§5.2).
+3. **Uniqueness repair:** `repairUniqueness` moves rival-solution cells into a neighbouring region until `countSolutions == 1`, within 60 moves (§5.3).
+4. **Shape filter:** `passesShape(regions, shape)` with `ShapeLimits { minRegion, maxSingletons, maxRegion }`; `defaultShape(n)` is `minRegion` 2, `maxSingletons` 1 for n <= 8 and 2 for n >= 9, `maxRegion` `ceil(0.35 n²)` (§5.4).
+5. **Rate:** when `tier` is given, `rate(p)` must equal it, else the candidate is discarded (as built in M5-05; mutating for difficulty is not built, see `GENERATOR_DESIGN.md` §7.3 and §16). Without `tier`, `rate` is not called.
 6. **Output:** `Level { …, tier, seed }` after `validateLevel`.
 
-Returns `null` after `maxAttempts` (the caller treats this as "combination not available" and hides it from level select). The same `generate` call with the same options always returns the same level.
+Returns `null` after `maxAttempts` (the caller treats this as "combination not available" and the curriculum omits it; there is no level select in v1). The same `generate` call with the same options always returns the same level.
 
-`seed.ts`: `mulberry32` PRNG behind a small `Rng` interface (`next()`, `int(n)`, `shuffle(arr)`), and `hashSeed(string) → uint32` (xmur3 or FNV-1a).
+`seed.ts`: `makeRng(seed: string)` returns an `Rng` (`next()`, `int(n)`, `shuffle(arr)`, `pick(arr)`) backed by mulberry32 seeded from `hashSeed(string) → uint32` (FNV-1a over UTF-16 code units, then murmur3 fmix32). Only `Math.imul` and `>>> 0`, so streams are identical on every runtime; `makeRng("doku")` is pinned by a frozen vector. `int(n)` is `floor(next() * n)` and throws `RangeError` unless `n` is an integer >= 1. `shuffle` is Fisher-Yates on a copy, drawing `int(i + 1)` for `i` from `len-1` down to 1 (the draw order is contract: generator goldens depend on it). `pick([])` throws `RangeError`. `isolation.test.ts` fails on `Math.random` or `Date.` in engine sources.
 
-**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The app can later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only an `AbortSignal` for cancellation.
+**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The Worker call is not built: v1 ships bundled packs. The app could later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only the polled `shouldStop` callback for cancellation (the engine reads no clock, so a caller wanting a deadline closes over its own).
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (not yet implemented), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint`, `rate`, `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (kept internal, see §2), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `REGION_NAMES`, `nextHint` and its `Hint` type (M5-06), `rate` (exported in M5-04; `solveByTechniques` and the technique types stay internal), `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 
@@ -263,19 +276,19 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coor
 
 Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/engine`). `src/engine/isolation.test.ts` scans every file under `src/engine` and fails if any imports from `src/ui`, `src/store`, `src/platform` or `@tauri-apps/*`, and asserts `window` and `document` are undefined.
 
-## 12. Build order within milestone 1
+## 12. Build order (milestones 1 and 5)
 
 1. `types`, `compile`, `board`, `rules` + tests, with 2–3 hand-written fixtures.
 2. `seed`, `countSolutions` + uniqueness tests.
-3. `candidates`, then techniques 1–3 and `solveByTechniques`, `rate` (Easy/Medium working end to end).
-4. `hints` (cheap once the ladder exists).
-5. Techniques 4–6 (Hard), with soundness property tests running throughout.
+3. `candidates` (done in M5-04, with `compile`), then techniques 1–3 and `solveByTechniques`, `rate` (Easy/Medium working end to end).
+4. `hints` (cheap once the ladder exists; the ladder-driven version landed with Hard in M5-06).
+5. Techniques 4–6 (Hard, M5-06), with soundness property tests running throughout.
 6. `generator` with Easy/Medium; extend as techniques land.
-7. Technique 7 (lookahead) and Expert generation last; defer if Hard is already a satisfying top tier.
+7. Technique 7 (lookahead) and Expert generation last (done in M5-07: Expert shipped, see `GENERATOR_DESIGN.md` §18).
 
 ## 13. Open questions
 
-1. **Generator success rates:** random region growth may rarely yield some size/tier pairs (e.g. 7×7 Expert, 11×11 Easy). We learn this empirically once the generator runs; the fallback is to hide those combinations (already in `DESIGN.md` §4.1).
-2. **Minimum region size** and max region share (defaults above are guesses that affect puzzle feel).
-3. **Expert definition:** depth-1 lookahead as written, or allow depth 2? Depth 2 is much slower and probably unnecessary at N ≤ 11.
+1. **Generator success rates:** answered by `--stats` (`GENERATOR_DESIGN.md` §16 to §18): only Easy 11×11 is dropped; every Expert cell fills 20 of 20.
+2. **Minimum region size** and max region share: shipped defaults are `minRegion` 2, `maxSingletons` 1 (n <= 8) or 2 (n >= 9) and `maxRegion` `ceil(0.35 n²)` (§9); still guesses, tune by playing (`GENERATOR_DESIGN.md` §12).
+3. **Expert definition:** resolved in M5-07: depth-1 lookahead, no nesting. It solved every unrated level measured, so depth 2 is unnecessary at N ≤ 11.
 4. **Pre-generated vs on-device generation:** v1 ships bundled packs; the Worker path is designed in but not required for v1.

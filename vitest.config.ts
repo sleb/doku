@@ -11,7 +11,7 @@ export default mergeConfig(
           test: {
             name: "node",
             environment: "node",
-            include: ["src/**/*.test.ts"],
+            include: ["src/**/*.test.ts", "tools/**/*.test.ts"],
           },
         },
         {

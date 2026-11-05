@@ -27,7 +27,16 @@ export type GameState =
       history: readonly number[];
       /** Undone toggles, oldest first; redo pops the last. */
       future: readonly number[];
+      /** The hint on display; transient, so never saved. */
+      hintShown: HintShown | null;
     };
+
+/** What the board draws for a hint: the forcing cells, the cells it rules out. */
+export interface HintShown {
+  cells: number[];
+  targets: number[];
+  message: string;
+}
 
 export const idleState: GameState = {
   status: "idle",
@@ -47,6 +56,7 @@ export function startLevel(level: Level): GameState {
     elapsedMs: 0,
     history: [],
     future: [],
+    hintShown: null,
   };
 }
 
@@ -59,7 +69,9 @@ export function tick(state: GameState, dt: number): GameState {
 }
 
 export function pause(state: GameState): GameState {
-  return state.status === "playing" ? { ...state, status: "paused" } : state;
+  return state.status === "playing"
+    ? { ...state, status: "paused", hintShown: null }
+    : state;
 }
 
 export function resume(state: GameState): GameState {
@@ -106,6 +118,7 @@ export function toggleMark(state: GameState, cell: number): GameState {
     board: flip(s.board, cell),
     history: [...s.history, cell],
     future: [],
+    hintShown: null,
   };
 }
 
@@ -117,6 +130,7 @@ function commitFace(s: Started, cell: number): Started {
     ...s,
     ...prune(s, cell),
     board,
+    hintShown: null,
     status: isSolved(board, s.level) ? "won" : "playing",
   };
 }
@@ -134,20 +148,47 @@ export function placeFace(state: GameState, cell: number): GameState {
     board,
     wrong: new Set(s.wrong).add(cell),
     hearts,
+    hintShown: null,
     status: hearts <= 0 ? "lost" : "playing",
   };
 }
 
+const sameCells = (a: readonly number[], b: readonly number[]) =>
+  a.length === b.length && a.every((v, i) => v === b[i]);
+
 /**
- * Place a correct face in the first row without one, for a heart. Refused (same
- * state) unless playing with a spare heart: a hint can win but never lose.
+ * Ask for the simplest deduction the player has not acted on, for a heart. A
+ * placement puts the face down; an elimination only highlights and explains
+ * (it writes no marks and nothing to history). Asking again for the hint
+ * already on display is free. Refused (same state) unless playing with a spare
+ * heart: a hint can win but never lose.
  */
 export function hint(state: GameState): GameState {
   if (state.status !== "playing" || state.hearts <= 1) return state;
-  const cell = nextHint(state.board, state.level);
-  if (cell === null) return state;
-  const s = commitFace(state, cell);
-  return { ...s, hearts: s.hearts - 1, hintsUsed: s.hintsUsed + 1 };
+  const found = nextHint(state.board, state.level);
+  if (found === null) return state;
+  const { place, eliminate, because } = found.deduction;
+  const shown: HintShown = {
+    cells: because.cells,
+    targets: place === undefined ? eliminate : [],
+    message: found.message,
+  };
+  const current = state.hintShown;
+  if (
+    current &&
+    current.message === shown.message &&
+    sameCells(current.cells, shown.cells) &&
+    sameCells(current.targets, shown.targets)
+  ) {
+    return state;
+  }
+  const next = place === undefined ? state : commitFace(state, place);
+  return {
+    ...next,
+    hearts: next.hearts - 1,
+    hintsUsed: next.hintsUsed + 1,
+    hintShown: next.status === "playing" ? shown : null,
+  };
 }
 
 function flip(board: Board, cell: number): Board {
@@ -165,6 +206,7 @@ export function undo(state: GameState): GameState {
     board: flip(state.board, cell),
     history: state.history.slice(0, -1),
     future: [...state.future, cell],
+    hintShown: null,
   };
 }
 
@@ -176,5 +218,6 @@ export function redo(state: GameState): GameState {
     board: flip(state.board, cell),
     history: [...state.history, cell],
     future: state.future.slice(0, -1),
+    hintShown: null,
   };
 }

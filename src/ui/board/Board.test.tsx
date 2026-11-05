@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { Cell, emptyBoard } from "../../engine";
+import { Cell, emptyBoard, REGION_NAMES } from "../../engine";
 import {
   uniqueLevel7 as level,
   multiSolutionLevel7,
@@ -9,7 +9,6 @@ import {
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
-import { REGION_NAMES } from "./palette";
 
 const n = level.size;
 const none: ReadonlySet<number> = new Set();
@@ -372,5 +371,30 @@ describe("Board", () => {
       await userEvent.keyboard("{ArrowRight}");
       expect(activeIndex()).toBe(3);
     });
+  });
+});
+
+describe("Board hint markers", () => {
+  test("marks causes and targets by index", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        highlight={new Set([3, 4])}
+        targets={new Set([10])}
+        disabled={false}
+        {...handlers()}
+      />,
+    );
+    const marked = Array.from(document.querySelectorAll("[data-hint]")).map(
+      (e) => [e.getAttribute("data-index"), e.getAttribute("data-hint")],
+    );
+    expect(marked).toEqual([
+      ["3", "cause"],
+      ["4", "cause"],
+      ["10", "target"],
+    ]);
   });
 });

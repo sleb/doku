@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { cell, hearts, press, seedRaw, storageValue } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 import { resumeScenario } from "./resumeFlow";
 
-const { size, solution } = levelById("demo-7");
+const { size, solution } = levelBySize(7);
 
 test("reload resumes the whole game, paused", async ({ page }) => {
   await resumeScenario(
@@ -14,7 +14,7 @@ test("reload resumes the whole game, paused", async ({ page }) => {
 });
 
 const good = {
-  levelId: "demo-7",
+  levelId: levelBySize(7).id,
   board: Array(size * size).fill(0),
   wrong: [],
   hearts: 3,
@@ -25,7 +25,10 @@ const good = {
 const bad: Array<[string, string]> = [
   ["a string", JSON.stringify("garbage")],
   ["a wrong-length board", JSON.stringify({ ...good, board: [0, 0, 0] })],
-  ["another level's id", JSON.stringify({ ...good, levelId: "demo-11" })],
+  [
+    "another level's id",
+    JSON.stringify({ ...good, levelId: levelBySize(11).id }),
+  ],
   ["zero hearts", JSON.stringify({ ...good, hearts: 0 })],
   ["unparsable JSON", "{"],
 ];

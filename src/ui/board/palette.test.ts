@@ -1,7 +1,8 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
+import { REGION_NAMES } from "../../engine";
+import { GLYPH_COLOR, REGION_BG, WRONG_COLOR } from "./palette";
 
 function tokenHex(i: number): string {
   const m = css.match(

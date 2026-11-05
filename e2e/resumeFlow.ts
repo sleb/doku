@@ -1,8 +1,8 @@
 import { expect, type Page } from "@playwright/test";
 import { cell, hearts, storageJson } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 
-const { size, solution } = levelById("demo-7");
+const { size, solution } = levelBySize(7);
 
 const seconds = (text: string | null): number =>
   (text ?? "").split(":").reduce((acc, p) => acc * 60 + Number(p), 0);
