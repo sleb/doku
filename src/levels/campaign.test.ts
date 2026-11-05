@@ -1,16 +1,20 @@
 import { describe, expect, test } from "vitest";
 import { countSolutions, validateLevel } from "../engine";
-import { uniqueLevel7, uniqueLevel11 } from "../engine/__fixtures__/levels";
 import { MAX_SIZE, MIN_SIZE } from "../engine/validate";
 import { LEVELS, levelIndex } from "./campaign";
 
-const byId = (id: string) => LEVELS[levelIndex(id)];
-
 describe("campaign", () => {
-  test("has 8 levels including a 7x7 and an 11x11", () => {
-    expect(LEVELS).toHaveLength(8);
-    expect(LEVELS.some((l) => l.size === 7)).toBe(true);
-    expect(LEVELS.some((l) => l.size === 11)).toBe(true);
+  test("is a full campaign covering every size, with several 11x11", () => {
+    expect(LEVELS.length).toBeGreaterThanOrEqual(40);
+    for (let size = MIN_SIZE; size <= MAX_SIZE; size++) {
+      expect(
+        LEVELS.some((l) => l.size === size),
+        `size ${size}`,
+      ).toBe(true);
+    }
+    expect(LEVELS.filter((l) => l.size === 11).length).toBeGreaterThanOrEqual(
+      5,
+    );
   });
 
   test("every level is valid, in range and uniquely solvable", () => {
@@ -31,13 +35,5 @@ describe("campaign", () => {
       expect(levelIndex(l.id)).toBe(i);
     });
     expect(levelIndex("nope")).toBe(-1);
-  });
-
-  test("demo levels match the fixtures apart from id", () => {
-    expect({ ...byId("demo-7"), id: "" }).toEqual({ ...uniqueLevel7, id: "" });
-    expect({ ...byId("demo-11"), id: "" }).toEqual({
-      ...uniqueLevel11,
-      id: "",
-    });
   });
 });
