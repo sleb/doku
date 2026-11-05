@@ -47,3 +47,12 @@ export function solve(level: Level): number[] | null {
 export function countSolutions(level: Level, limit = 2): number {
   return search(level, limit, () => {});
 }
+
+// Copies of up to `limit` valid placements, in search order.
+export function solutions(level: Level, limit: number): number[][] {
+  const found: number[][] = [];
+  search(level, limit, (placement) => {
+    found.push([...placement]);
+  });
+  return found;
+}
