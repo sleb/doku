@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { withoutLookahead } from "./__fixtures__/capLadder";
 import { uniqueLevel7 } from "./__fixtures__/levels";
 import { expertLevel1, mediumLevel11, rated } from "./__fixtures__/rated";
 import { rate } from "./difficulty";
 import { generate } from "./generator";
 import { solveByTechniques } from "./solver";
-import { TECHNIQUES } from "./techniques";
 
 describe("rate goldens", () => {
   it.each(rated)("$name is $tier", ({ level, tier }) => {
@@ -31,9 +31,10 @@ describe("rate goldens", () => {
   it("expert levels need a lookahead step and none of the others do", () => {
     for (const { level, tier } of rated) {
       const steps = solveByTechniques(level).steps;
-      expect(steps.some((s) => s.technique === "lookahead"), level.id).toBe(
-        tier === "expert",
-      );
+      expect(
+        steps.some((s) => s.technique === "lookahead"),
+        level.id,
+      ).toBe(tier === "expert");
     }
   });
 });
@@ -49,14 +50,7 @@ describe("rate", () => {
   });
 
   it("rates a level the ladder cannot finish as unrated", () => {
-    // Cap the ladder at rung 6 so an expert level stalls.
-    const lookahead = TECHNIQUES.pop();
-    try {
-      expect(lookahead?.id).toBe("lookahead");
-      expect(rate(expertLevel1)).toBe("unrated");
-    } finally {
-      if (lookahead) TECHNIQUES.push(lookahead);
-    }
+    expect(withoutLookahead(() => rate(expertLevel1))).toBe("unrated");
   });
 
   it("returns a tier or unrated for a fixture", () => {

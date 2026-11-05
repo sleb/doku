@@ -51,6 +51,11 @@ describe("explain", () => {
       "A face here would leave region 5 with nowhere to go, so this cell cannot hold one.",
     ],
     [
+      "lookahead",
+      make("lookahead", [row(4)], { eliminate: [1] }),
+      "A face here would leave row 5 with nowhere to go after the forced moves that follow, so this cell cannot hold one.",
+    ],
+    [
       "subset-regions-lines (rows)",
       make("subset-regions-lines", [region(2), region(3), row(2), row(3)], {
         eliminate: [1],

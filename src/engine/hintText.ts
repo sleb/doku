@@ -31,6 +31,8 @@ const TEMPLATES: Record<TechniqueId, (units: UnitRef[]) => string> = {
     `${capital(label(line))} can only fit in ${label(region)}, so the rest of ${label(region)} cannot hold a face.`,
   "adjacency-pressure": ([u]) =>
     `A face here would leave ${label(u)} with nowhere to go, so this cell cannot hold one.`,
+  lookahead: ([u]) =>
+    `A face here would leave ${label(u)} with nowhere to go after the forced moves that follow, so this cell cannot hold one.`,
   "subset-regions-lines": (units) => subsetText(units),
   "subset-lines-regions": (units) => subsetText(units),
 };

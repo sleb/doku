@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { withoutLookahead } from "./__fixtures__/capLadder";
 import { uniqueLevel7, uniqueLevel11 } from "./__fixtures__/levels";
+import { expertLevel1, expertLevel2 } from "./__fixtures__/rated";
 import { eliminate, fromBoard, placeFace } from "./candidates";
 import { compile } from "./compile";
 import { generate } from "./generator";
@@ -103,9 +105,7 @@ describe("solveByTechniques", () => {
   });
 
   it("reports solved:false when the ladder is stuck", () => {
-    const stuck = generated.find((l) => !solveByTechniques(l).solved);
-    expect(stuck).toBeDefined();
-    const trace = solveByTechniques(stuck as Level);
+    const trace = withoutLookahead(() => solveByTechniques(expertLevel1));
     expect(trace.solved).toBe(false);
     expect(
       trace.hardest === null ||
@@ -134,5 +134,21 @@ describe("solveByTechniques", () => {
       }
     }
     expect(hardSteps).toBeGreaterThan(0);
+  }, 120_000);
+
+  it("is sound on lookahead steps, and the property sees some", () => {
+    let lookaheadSteps = 0;
+    for (const level of [expertLevel1, expertLevel2, ...generated]) {
+      const n = level.size;
+      const inSolution = (i: number) =>
+        level.solution[Math.floor(i / n)] === i % n;
+      for (const step of solveByTechniques(level).steps) {
+        if (step.technique !== "lookahead") continue;
+        lookaheadSteps++;
+        expect(step.place).toBeUndefined();
+        for (const i of step.eliminate) expect(inSolution(i)).toBe(false);
+      }
+    }
+    expect(lookaheadSteps).toBeGreaterThan(0);
   }, 120_000);
 });

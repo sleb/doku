@@ -9,12 +9,7 @@ import {
 } from "./candidates";
 import { compile } from "./compile";
 import { solveByTechniques } from "./solver";
-import {
-  type Deduction,
-  lookahead,
-  propagate,
-  TECHNIQUES,
-} from "./techniques";
+import { type Deduction, lookahead, propagate, TECHNIQUES } from "./techniques";
 
 const rungs1to6 = TECHNIQUES.slice(0, 6);
 const apply = (
@@ -22,7 +17,9 @@ const apply = (
   c: Candidates,
   d: Deduction,
 ): Candidates =>
-  d.place !== undefined ? placeFace(p, c, d.place) : eliminate(p, c, d.eliminate);
+  d.place !== undefined
+    ? placeFace(p, c, d.place)
+    : eliminate(p, c, d.eliminate);
 
 // Candidates just before the solver's first lookahead step on `level`.
 function beforeLookahead(level: typeof expertLevel1) {
@@ -85,7 +82,9 @@ describe("lookahead", () => {
       const [x] = d?.eliminate ?? [];
       // The eliminated cell is not a solution cell, and the cited unit is empty
       // after the assumption plus forced moves.
-      expect(level.solution[Math.floor(x / level.size)]).not.toBe(x % level.size);
+      expect(level.solution[Math.floor(x / level.size)]).not.toBe(
+        x % level.size,
+      );
       expect(d?.because.cells).toEqual([x]);
       const after = propagate(p, placeFace(p, c, x));
       expect(contradiction(after)).toBe(true);
@@ -108,8 +107,13 @@ describe("lookahead", () => {
   });
 
   it("is null when no assumption contradicts", () => {
+    // All but the last solution face placed: nothing left to assume.
     const p = compile(expertLevel1);
-    expect(lookahead(p, fromBoard(p))).toBeNull();
+    let c = fromBoard(p);
+    expertLevel1.solution.slice(0, 6).forEach((col, r) => {
+      c = placeFace(p, c, r * 7 + col);
+    });
+    expect(lookahead(p, c)).toBeNull();
   });
 
   it("is null on a solved board", () => {
@@ -123,7 +127,9 @@ describe("lookahead", () => {
 
   it("never appears in a Hard golden's trace", () => {
     expect(
-      solveByTechniques(hardLevel1).steps.some((s) => s.technique === "lookahead"),
+      solveByTechniques(hardLevel1).steps.some(
+        (s) => s.technique === "lookahead",
+      ),
     ).toBe(false);
   });
 

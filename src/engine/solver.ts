@@ -1,6 +1,6 @@
-import { eliminate, fromBoard, placeFace } from "./candidates";
+import { fromBoard } from "./candidates";
 import { compile } from "./compile";
-import { type Deduction, TECHNIQUES } from "./techniques";
+import { applyDeduction, type Deduction, TECHNIQUES } from "./techniques";
 import type { Board, Level, Tier } from "./types";
 
 // One backtracking search from the rules alone; never reads level.solution.
@@ -90,10 +90,7 @@ export function solveByTechniques(level: Level, board?: Board): SolveTrace {
     if (!hardest || tiers.indexOf(step.tier) > tiers.indexOf(hardest)) {
       hardest = step.tier;
     }
-    cand =
-      step.place !== undefined
-        ? placeFace(p, cand, step.place)
-        : eliminate(p, cand, step.eliminate);
+    cand = applyDeduction(p, cand, step);
   }
   return { solved: isDone(cand.placed), steps, hardest };
 }

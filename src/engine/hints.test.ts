@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { withoutLookahead } from "./__fixtures__/capLadder";
 import { fixtures, uniqueLevel7 } from "./__fixtures__/levels";
 import {
+  expertLevel1,
   hardLevel1,
   hardLevel2,
   mediumLevel11,
@@ -15,7 +17,7 @@ import { Cell, type Level } from "./types";
 const valid = fixtures.filter((f) => f.name.startsWith("unique"));
 const solvable = [
   ...valid.map((f) => ({ name: f.name, level: f.level })),
-  ...rated.filter((r) => r.tier !== "unrated"),
+  ...rated,
 ];
 
 function applyHint(board: Uint8Array, hint: Hint) {
@@ -42,10 +44,8 @@ describe("nextHint", () => {
   });
 
   it("is null when the ladder is stuck", () => {
-    const stuck: Level = rated.find((r) => r.tier === "unrated")
-      ?.level as Level;
-    expect(stuck).toBeDefined();
-    const trace = solveByTechniques(stuck);
+    const stuck: Level = expertLevel1;
+    const trace = withoutLookahead(() => solveByTechniques(stuck));
     expect(trace.solved).toBe(false);
     // Take every step the ladder can, as the player would, then ask again.
     const board = emptyBoard(stuck).slice();
@@ -53,7 +53,7 @@ describe("nextHint", () => {
       if (step.place !== undefined) board[step.place] = Cell.Face;
       else for (const i of step.eliminate) board[i] = Cell.Mark;
     }
-    expect(nextHint(board, stuck)).toBeNull();
+    expect(withoutLookahead(() => nextHint(board, stuck))).toBeNull();
   });
 
   it("skips eliminations the player has already marked", () => {

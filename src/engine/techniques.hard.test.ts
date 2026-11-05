@@ -190,8 +190,8 @@ describe("subset-lines-regions", () => {
 });
 
 describe("TECHNIQUES with the hard rungs", () => {
-  it("lists the six rungs in order", () => {
-    expect(TECHNIQUES.map((t) => [t.id, t.tier])).toEqual([
+  it("lists the first six rungs in order", () => {
+    expect(TECHNIQUES.slice(0, 6).map((t) => [t.id, t.tier])).toEqual([
       ["single-candidate", "easy"],
       ["region-in-line", "medium"],
       ["line-in-region", "medium"],

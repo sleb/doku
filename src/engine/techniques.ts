@@ -1,4 +1,9 @@
-import type { Candidates } from "./candidates";
+import {
+  type Candidates,
+  eliminate,
+  emptiedUnit,
+  placeFace,
+} from "./candidates";
 import { neighborsOf, type Puzzle, type UnitKind } from "./compile";
 import type { Tier } from "./types";
 
@@ -8,7 +13,8 @@ export type TechniqueId =
   | "line-in-region"
   | "adjacency-pressure"
   | "subset-regions-lines"
-  | "subset-lines-regions";
+  | "subset-lines-regions"
+  | "lookahead";
 
 export interface UnitRef {
   kind: UnitKind;
@@ -231,6 +237,52 @@ export const subsetRegionsLines: Technique = (p, c) =>
 export const subsetLinesRegions: Technique = (p, c) =>
   subset(p, c, "subset-lines-regions");
 
+// Applies a deduction, returning new candidates.
+export function applyDeduction(
+  p: Puzzle,
+  c: Candidates,
+  d: Deduction,
+): Candidates {
+  return d.place !== undefined
+    ? placeFace(p, c, d.place)
+    : eliminate(p, c, d.eliminate);
+}
+
+// Rungs 1 to 6 (every technique below lookahead) to a fixpoint, stopping early
+// when a unit empties. Lookahead's inner loop; depth 1, so it never nests.
+export function propagate(p: Puzzle, c: Candidates): Candidates {
+  let cand = c;
+  for (;;) {
+    if (emptiedUnit(cand) >= 0) return cand;
+    let step: Deduction | null = null;
+    for (const t of TECHNIQUES) {
+      if (t.id === "lookahead") break;
+      step = t.run(p, cand);
+      if (step) break;
+    }
+    if (!step) return cand;
+    cand = applyDeduction(p, cand, step);
+  }
+}
+
+// Assume a face at X and propagate with rungs 1 to 6. If some unit empties, X
+// is impossible. The first such cell in index order, one per call; always an
+// elimination, never a placement. Cites the unit that emptied.
+export const lookahead: Technique = (p, c) => {
+  for (let x = 0; x < p.n * p.n; x++) {
+    if (!c.alive[x] || c.placed[x]) continue;
+    const unit = emptiedUnit(propagate(p, placeFace(p, c, x)));
+    if (unit < 0) continue;
+    return {
+      technique: "lookahead",
+      tier: "expert",
+      eliminate: [x],
+      because: { units: [ref(p, unit)], cells: [x] },
+    };
+  }
+  return null;
+};
+
 // Ordered simplest to hardest; the single source of truth for tier.
 export const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[] = [
   { id: "single-candidate", tier: "easy", run: singleCandidate },
@@ -239,4 +291,5 @@ export const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[] = [
   { id: "adjacency-pressure", tier: "hard", run: adjacencyPressure },
   { id: "subset-regions-lines", tier: "hard", run: subsetRegionsLines },
   { id: "subset-lines-regions", tier: "hard", run: subsetLinesRegions },
+  { id: "lookahead", tier: "expert", run: lookahead },
 ];
