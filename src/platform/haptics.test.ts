@@ -23,6 +23,16 @@ function setup(
   return { plugin, load, h };
 }
 
+describe("supported", () => {
+  it.each([
+    [true, true, true],
+    [true, false, false],
+    [false, true, false],
+  ])("tauri %s, mobile %s gives %s", (isTauri, isMobile, expected) => {
+    expect(setup({ isTauri, isMobile }).h.supported()).toBe(expected);
+  });
+});
+
 describe("createHaptics", () => {
   it("never touches the plugin outside Tauri", async () => {
     const { plugin, load, h } = setup({ isTauri: false });

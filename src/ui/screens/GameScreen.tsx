@@ -56,10 +56,10 @@ export function GameScreen() {
     }
   }, [status]);
 
-  // First launch: Rules open over a paused game. Derived from `seenRules`
+  // First launch: Rules open over a paused game. Derived from `seenTutorial`
   // (set on dismissal), so StrictMode's double effects cannot reopen it.
-  const seenRules = useSettingsStore((s) => s.seenRules);
-  const firstRules = !seenRules && status !== "idle";
+  const seenTutorial = useSettingsStore((s) => s.seenTutorial);
+  const firstRules = !seenTutorial && status !== "idle";
   useEffect(() => {
     if (firstRules) gameStore.getState().pause();
   }, [firstRules]);
@@ -108,7 +108,7 @@ export function GameScreen() {
       {(firstRules || sheet === "rules") && (
         <RulesDialog
           onClose={() => {
-            settingsStore.getState().set({ seenRules: true });
+            settingsStore.getState().set({ seenTutorial: true });
             setSheet(null);
             if (firstRules) resume();
           }}

@@ -30,19 +30,37 @@ test.describe("fresh install", () => {
   });
 });
 
-test("haptics off in Settings persists across reload", async ({ page }) => {
+test("sound off in Settings persists across reload", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Pause" }).click();
   await page.getByRole("button", { name: "Settings" }).click();
-  const sw = page.getByRole("switch", { name: "Haptics" });
+  const sw = page.getByRole("switch", { name: "Sound" });
   await expect(sw).toHaveAttribute("aria-checked", "true");
   await sw.click();
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await page.reload();
   // The saved game comes back paused, so the Pause dialog is already open.
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByRole("switch", { name: "Haptics" })).toHaveAttribute(
+  await expect(page.getByRole("switch", { name: "Sound" })).toHaveAttribute(
     "aria-checked",
     "false",
   );
+});
+
+test("Settings sections scroll on a short landscape screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 667, height: 375 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Pause" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  const body = page.getByTestId("settings-body");
+  await expect(body).toBeVisible();
+  expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
+    true,
+  );
+  const startOver = page.getByRole("button", { name: "Start over" });
+  await startOver.scrollIntoViewIfNeeded();
+  await startOver.click();
+  await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
 });

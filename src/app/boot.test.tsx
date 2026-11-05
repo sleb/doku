@@ -17,10 +17,10 @@ beforeEach(() => {
 describe("boot", () => {
   test("hydrates the settings store from storage", async () => {
     const storage = new MemoryStorage();
-    await storage.set("settings", { haptics: false, seenRules: true });
+    await storage.set("settings", { haptics: false, seenTutorial: true });
     await boot(storage);
     expect(settingsStore.getState().haptics).toBe(false);
-    expect(settingsStore.getState().seenRules).toBe(true);
+    expect(settingsStore.getState().seenTutorial).toBe(true);
   });
 
   test("persists later changes", async () => {
@@ -28,8 +28,8 @@ describe("boot", () => {
     await boot(storage);
     settingsStore.getState().set({ haptics: false });
     expect(await storage.get("settings")).toEqual({
+      ...defaultSettings,
       haptics: false,
-      seenRules: false,
     });
   });
 
@@ -38,7 +38,7 @@ describe("boot", () => {
     await storage.set("settings", "garbage");
     await boot(storage);
     expect(settingsStore.getState().haptics).toBe(true);
-    expect(settingsStore.getState().seenRules).toBe(false);
+    expect(settingsStore.getState().seenTutorial).toBe(false);
   });
 });
 

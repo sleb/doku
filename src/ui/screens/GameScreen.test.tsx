@@ -13,7 +13,10 @@ import { holdCell } from "../../test/hold";
 import { GameScreen } from "./GameScreen";
 
 vi.mock("../../platform/haptics", () => ({
-  haptics: { play: vi.fn().mockResolvedValue(undefined) },
+  haptics: {
+    play: vi.fn().mockResolvedValue(undefined),
+    supported: () => true,
+  },
 }));
 
 const level = LEVELS[0];
@@ -33,7 +36,7 @@ const label = (i: number) =>
 beforeEach(() => {
   gameStore.setState(idleState, false);
   progressStore.setState(defaultProgress);
-  settingsStore.setState({ ...defaultSettings, seenRules: true });
+  settingsStore.setState({ ...defaultSettings, seenTutorial: true });
   vi.mocked(haptics.play).mockClear();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -440,16 +443,16 @@ describe("GameScreen", () => {
       expect(gameStore.getState().status).toBe("paused");
     });
 
-    test("dismissing first-launch Rules sets seenRules and resumes", async () => {
+    test("dismissing first-launch Rules sets seenTutorial and resumes", async () => {
       fresh();
       renderGame();
       await userEvent.click(screen.getByRole("button", { name: "Got it" }));
-      expect(settingsStore.getState().seenRules).toBe(true);
+      expect(settingsStore.getState().seenTutorial).toBe(true);
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(gameStore.getState().status).toBe("playing");
     });
 
-    test("a remount with seenRules true does not reopen Rules", () => {
+    test("a remount with seenTutorial true does not reopen Rules", () => {
       renderGame();
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(gameStore.getState().status).toBe("playing");
@@ -519,7 +522,7 @@ describe("GameScreen", () => {
     });
 
     test("Escape on the first-launch Rules resumes play, not Pause", async () => {
-      settingsStore.setState({ seenRules: false });
+      settingsStore.setState({ seenTutorial: false });
       renderGame();
       expect(screen.getByRole("dialog", { name: "Rules" })).toBeInTheDocument();
       await userEvent.keyboard("{Escape}");

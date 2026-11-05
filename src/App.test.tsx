@@ -22,7 +22,7 @@ import { REGION_BG } from "./ui/board/palette";
 
 beforeEach(() => {
   gameStore.setState(idleState, false);
-  settingsStore.setState({ ...defaultSettings, seenRules: true });
+  settingsStore.setState({ ...defaultSettings, seenTutorial: true });
   progressStore.setState(defaultProgress);
   startCurrent();
 });
@@ -135,7 +135,7 @@ test("Finish leads to the Finale, whose Start over returns to level 1", async ()
 
 test("a restored save opens paused; Resume continues the same game", async () => {
   const storage = new MemoryStorage();
-  await storage.set("settings", { haptics: true, seenRules: true });
+  await storage.set("settings", { haptics: true, seenTutorial: true });
   const played = tick(toggleMark(startLevel(demoLevel), 4), 0) as Started;
   await storage.set("save", toSaved({ ...played, elapsedMs: 42000 }));
   await boot(storage);
@@ -149,7 +149,7 @@ test("a restored save opens paused; Resume continues the same game", async () =>
 
 test("hiding the app pauses and the saved elapsed time lands", async () => {
   const storage = new MemoryStorage();
-  await storage.set("settings", { haptics: true, seenRules: true });
+  await storage.set("settings", { haptics: true, seenTutorial: true });
   await boot(storage);
   render(<App />);
   act(() => gameStore.getState().tick(6000));

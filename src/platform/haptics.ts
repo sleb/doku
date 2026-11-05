@@ -3,6 +3,8 @@ import type { OutcomeKind } from "./outcome";
 export interface Haptics {
   /** Always resolves: a failed buzz must never break gameplay. */
   play(kind: OutcomeKind): Promise<void>;
+  /** True only in a Tauri build on mobile, where the plugin is registered. */
+  supported(): boolean;
 }
 
 type Plugin = Pick<
@@ -61,10 +63,13 @@ export function createHaptics(deps: HapticsDeps = defaultDeps): Haptics {
     return loading;
   };
 
+  const supported = () => deps.isTauri() && deps.isMobile();
+
   return {
+    supported,
     async play(kind) {
       try {
-        if (!deps.isTauri() || !deps.isMobile()) return;
+        if (!supported()) return;
         const p = await plugin();
         const result =
           kind === "place"
