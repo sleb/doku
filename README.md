@@ -28,7 +28,7 @@ bun run test:engine # engine tests only, plus the engine import-boundary test
 bun run test:e2e    # Playwright (Chromium, mobile Chromium, mobile WebKit) against the Vite dev server on port 1420
 ```
 
-In dev builds only, `http://localhost:1420/?level=<id>` (for example `any-11-001`) starts that level and ignores saved progress and the saved game; it does not reach the Finale. Level ids are in `src/levels/pack-1.json`. `bun tools/generate-levels.ts --pack 1` regenerates `src/levels/pack-1.json` from `tools/curriculum.ts` (byte-reproducible; about 7 s), `--stats` prints per-size generator statistics without writing, and `--only size[:tier]` previews rows without writing (see `docs/GENERATOR_DESIGN.md` §8).
+In dev builds only, `http://localhost:1420/?level=<id>` (for example `medium-11-001`) starts that level and ignores saved progress and the saved game; it does not reach the Finale. Level ids are in `src/levels/pack-1.json`. `bun tools/generate-levels.ts --pack 1` regenerates `src/levels/pack-1.json` from `tools/curriculum.ts` (byte-reproducible; about 40 s), `--stats` prints per size x tier generator statistics without writing (about 10 minutes), and `--only size[:tier]` previews rows without writing (see `docs/GENERATOR_DESIGN.md` §8).
 
 ## Quality gates
 

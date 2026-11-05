@@ -2,7 +2,7 @@
 
 Companion to `DESIGN.md` §4, §4.1, §10 and §12 for milestone 5 ("Generator + level packs + difficulty tiers"). It expands `docs/ENGINE_DESIGN.md` §9, which stays the short reference; if the two disagree, this document wins on the generator and `ENGINE_DESIGN.md` wins on the technique ladder (§6) and solvers (§7). Sync both when this lands.
 
-**Status:** draft for review. M5-01 (`seed.ts`), M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) and M5-03 (the pack tool and generated campaign) are implemented; see §13 and §14 for what differs from this text. The rest (`rate`, tiers) is not.
+**Status:** draft for review. M5-01 (`seed.ts`), M5-02 (`solutions`, `generate`, `generateCandidate`, `randomSolution`, `growRegions`, `repairUniqueness`, `passesShape`, untiered) and M5-03 (the pack tool and generated campaign), M5-04 (`rate`, Easy and Medium) and M5-05 (tiered generation and the tiered campaign) are implemented; see §13 to §16 for what differs from this text. Hard and Expert are not.
 
 ## 1. Goals and non-goals
 
@@ -30,7 +30,7 @@ Pick a random valid placement (the solution). Grow one connected region around e
 export interface GenerateOptions {
   size: number;                  // 7..11 (RangeError otherwise)
   seed: string;
-  tier?: Tier;                   // omitted: any uniquely solvable level, no rating (§7)
+  tier?: Tier;                   // omitted: any uniquely solvable level, no rating (§7); set: rate(level) === tier and Level.tier is set
   maxAttempts?: number;          // default 2000; the only budget, so results never depend on wall-clock
   shape?: Partial<ShapeLimits>;  // §5.4
   signal?: AbortSignal;          // checked once per attempt; abort returns null
@@ -248,9 +248,9 @@ Stories 01 to 03 deliver value on their own (a real, varied, all-sizes pack) bef
 
 ## 12. Open questions
 
-1. **Shippable size×tier table:** answered by story 03's `--stats` output; update `curriculum.ts` and `DESIGN.md` §13.
+1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16); Hard and Expert wait for #92 and #93.
 2. **Shape defaults** (`minRegion = 2`, `maxSingletons` 1 for 7 to 8 and 2 for 9 to 11, `maxRegion = 35%`): guesses; tune by playing generated packs.
-3. **Curve design:** the order of the curriculum (all Easy first, or interleaving sizes and tiers for variety) is a game-design decision made once real levels exist.
+3. **Curve design:** M5-05 ships all Easy first (sizes 7 to 10), then Medium (7 to 11) (§16). Whether to interleave sizes and tiers for variety stays a game-design decision to revisit after playing it.
 4. **Seed string format for the daily puzzle** (milestone 6): date-derived, e.g. `daily/2026-11-04`; nothing in this design blocks it.
 5. **Retire `Level.seed`?** Kept for reproduction and debugging; it grows the pack JSON slightly. Revisit if pack size matters.
 
@@ -281,9 +281,9 @@ Deviations from §8 and measurements from the first pack tool (`tools/generate-l
 - **Split.** `pack.ts` holds the pure logic (`canonicalForm`, `levelId`, `rowStartIndexes`, `collectRow`, `verifyLevel`, `buildPack`, `computeStats`, `formatStats`) and is unit tested (`tools/pack.test.ts`, vitest `node` project, 7x7 only); `generate-levels.ts` is the thin CLI (argv, `fs`, exit codes, `AbortSignal.timeout`). The generator gained `tryCandidate`, which reports why a candidate was rejected (`repair` or `shape`); `generateCandidate` is a wrapper, so draw order and the golden snapshot are unchanged.
 - **Curriculum.** `CurriculumRow = { pack, size, tier?, count }`. Seeds are `pack-N/<size>/<tier|any>/<i>`; a duplicate board consumes a seed. Ids are `<tier|any>-<size 2 digits>-<index 3 digits>`, 1-based, numbered per (tier, size) over the whole curriculum so they stay unique across packs; the tool also refuses to write on a collision with another pack's file. A row that needs more than 50 seeds per wanted level gives up and is reported.
 - **Serialization.** 2-space JSON with number arrays on one line, which is what Biome emits, so `biome check` accepts a generated pack unchanged.
-- **CLI.** `--pack N` (default 1), `--stats`, `--only size[:tier]`, `--max-attempts K`, `--timeout SECONDS` (default 60 per level). `--only` builds just those rows but ids still come from the full curriculum; it **writes nothing** (a partial pack must not overwrite the real one). An unfilled row exits 1. `rate === tier` verification waits for #91.
+- **CLI.** `--pack N` (default 1), `--stats`, `--only size[:tier]`, `--max-attempts K`, `--timeout SECONDS` (default 60 per level). `--only` builds just those rows but ids still come from the full curriculum; it **writes nothing** (a partial pack must not overwrite the real one). An unfilled row exits 1. `rate === tier` verification landed with #91 (§16).
 - **Dedup** reaches back only to lower-numbered packs; ids are checked against every other pack.
-- **Pack 1.** 42 untiered levels: 8 each at 7 to 10, then 10 at 11x11, in size order (the curve is simply "bigger is later" until tiers exist). Regenerating takes about 7 s and is byte-identical.
+- **Pack 1 (as of M5-03; replaced in M5-05, see §16).** 42 untiered levels: 8 each at 7 to 10, then 10 at 11x11, in size order (the curve is simply "bigger is later" until tiers exist). Regenerating takes about 7 s and is byte-identical.
 - **`--stats`** (20 seeds per size, attempts to first success):
 
 | size | median | p90 | repair rejects | shape rejects | ms per level |
@@ -300,7 +300,7 @@ Deviations from §8 and measurements from the first pack tool (`tools/generate-l
 
 The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, `solveByTechniques` in `solver.ts`, `difficulty.ts`).
 
-- **API.** `rate(level: Level): Tier | 'unrated'` is exported from `index.ts`; `solveByTechniques(level, board?)` returns `{ solved, steps, hardest }` and stays internal, as do `Candidates` and `TECHNIQUES`. `compile` is minimal (`n`, `regionOf`, 3N units). `generate` has no `tier` option yet (#91).
+- **API.** `rate(level: Level): Tier | 'unrated'` is exported from `index.ts`; `solveByTechniques(level, board?)` returns `{ solved, steps, hardest }` and stays internal, as do `Candidates` and `TECHNIQUES`. `compile` is minimal (`n`, `regionOf`, 3N units). `generate` gained `tier` in M5-05 (§16).
 - **Rating.** The solver always takes the first deduction of the simplest applicable technique and restarts from technique 1, so the tier is the minimum hardest tier. A level the ladder cannot finish is `unrated`; until Hard lands (#92) that is most generated levels.
 - **Soundness** is a property test over 100 generated levels (n 7 to 11, 20 seeds each): no elimination removes a solution cell and every placement is a solution cell. A throwaway mutation (region-in-line eliminating the whole line, region cells included) makes it fail.
 - **Measured tier shares** of untiered `generate` output (`seed` = `measure/<n>/<i>`; 100 levels per size, 40 at 11):
@@ -315,3 +315,37 @@ The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, 
 
   Easy levels are rare and the unrated share is large, so Hard techniques (#92) are needed before the curriculum can fill every size by tier, and an Easy 11x11 may be dropped as `DESIGN.md` §4.1 anticipates.
 - **Cost.** A full `rate` of a solved 11x11 level has a median of about 0.04 ms (max under 1 ms in 100 runs); stuck levels are cheaper still. The budget is 10 ms, so tier filtering adds nothing noticeable to generation, whose cost is dominated by uniqueness repair (§13).
+
+## 16. As built in M5-05
+
+Tiered generation and the tiered campaign.
+
+- **Filter.** `generate({ size, tier, seed })` runs the same attempts `${seed}#k` as before; after a candidate survives uniqueness and shape it is rated, and kept only if `rate(candidate) === tier`. The returned level has `tier` set and `unrated` is never returned. With `tier` omitted `rate` is never called (tested with a spy), so untiered output and the golden snapshot are unchanged. `maxAttempts` stays 2000; `hard` and `expert` simply exhaust it and return `null` until #92 and #93.
+- **`tryCandidate(size, rng, shape?, tier?)`** adds the reject reasons `tier` and `unrated`; `generate` and `--stats` share it.
+- **Pack tool.** `GenerateFn` takes `tier`; `collectRow` passes `row.tier`; `verifyLevel` additionally fails when `level.tier` is set and `rate(level) !== level.tier`. `computeStats(size, tier?, seeds = 20)` measures every size x {untiered, easy, medium} cell; `--stats` prints them. A seed that needs more than 2000 attempts or 60 s counts as not filled.
+- **Fill criterion.** A cell ships if at least 18 of the 20 stats seeds fill within 2000 attempts and 60 s each. Counts are chosen within what the cell can produce; the real regeneration run is the final check.
+- **Steering (§7.3) not built.** The only cell we wanted that failed the criterion is Easy 11x11, which `DESIGN.md` §4.1 already allows to drop, and dropping it leaves the curve intact (Medium 11x11 fills). Local search would be built only if a wanted cell failed and dropping it hurt the curve. No `rateWithTrace` export.
+- **`--stats`** (20 seeds per cell, attempts to first success among filled seeds; ms/level is wall time over filled seeds):
+
+```
+size  tier    filled  median   p90  repair-rej  shape-rej  tier-rej  unrated-rej  ms/level
+   7  any      20/20       1      6         57%         2%        0%           0%         1
+   7  easy     20/20      16     76         62%         5%        6%          24%         7
+   7  medium   20/20      11     27         60%         6%        2%          25%         3
+   8  any      20/20       2      7         68%         2%        0%           0%         2
+   8  easy     20/20      84    185         70%         5%        5%          19%        65
+   8  medium   20/20      11     45         71%         3%        1%          20%        11
+   9  any      20/20       3      9         76%         1%        0%           0%         8
+   9  easy     20/20      64    263         79%         0%        4%          16%       228
+   9  medium   20/20      18    105         82%         0%        1%          13%        58
+  10  any      20/20       8     15         89%         0%        0%           0%        55
+  10  easy     20/20     243   1027         87%         0%        2%          10%      2436
+  10  medium   20/20      32    110         87%         0%        1%          10%       372
+  11  any      20/20      10     31         93%         0%        0%           0%       407
+  11  easy     16/20     337   1404         93%         0%        1%           6%     29538
+  11  medium   20/20      67    236         93%         0%        0%           6%      2968
+```
+
+  Easy gets rarer with size (median 16 attempts at 7x7, 243 at 10x10, 337 at 11x11) because the unrated share grows with the board; Easy 11x11 fills only 16 of 20 seeds within 2000 attempts and about 30 s per level, so it is dropped. Medium fills every size, 11x11 at about 3 s per level.
+- **Curriculum (pack 1, 69 levels).** In order: Easy 7, 8, 9, 10 (8 each), then Medium 7, 8, 9, 10 (8 each), then Medium 11 (5). Shipped cells: easy 7 to 10, medium 7 to 11. Dropped: easy 11. Ids are `easy-07-001` ... `medium-11-005`; the 42 untiered `any-*` levels are gone (no migration before the MVP). Regeneration takes about 40 s and is byte-identical on a second run.
+- **Tests.** `generator.test.ts` (tier honoured over 10 seeds at 7x7 for each tier, determinism, spy, `hard` returns null on a small budget, reject reasons), `tools/pack.test.ts` (tiered rows, `rate` verification, tiered stats), `campaign.test.ts` (every level tiered, `rate(level) === level.tier`, tiers non-decreasing along the pack).

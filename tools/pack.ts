@@ -4,6 +4,7 @@ import {
   countSolutions,
   type Level,
   makeRng,
+  rate,
   solve,
   type Tier,
   validateLevel,
@@ -17,7 +18,11 @@ export interface CurriculumRow {
   count: number;
 }
 
-export type GenerateFn = (o: { size: number; seed: string }) => Level | null;
+export type GenerateFn = (o: {
+  size: number;
+  seed: string;
+  tier?: Tier;
+}) => Level | null;
 
 type Grid = number[][];
 
@@ -98,7 +103,7 @@ export function collectRow(
       };
     }
     const seed = `pack-${row.pack}/${row.size}/${tier}/${i}`;
-    const made = generate({ size: row.size, seed });
+    const made = generate({ size: row.size, seed, tier: row.tier });
     if (!made) {
       return {
         levels,
@@ -124,6 +129,9 @@ export function verifyLevel(level: Level): string[] {
   if (issues.length > 0) return issues;
   const out: string[] = [];
   if (countSolutions(level) !== 1) out.push("not uniquely solvable");
+  if (level.tier && rate(level) !== level.tier) {
+    out.push(`rate() is ${rate(level)}, level says ${level.tier}`);
+  }
   const solved = solve(level);
   if (!solved || solved.join() !== level.solution.join()) {
     out.push("solve() differs from the stored solution");
@@ -184,51 +192,70 @@ export function buildPack(
   return { levels, json: serialize(levels), failures };
 }
 
-export interface SizeStats {
+export interface CellStats {
   size: number;
+  /** Absent for the untiered cell. */
+  tier?: Tier;
   seeds: number;
-  /** Seeds that never produced a level within the attempt cap. */
-  failed: number;
+  /** Seeds that produced a level within the attempt and time caps. */
+  filled: number;
   /** Candidates drawn over all seeds, successes included. */
   attempts: number;
+  /** Over filled seeds only. */
   medianAttempts: number;
   p90Attempts: number;
-  rejects: { repair: number; shape: number };
+  rejects: { repair: number; shape: number; tier: number; unrated: number };
   wallMs: number;
 }
 
 const STATS_MAX_ATTEMPTS = 2000;
+// A seed that takes longer than this counts as not filled.
+const STATS_SEED_MS = 60_000;
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   return sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)];
 }
 
-/** Attempts to first success over `seeds` fixed seeds `stats/<size>/<k>`. */
-export function computeStats(size: number, seeds = 20): SizeStats {
+/** Attempts to first success over `seeds` fixed seeds `stats/<size>/<tier>/<k>`. */
+export function computeStats(
+  size: number,
+  tier?: Tier,
+  seeds = 20,
+  maxAttempts = STATS_MAX_ATTEMPTS,
+): CellStats {
   const started = performance.now();
   const perSeed: number[] = [];
-  const rejects = { repair: 0, shape: 0 };
+  const rejects = { repair: 0, shape: 0, tier: 0, unrated: 0 };
   let attempts = 0;
-  let failed = 0;
   for (let k = 0; k < seeds; k++) {
+    const seedStart = performance.now();
     let used = 0;
     let ok = false;
-    while (!ok && used < STATS_MAX_ATTEMPTS) {
-      const result = tryCandidate(size, makeRng(`stats/${size}/${k}#${used}`));
+    while (
+      !ok &&
+      used < maxAttempts &&
+      performance.now() - seedStart < STATS_SEED_MS
+    ) {
+      const result = tryCandidate(
+        size,
+        makeRng(`stats/${size}/${tier ?? "any"}/${k}#${used}`),
+        undefined,
+        tier,
+      );
       used++;
       if ("level" in result) ok = true;
       else rejects[result.reject]++;
     }
     attempts += used;
     if (ok) perSeed.push(used);
-    else failed++;
   }
   perSeed.sort((a, b) => a - b);
   return {
     size,
+    tier,
     seeds,
-    failed,
+    filled: perSeed.length,
     attempts,
     medianAttempts: percentile(perSeed, 0.5),
     p90Attempts: percentile(perSeed, 0.9),
@@ -237,19 +264,22 @@ export function computeStats(size: number, seeds = 20): SizeStats {
   };
 }
 
-export function formatStats(rows: readonly SizeStats[]): string {
-  const head = "size  median  p90  repair-rej  shape-rej  failed  ms/level";
+export function formatStats(rows: readonly CellStats[]): string {
+  const head =
+    "size  tier    filled  median   p90  repair-rej  shape-rej  tier-rej  unrated-rej  ms/level";
   const lines = rows.map((s) => {
     const pct = (n: number) => `${((100 * n) / s.attempts).toFixed(0)}%`;
-    const perLevel =
-      s.seeds > s.failed ? Math.round(s.wallMs / (s.seeds - s.failed)) : 0;
+    const perLevel = s.filled > 0 ? Math.round(s.wallMs / s.filled) : 0;
     return [
       String(s.size).padStart(4),
+      (s.tier ?? "any").padEnd(6),
+      `${s.filled}/${s.seeds}`.padStart(6),
       String(s.medianAttempts).padStart(6),
-      String(s.p90Attempts).padStart(4),
+      String(s.p90Attempts).padStart(5),
       pct(s.rejects.repair).padStart(10),
       pct(s.rejects.shape).padStart(9),
-      String(s.failed).padStart(6),
+      pct(s.rejects.tier).padStart(8),
+      pct(s.rejects.unrated).padStart(11),
       String(perLevel).padStart(8),
     ].join("  ");
   });

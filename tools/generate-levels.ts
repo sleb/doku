@@ -1,7 +1,7 @@
 // Usage: bun tools/generate-levels.ts [--pack N] [--stats] [--only size[:tier]]
 //                                     [--max-attempts K] [--timeout SECONDS]
 //   --pack N          write src/levels/pack-N.json from tools/curriculum.ts (default 1)
-//   --stats           print per-size generator statistics; writes nothing
+//   --stats           print generator statistics per size x tier cell; writes nothing
 //   --only size[:tier]  build just those rows (tier "any" = untiered); writes nothing
 // Exits 1 if a row cannot be filled (unless --only) or a level fails verification.
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -11,6 +11,8 @@ import { CURRICULUM } from "./curriculum";
 import { buildPack, computeStats, formatStats } from "./pack";
 
 const SIZES = [7, 8, 9, 10, 11];
+// Untiered, then every tier the generator is expected to fill so far.
+const TIERS = [undefined, "easy", "medium"] as const;
 const dir = new URL("../src/levels/", import.meta.url);
 
 function flag(name: string): string | undefined {
@@ -31,7 +33,9 @@ function num(name: string, fallback: number): number {
 }
 
 if (has("stats")) {
-  const rows = SIZES.map((size) => computeStats(size));
+  const rows = SIZES.flatMap((size) =>
+    TIERS.map((tier) => computeStats(size, tier)),
+  );
   process.stdout.write(formatStats(rows));
   process.exit(0);
 }
@@ -55,10 +59,11 @@ const others = readdirSync(dir)
   }));
 
 const result = buildPack(CURRICULUM, packNumber, others, {
-  generate: ({ size, seed }) =>
+  generate: ({ size, seed, tier }) =>
     generate({
       size,
       seed,
+      tier,
       maxAttempts,
       signal: AbortSignal.timeout(timeoutMs),
     }),
