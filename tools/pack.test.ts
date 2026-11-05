@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vitest";
+import { type Level, makeRng } from "../src/engine";
+import { multiSolutionLevel7, uniqueLevel7 } from "../src/engine/__fixtures__/levels";
+import { generateCandidate } from "../src/engine/generator";
+import {
+  buildPack,
+  canonicalForm,
+  type CurriculumRow,
+  collectRow,
+  levelId,
+  rowStartIndexes,
+  verifyLevel,
+} from "./pack";
+
+const rotate = (g: number[][]): number[][] =>
+  g[0].map((_, c) => g.map((row) => row[c]).reverse());
+const mirror = (g: number[][]): number[][] => g.map((row) => [...row].reverse());
+
+function symmetries(g: number[][]): number[][][] {
+  const out: number[][][] = [];
+  let cur = g;
+  for (let i = 0; i < 4; i++) {
+    out.push(cur, mirror(cur));
+    cur = rotate(cur);
+  }
+  return out;
+}
+
+describe("canonicalForm", () => {
+  it("is identical across all 8 symmetries", () => {
+    const forms = symmetries(uniqueLevel7.regions).map((regions) =>
+      canonicalForm({ ...uniqueLevel7, regions }),
+    );
+    expect(new Set(forms).size).toBe(1);
+  });
+
+  it("ignores region relabelling", () => {
+    const n = uniqueLevel7.size;
+    const regions = uniqueLevel7.regions.map((row) => row.map((id) => n - 1 - id));
+    expect(canonicalForm({ ...uniqueLevel7, regions })).toBe(
+      canonicalForm(uniqueLevel7),
+    );
+  });
+
+  it("differs for a different level", () => {
+    expect(canonicalForm(multiSolutionLevel7)).not.toBe(
+      canonicalForm(uniqueLevel7),
+    );
+  });
+});
+
+describe("levelId", () => {
+  it("pads size and index", () => {
+    expect(levelId(undefined, 7, 3)).toBe("any-07-003");
+    expect(levelId("easy", 11, 12)).toBe("easy-11-012");
+  });
+
+  it("numbers per (tier, size) over the whole curriculum, 1-based", () => {
+    const curriculum: CurriculumRow[] = [
+      { pack: 1, size: 7, count: 2 },
+      { pack: 1, size: 8, count: 3 },
+      { pack: 2, size: 7, count: 4 },
+    ];
+    expect(rowStartIndexes(curriculum)).toEqual([1, 1, 3]);
+  });
+});
+
+// Real candidates for stubbing: `generate` replacement over seeds.
+const stubGenerate = ({ size, seed }: { size: number; seed: string }) => {
+  const level = generateCandidate(size, makeRng(seed));
+  return level ? { ...level, id: seed, seed } : null;
+};
+
+describe("collectRow", () => {
+  const row: CurriculumRow = { pack: 1, size: 7, count: 2 };
+
+  it("collects exactly count levels with ids and row seeds", () => {
+    const seen = new Set<string>();
+    const gen = (o: { size: number; seed: string }) => stubGenerate(o);
+    const { levels, failure } = collectRow(row, 1, seen, gen);
+    expect(failure).toBeUndefined();
+    expect(levels.map((l) => l.id)).toEqual(["any-07-001", "any-07-002"]);
+    for (const l of levels) {
+      expect(l.seed).toMatch(/^pack-1\/7\/any\/\d+#\d+$/);
+      expect(l.tier).toBeUndefined();
+    }
+    expect(seen.size).toBe(2);
+  });
+
+  it("skips a duplicate and moves to the next seed", () => {
+    const calls: string[] = [];
+    const gen = ({ seed }: { size: number; seed: string }): Level => {
+      calls.push(seed);
+      return { ...uniqueLevel7, id: seed, seed };
+    };
+    const { levels } = collectRow({ ...row, count: 1 }, 1, new Set(), gen);
+    expect(levels).toHaveLength(1);
+    const seen = new Set([canonicalForm(uniqueLevel7)]);
+    calls.length = 0;
+    const alt = collectRow(
+      { ...row, count: 1 },
+      1,
+      seen,
+      ({ size, seed }) => {
+        calls.push(seed);
+        return calls.length < 3
+          ? { ...uniqueLevel7, id: seed, seed }
+          : stubGenerate({ size, seed });
+      },
+    );
+    expect(calls).toEqual([
+      "pack-1/7/any/0",
+      "pack-1/7/any/1",
+      "pack-1/7/any/2",
+    ]);
+    expect(alt.levels).toHaveLength(1);
+  });
+
+  it("reports a failure when generate returns null", () => {
+    const { levels, failure } = collectRow(row, 1, new Set(), () => null);
+    expect(levels).toEqual([]);
+    expect(failure).toMatch(/size 7/);
+  });
+});
+
+describe("verifyLevel", () => {
+  const real = { ...stubGenerate({ size: 7, seed: "v" }), id: "x" } as Level;
+
+  it("passes a real generated level", () => {
+    expect(verifyLevel(real)).toEqual([]);
+  });
+
+  it("rejects a non-unique level", () => {
+    expect(verifyLevel(multiSolutionLevel7)).not.toEqual([]);
+  });
+
+  it("rejects a solution mismatch", () => {
+    const solution = [...uniqueLevel7.solution].reverse();
+    expect(verifyLevel({ ...uniqueLevel7, solution })).not.toEqual([]);
+  });
+
+  it("rejects an invalid level", () => {
+    expect(verifyLevel({ ...uniqueLevel7, size: 6 })).not.toEqual([]);
+  });
+});
+
+describe("buildPack", () => {
+  const curriculum: CurriculumRow[] = [
+    { pack: 1, size: 7, count: 2 },
+    { pack: 1, size: 7, count: 2 },
+    { pack: 2, size: 8, count: 5 },
+  ];
+  const gen = (o: { size: number; seed: string }) => stubGenerate(o);
+
+  it("is byte-identical across runs, in row order, only the requested pack", () => {
+    const a = buildPack(curriculum, 1, [], { generate: gen });
+    const b = buildPack(curriculum, 1, [], { generate: gen });
+    expect(a.json).toBe(b.json);
+    expect(a.failures).toEqual([]);
+    expect(a.levels.map((l) => l.id)).toEqual([
+      "any-07-001",
+      "any-07-002",
+      "any-07-003",
+      "any-07-004",
+    ]);
+    expect(a.json.endsWith("}\n")).toBe(true);
+    expect(JSON.parse(a.json).levels).toEqual(a.levels);
+  });
+
+  it("refuses an id already used by another pack", () => {
+    const other = [{ ...uniqueLevel7, id: "any-07-002" }];
+    expect(() => buildPack(curriculum, 1, other, { generate: gen })).toThrow(
+      /any-07-002/,
+    );
+  });
+
+  it("skips boards already in lower-numbered packs", () => {
+    const first = buildPack(curriculum, 1, [], { generate: gen });
+    const two = buildPack(
+      [{ pack: 2, size: 7, count: 2 }],
+      2,
+      first.levels,
+      { generate: gen },
+    );
+    const forms = new Set(first.levels.map(canonicalForm));
+    for (const l of two.levels) expect(forms.has(canonicalForm(l))).toBe(false);
+  });
+
+  it("reports unfillable rows as failures", () => {
+    const res = buildPack(curriculum, 1, [], { generate: () => null });
+    expect(res.levels).toEqual([]);
+    expect(res.failures).toHaveLength(2);
+  });
+
+  it("aborts on a level that fails verification", () => {
+    const bad = ({ seed }: { size: number; seed: string }): Level => ({
+      ...multiSolutionLevel7,
+      id: seed,
+      seed,
+    });
+    expect(() => buildPack(curriculum, 1, [], { generate: bad })).toThrow(
+      /verif/i,
+    );
+  });
+});
