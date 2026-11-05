@@ -69,7 +69,7 @@ Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
 | `generator.ts` *(M5)* | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
 | `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(board, level) → Deduction[]` (forced faces and eliminated cells). Shared by the hint system and difficulty rating |
 | `difficulty.ts` *(M5)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
-| `seed.ts` *(M5)* | Seeded PRNG so daily puzzles are deterministic across devices |
+| `seed.ts` *(M5)* | `makeRng(seed)` / `Rng` (`next`, `int`, `shuffle`, `pick`): mulberry32 seeded by `hashSeed` (FNV-1a + fmix32), so daily puzzles are deterministic across devices |
 
 Design notes:
 - **Wrong tap = deviation from the unique solution.** Placing a face on a cell that is not in `level.solution` costs a heart. The wrong face is not placed; the cell is auto-marked ✕ instead, so the player is never stuck in a dead-end board and a mistake is never silently carried forward. Rule conflicts (`findConflicts`, faces only; marks never conflict) are still used for optional highlighting, but cost nothing by themselves. Because correctness depends on the stored solution, the generator must guarantee uniqueness (`countSolutions == 1`) and the loader should verify `solution` against `rules.ts` in dev/test builds.

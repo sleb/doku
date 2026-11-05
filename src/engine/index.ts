@@ -2,6 +2,8 @@ export { emptyBoard } from "./board";
 export { nextHint } from "./hints";
 export type { Conflict, ConflictReason, TapJudgement } from "./rules";
 export { findConflicts, isSolved, judgeTap } from "./rules";
+export type { Rng } from "./seed";
+export { makeRng } from "./seed";
 export { countSolutions, solve } from "./solver";
 export type { Board, Coord, Level, Tier } from "./types";
 export { Cell } from "./types";
