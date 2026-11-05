@@ -1,4 +1,5 @@
 export { emptyBoard } from "./board";
+export { rate } from "./difficulty";
 export type { GenerateOptions, ShapeLimits } from "./generator";
 export { generate } from "./generator";
 export { nextHint } from "./hints";
