@@ -43,6 +43,8 @@ export function GameScreen() {
   const { restart, toggleMark, placeFace, pause, resume } =
     gameStore.getState();
   const inputMode = useSettingsStore((s) => s.inputMode);
+  const palette = useSettingsStore((s) => s.palette);
+  const patterns = useSettingsStore((s) => s.patterns);
   const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
   const holdOwner = useRef<number | null>(null);
   const boardArea = useRef<HTMLDivElement>(null);
@@ -113,6 +115,8 @@ export function GameScreen() {
               conflicts={conflicts}
               disabled={finished || paused}
               inputMode={inputMode}
+              palette={palette}
+              patterns={patterns}
               celebrate={result.pending && status === "won"}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}

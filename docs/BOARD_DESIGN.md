@@ -242,7 +242,7 @@ export const CellView = memo(function CellView(props: CellProps) { ... });
 
 ### 4.4 Palette (`palette.ts`, `app/index.css`)
 
-Tailwind only generates classes it can see statically, so region colors are declared as theme tokens and looked up through a literal array:
+Tailwind only generates classes it can see statically, so region colors are declared as theme tokens and looked up through literal arrays (one per palette; M6-09, `POLISH_DESIGN.md` §8.2):
 
 ```css
 /* app/index.css */
@@ -253,7 +253,7 @@ Tailwind only generates classes it can see statically, so region colors are decl
 ```
 
 ```ts
-export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
+export function regionClass(palette: "default" | "accessible", region: number): string; // "bg-region-3" | "bg-region-a-3"
 export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
 ```
 

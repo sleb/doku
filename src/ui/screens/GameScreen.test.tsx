@@ -824,3 +824,21 @@ describe("GameScreen announcer", () => {
     expect(status()).toHaveTextContent("");
   });
 });
+
+describe("palette and patterns settings", () => {
+  test("switching the settings recolors and patterns the board", () => {
+    renderGame();
+    const region = level.regions[0][0];
+    expect(cell(0)).toHaveClass(`bg-region-${region}`);
+    expect(cell(0).style.backgroundImage).toBe("");
+    act(() => settingsStore.setState({ palette: "accessible" }));
+    expect(cell(0)).toHaveClass(`bg-region-a-${region}`);
+    act(() => settingsStore.setState({ patterns: true }));
+    const anyPatterned = Array.from({ length: n * n }, (_, i) => cell(i)).some(
+      (b) => b.style.backgroundImage !== "",
+    );
+    expect(anyPatterned).toBe(true);
+    act(() => settingsStore.setState({ patterns: false }));
+    expect(cell(0).style.backgroundImage).toBe("");
+  });
+});

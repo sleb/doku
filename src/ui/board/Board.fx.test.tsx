@@ -23,8 +23,12 @@ const none: ReadonlySet<number> = new Set();
 const board = emptyBoard(level);
 const onToggleMark = vi.fn();
 const onPlaceFace = vi.fn();
-const view = (celebrate?: boolean) => (
+const view = (
+  celebrate?: boolean,
+  look: { palette?: "default" | "accessible"; patterns?: boolean } = {},
+) => (
   <Board
+    {...look}
     celebrate={celebrate}
     level={level}
     board={board}
@@ -111,5 +115,30 @@ describe("Board fx", () => {
     renders.byIndex.clear();
     rerender(view(true));
     expect(renders.byIndex.size).toBe(0);
+  });
+
+  test("a palette change re-renders each cell once and recolors it", () => {
+    const { rerender, container } = render(view());
+    renders.byIndex.clear();
+    rerender(view(undefined, { palette: "accessible" }));
+    expect(renders.byIndex.size).toBe(level.size * level.size);
+    for (const n of renders.byIndex.values()) expect(n).toBe(1);
+    expect(
+      container.querySelectorAll(
+        "button.bg-region-a-0, button[class*=bg-region-a-]",
+      ),
+    ).toHaveLength(level.size * level.size);
+  });
+
+  test("a patterns change re-renders each cell once", () => {
+    const { rerender, container } = render(view());
+    renders.byIndex.clear();
+    rerender(view(undefined, { patterns: true }));
+    expect(renders.byIndex.size).toBe(level.size * level.size);
+    for (const n of renders.byIndex.values()) expect(n).toBe(1);
+    const patterned = Array.from(container.querySelectorAll("button")).filter(
+      (b) => b.style.backgroundImage !== "",
+    );
+    expect(patterned.length).toBeGreaterThan(0);
   });
 });

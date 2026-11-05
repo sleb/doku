@@ -18,7 +18,7 @@ import { toSaved } from "./store/persist";
 import { defaultProgress, progressStore } from "./store/progress";
 import { defaultSettings, settingsStore } from "./store/settings";
 import { holdCell } from "./test/hold";
-import { REGION_BG } from "./ui/board/palette";
+import { regionClass } from "./ui/board/palette";
 
 beforeEach(() => {
   // These tests expect the result modal at once; the delay is covered in GameScreen.test.
@@ -47,7 +47,7 @@ test("cells carry their region background class", () => {
   render(<App />);
   const region = demoLevel.regions[0][0];
   expect(screen.getByRole("button", { name: /^Row 1, column 1,/ })).toHaveClass(
-    REGION_BG[region],
+    regionClass("default", region),
   );
 });
 

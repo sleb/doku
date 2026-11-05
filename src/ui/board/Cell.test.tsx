@@ -11,7 +11,8 @@ import { Cell } from "../../engine";
 import { holdCell } from "../../test/hold";
 import { CellView } from "./Cell";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
-import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
+import { GLYPH_COLOR, REGION_NAMES, regionClass, WRONG_COLOR } from "./palette";
+import { patternStyle } from "./patterns";
 
 type Props = Parameters<typeof CellView>[0];
 
@@ -87,7 +88,31 @@ describe("CellView", () => {
   });
 
   test("uses the region background", () => {
-    expect(renderCell({ region: 3 }).className).toContain(REGION_BG[3]);
+    expect(renderCell({ region: 3 }).className).toContain(
+      regionClass("default", 3),
+    );
+  });
+
+  test("the accessible palette uses the accessible background", () => {
+    const cn = renderCell({ region: 3, palette: "accessible" }).className;
+    expect(cn).toContain("bg-region-a-3");
+    expect(cn).not.toContain("bg-region-3");
+  });
+
+  test("patterns off applies no background image", () => {
+    expect(renderCell({ region: 3 }).style.backgroundImage).toBe("");
+  });
+
+  test("patterns on applies the region's pattern", () => {
+    const b = renderCell({ region: 3, patterns: true });
+    expect(b.style.backgroundImage).toBe(patternStyle(3).backgroundImage);
+    expect(b.style.backgroundImage).not.toBe("");
+  });
+
+  test("patterns on leaves region 0 solid", () => {
+    expect(
+      renderCell({ region: 0, patterns: true }).style.backgroundImage,
+    ).toBe("");
   });
 
   test("conflict adds a ring and data-conflict", () => {
