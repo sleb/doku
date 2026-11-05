@@ -8,6 +8,8 @@
   --color-accent: #292524;
   --color-on-accent: #ffffff;
   --color-focus: #1d4ed8;
+  /* Board cells keep their light palette in both themes, so their ring is fixed dark. */
+  --color-cell-focus: #171717;
   --color-subtle: #e7e5e4;
   --color-region-0: #fca5a5;
   --color-region-1: #fdba74;
@@ -67,6 +69,20 @@ body {
   overscroll-behavior: none;
   overflow: hidden;
   background: var(--color-surface);
+}
+
+/* One focus style for every control (POLISH_DESIGN 9.3). Cell overrides the offset only. */
+@layer base {
+  :where(button, [role="switch"], [role="radio"], a, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Pressed feedback for buttons; board cells have their own press and hold effects. */
+button:not(.cell):active:not(:disabled) {
+  filter: brightness(0.88);
+  transition: filter 80ms ease;
 }
 
 body {
@@ -138,9 +154,16 @@ body {
 /* Tutorial "look here" ring. The board is the same in both themes, so the
    ring is a fixed dark dashed line (shape, not just colour) over a light halo. */
 .cell[data-highlight] {
-  outline: 3px dashed #1c1917;
-  outline-offset: -6px;
   box-shadow: inset 0 0 0 8px rgb(255 255 255 / 0.55);
+}
+
+/* The dashed line is a pseudo-element, so the cell's own outline stays free for the focus ring. */
+.cell[data-highlight]::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 3px dashed #1c1917;
+  pointer-events: none;
 }
 
 /* Responsive game layout (GameLayout). `main` is the size container. */
@@ -388,5 +411,12 @@ body {
 
   .dialog-in {
     animation-name: fx-fade;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(.cell):active:not(:disabled) {
+    filter: none;
+    transition: none;
   }
 }
