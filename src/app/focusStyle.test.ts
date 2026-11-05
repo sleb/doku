@@ -16,7 +16,13 @@ function sources(dir: string): string[] {
 test("one :focus-visible rule covers every control and uses the focus token", () => {
   const rules = css.match(/[^{}]*:focus-visible[^{}]*\{[^}]*\}/g) ?? [];
   expect(rules).toHaveLength(1);
-  for (const sel of ["button", "[role=switch]", "[role=radio]", "a", "[tabindex]"]) {
+  for (const sel of [
+    "button",
+    '[role="switch"]',
+    '[role="radio"]',
+    "a",
+    "[tabindex]",
+  ]) {
     expect(rules[0]).toContain(sel);
   }
   expect(rules[0]).toContain("outline: 3px solid var(--color-focus)");
@@ -37,10 +43,15 @@ test("Cell keeps its inset focus offset with the token colour", () => {
 });
 
 test("buttons give pressed feedback, removed under reduced motion", () => {
-  const rules = css.match(/button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*\}/g) ?? [];
+  const rules =
+    css.match(/button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*\}/g) ?? [];
   expect(rules.join("\n")).toContain("scale(0.97)");
   expect(rules.join("\n")).toMatch(/80ms/);
   expect(rules.join("\n")).toContain(":not(.cell)");
-  const reduced = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
-  expect(reduced).toMatch(/button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*(transform: none|transition: none)/);
+  const reduced = css.slice(
+    css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
+  );
+  expect(reduced).toMatch(
+    /button[^{}]*:active:not\(:disabled\)[^{}]*\{[^}]*(transform: none|transition: none)/,
+  );
 });
