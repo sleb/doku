@@ -67,8 +67,8 @@ Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
 | `solver.ts` | Constraint-propagation solver; `solve(level)` and `countSolutions(level, limit=2)` share one backtracker over a `Level` (ignores `level.solution`); `countSolutions` is the uniqueness check |
 | `hints.ts` | Target: `nextHint(board, level)` → `{ cell, technique, explanation }`, running the ladder from `techniques.ts` and reporting the simplest applicable technique. **Today (M4-04) a stub** returning only the cell index: the solution cell of the first row without a face |
 | `generator.ts` *(M5)* | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
-| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(board, level) → Deduction[]` (forced faces and eliminated cells). Shared by the hint system and difficulty rating |
-| `difficulty.ts` *(M5)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
+| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Landed in M5-04 with Easy and Medium (`single-candidate`, `region-in-line`, `line-in-region`); Hard and Expert follow. Shared by the hint system and difficulty rating |
+| `difficulty.ts` *(M5, landed M5-04)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
 | `seed.ts` *(M5)* | `makeRng(seed)` / `Rng` (`next`, `int`, `shuffle`, `pick`): mulberry32 seeded by `hashSeed` (FNV-1a + fmix32), so daily puzzles are deterministic across devices |
 
 Design notes:
@@ -85,6 +85,8 @@ A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.
 | Medium | A region confined to one row or column eliminates the rest of that line (and the reverse: a row/column confined to one region) |
 | Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. N regions confined to the same N rows or columns (pairs, triples) eliminate everything else in those lines |
 | Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
+
+Implemented so far (M5-04): Easy and Medium as in the table; `rate` returns `unrated` for any level that needs Hard techniques until those land (#92).
 
 Rules of the system:
 - The solver applies the simplest technique that makes progress each step, so the rating is the minimum hardest technique, not whatever a particular path happened to use.

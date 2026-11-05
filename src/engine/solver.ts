@@ -1,4 +1,7 @@
-import type { Level } from "./types";
+import { eliminate, fromBoard, placeFace } from "./candidates";
+import { compile } from "./compile";
+import { type Deduction, TECHNIQUES } from "./techniques";
+import type { Board, Level, Tier } from "./types";
 
 // One backtracking search from the rules alone; never reads level.solution.
 // Calls onSolution with the live placement (solution[r] = column of row r's
@@ -55,4 +58,42 @@ export function solutions(level: Level, limit: number): number[][] {
     found.push([...placement]);
   });
   return found;
+}
+
+export interface SolveTrace {
+  solved: boolean;
+  steps: Deduction[]; // in order
+  hardest: Tier | null; // highest tier over steps
+}
+
+// The human-style solver. Starts from the faces on `board` (marks ignored),
+// applies the first deduction of the simplest technique that finds one, then
+// restarts from the simplest technique. So `hardest` is the lowest tier at
+// which the level can be solved by this ladder. Never reads level.solution.
+export function solveByTechniques(level: Level, board?: Board): SolveTrace {
+  const p = compile(level);
+  const isDone = (placed: Uint8Array) =>
+    placed.reduce((sum, v) => sum + v, 0) === p.n;
+  let cand = fromBoard(p, board);
+  const steps: Deduction[] = [];
+  let hardest: Tier | null = null;
+  const tiers = TECHNIQUES.map((t) => t.tier);
+  for (;;) {
+    if (isDone(cand.placed)) break;
+    let step: Deduction | null = null;
+    for (const t of TECHNIQUES) {
+      step = t.run(p, cand);
+      if (step) break;
+    }
+    if (!step) break;
+    steps.push(step);
+    if (!hardest || tiers.indexOf(step.tier) > tiers.indexOf(hardest)) {
+      hardest = step.tier;
+    }
+    cand =
+      step.place !== undefined
+        ? placeFace(p, cand, step.place)
+        : eliminate(p, cand, step.eliminate);
+  }
+  return { solved: isDone(cand.placed), steps, hardest };
 }

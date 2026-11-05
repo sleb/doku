@@ -13,3 +13,7 @@ it("exports generate and solutions", () => {
   expect(typeof engine.generate).toBe("function");
   expect(typeof engine.solutions).toBe("function");
 });
+
+it("exports rate", () => {
+  expect(typeof engine.rate).toBe("function");
+});

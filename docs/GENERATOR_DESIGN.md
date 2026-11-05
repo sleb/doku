@@ -295,3 +295,23 @@ Deviations from §8 and measurements from the first pack tool (`tools/generate-l
 | 11 | 9 | 39 | 94% | 1% | 590 |
 
   Shape rarely rejects; failed repair is the dominant filter, as §6 expected. The "wrong tier" and "unrated" columns of §8.2 arrive with `rate`.
+
+## 15. As built in M5-04
+
+The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, `solveByTechniques` in `solver.ts`, `difficulty.ts`).
+
+- **API.** `rate(level: Level): Tier | 'unrated'` is exported from `index.ts`; `solveByTechniques(level, board?)` returns `{ solved, steps, hardest }` and stays internal, as do `Candidates` and `TECHNIQUES`. `compile` is minimal (`n`, `regionOf`, 3N units). `generate` has no `tier` option yet (#91).
+- **Rating.** The solver always takes the first deduction of the simplest applicable technique and restarts from technique 1, so the tier is the minimum hardest tier. A level the ladder cannot finish is `unrated`; until Hard lands (#92) that is most generated levels.
+- **Soundness** is a property test over 100 generated levels (n 7 to 11, 20 seeds each): no elimination removes a solution cell and every placement is a solution cell. A throwaway mutation (region-in-line eliminating the whole line, region cells included) makes it fail.
+- **Measured tier shares** of untiered `generate` output (`seed` = `measure/<n>/<i>`; 100 levels per size, 40 at 11):
+
+| size | easy | medium | unrated |
+|---|---|---|---|
+| 7 | 3% | 16% | 81% |
+| 8 | 5% | 16% | 79% |
+| 9 | 6% | 23% | 71% |
+| 10 | 3% | 18% | 79% |
+| 11 | 2.5% (1 of 40) | 7.5% (3 of 40) | 90% |
+
+  Easy levels are rare and the unrated share is large, so Hard techniques (#92) are needed before the curriculum can fill every size by tier, and an Easy 11x11 may be dropped as `DESIGN.md` §4.1 anticipates.
+- **Cost.** A full `rate` of a solved 11x11 level has a median of about 0.04 ms (max under 1 ms in 100 runs); stuck levels are cheaper still. The budget is 10 ms, so tier filtering adds nothing noticeable to generation, whose cost is dominated by uniqueness repair (§13).
