@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { fixtures, uniqueLevel7 } from "./__fixtures__/levels";
-import { hardLevel1, hardLevel2, rated } from "./__fixtures__/rated";
+import {
+  hardLevel1,
+  hardLevel2,
+  mediumLevel11,
+  rated,
+} from "./__fixtures__/rated";
 import { emptyBoard } from "./board";
 import { type Hint, nextHint } from "./hints";
 import { solveByTechniques } from "./solver";
@@ -105,5 +110,18 @@ describe("nextHint", () => {
       applyHint(board, hint);
     }
     throw new Error("no hard hint reached");
+  });
+
+  it("hints an 11x11 level in under 10 ms (median of warmed runs)", () => {
+    const board = emptyBoard(mediumLevel11);
+    for (let i = 0; i < 20; i++) nextHint(board, mediumLevel11);
+    const times: number[] = [];
+    for (let i = 0; i < 21; i++) {
+      const start = performance.now();
+      nextHint(board, mediumLevel11);
+      times.push(performance.now() - start);
+    }
+    times.sort((a, b) => a - b);
+    expect(times[10]).toBeLessThan(10);
   });
 });

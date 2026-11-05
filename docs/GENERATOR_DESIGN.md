@@ -248,7 +248,7 @@ Stories 01 to 03 deliver value on their own (a real, varied, all-sizes pack) bef
 
 ## 12. Open questions
 
-1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16); Hard and Expert wait for #92 and #93.
+1. **Shippable size×tier table:** answered for Easy and Medium by M5-05 (§16) and for Hard by M5-06 (§17: all five sizes fill); Expert waits for #93.
 2. **Shape defaults** (`minRegion = 2`, `maxSingletons` 1 for 7 to 8 and 2 for 9 to 11, `maxRegion = 35%`): guesses; tune by playing generated packs.
 3. **Curve design:** M5-05 ships all Easy first (sizes 7 to 10), then Medium (7 to 11) (§16). Whether to interleave sizes and tiers for variety stays a game-design decision to revisit after playing it.
 4. **Seed string format for the daily puzzle** (milestone 6): date-derived, e.g. `daily/2026-11-04`; nothing in this design blocks it.
@@ -301,7 +301,7 @@ Deviations from §8 and measurements from the first pack tool (`tools/generate-l
 The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, `solveByTechniques` in `solver.ts`, `difficulty.ts`).
 
 - **API.** `rate(level: Level): Tier | 'unrated'` is exported from `index.ts`; `solveByTechniques(level, board?)` returns `{ solved, steps, hardest }` and stays internal, as do `Candidates` and `TECHNIQUES`. `compile` is minimal (`n`, `regionOf`, 3N units). `generate` gained `tier` in M5-05 (§16).
-- **Rating.** The solver always takes the first deduction of the simplest applicable technique and restarts from technique 1, so the tier is the minimum hardest tier. A level the ladder cannot finish is `unrated`; until Hard lands (#92) that is most generated levels.
+- **Rating.** The solver always takes the first deduction of the simplest applicable technique and restarts from technique 1, so the tier is the minimum hardest tier. A level the ladder cannot finish is `unrated`; until Hard landed (M5-06, §17) that was most generated levels, and with Hard it is 5 to 10%.
 - **Soundness** is a property test over 100 generated levels (n 7 to 11, 20 seeds each): no elimination removes a solution cell and every placement is a solution cell. A throwaway mutation (region-in-line eliminating the whole line, region cells included) makes it fail.
 - **Measured tier shares** of untiered `generate` output (`seed` = `measure/<n>/<i>`; 100 levels per size, 40 at 11):
 
@@ -320,7 +320,7 @@ The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, 
 
 Tiered generation and the tiered campaign.
 
-- **Filter.** `generate({ size, tier, seed })` runs the same attempts `${seed}#k` as before; after a candidate survives uniqueness and shape it is rated, and kept only if `rate(candidate) === tier`. The returned level has `tier` set and `unrated` is never returned. With `tier` omitted `rate` is never called (tested with a spy), so untiered output and the golden snapshot are unchanged. `maxAttempts` stays 2000; `hard` and `expert` simply exhaust it and return `null` until #92 and #93.
+- **Filter.** `generate({ size, tier, seed })` runs the same attempts `${seed}#k` as before; after a candidate survives uniqueness and shape it is rated, and kept only if `rate(candidate) === tier`. The returned level has `tier` set and `unrated` is never returned. With `tier` omitted `rate` is never called (tested with a spy), so untiered output and the golden snapshot are unchanged. `maxAttempts` stays 2000; `expert` simply exhausts it and returns `null` until #93 (`hard` fills since M5-06, §17).
 - **`tryCandidate(size, rng, shape?, tier?)`** adds the reject reasons `tier` and `unrated`; `generate` and `--stats` share it.
 - **Pack tool.** `GenerateFn` takes `tier`; `collectRow` passes `row.tier`; `verifyLevel` additionally fails when `level.tier` is set and `rate(level) !== level.tier`. `computeStats(size, tier?, seeds = 20)` measures every size x {untiered, easy, medium} cell; `--stats` prints them. A seed that needs more than 2000 attempts or 60 s counts as not filled.
 - **Fill criterion.** A cell ships if at least 18 of the 20 stats seeds fill within 2000 attempts and 60 s each. Counts are chosen within what the cell can produce; the real regeneration run is the final check.
@@ -348,4 +348,51 @@ size  tier    filled  median   p90  repair-rej  shape-rej  tier-rej  unrated-rej
 
   Easy gets rarer with size (median 16 attempts at 7x7, 243 at 10x10, 337 at 11x11) because the unrated share grows with the board; Easy 11x11 fills only 16 of 20 seeds within 2000 attempts and about 30 s per level, so it is dropped. Medium fills every size, 11x11 at about 3 s per level.
 - **Curriculum (pack 1, 69 levels).** In order: Easy 7, 8, 9, 10 (8 each), then Medium 7, 8, 9, 10 (8 each), then Medium 11 (5). Shipped cells: easy 7 to 10, medium 7 to 11. Dropped: easy 11. Ids are `easy-07-001` ... `medium-11-005`; the 42 untiered `any-*` levels are gone (no migration before the MVP). Regeneration takes about 40 s and is byte-identical on a second run.
-- **Tests.** `generator.test.ts` (tier honoured over 10 seeds at 7x7 for each tier, determinism, spy, `hard` returns null on a small budget, reject reasons), `tools/pack.test.ts` (tiered rows, `rate` verification, tiered stats), `campaign.test.ts` (every level tiered, `rate(level) === level.tier`, tiers non-decreasing along the pack).
+- **Tests.** `generator.test.ts` (tier honoured over 10 seeds at 7x7 for each tier, determinism, spy, `expert` returns null on a small budget, reject reasons), `tools/pack.test.ts` (tiered rows, `rate` verification, tiered stats), `campaign.test.ts` (every level tiered, `rate(level) === level.tier`, tiers non-decreasing along the pack).
+
+## 17. As built in M5-06
+
+Hard techniques, ladder-driven hints and the Hard campaign cells.
+
+- **Ladder.** `adjacency-pressure`, `subset-regions-lines` and `subset-lines-regions` (`ENGINE_DESIGN.md` §6) are rungs 4 to 6, tier `hard`. `rate`, `generate({ tier: "hard" })` and `tryCandidate` needed no change: they already work for any tier the ladder can produce. Untiered output and the golden snapshot are unchanged.
+- **`unrated` after Hard.** The old `unrated` goldens now rate `hard` (renamed `hardLevel1` and `hardLevel2` in `__fixtures__/rated.ts`); two new `unrated` goldens were found by search and stall because they need lookahead (#93).
+- **Measured tier shares** of untiered `generate` output (`seed` = `measure/<n>/<i>`; 100 levels per size, 40 at 11):
+
+| size | easy | medium | hard | unrated |
+|---|---|---|---|---|
+| 7 | 3% | 16% | 71% | 10% |
+| 8 | 5% | 16% | 74% | 5% |
+| 9 | 6% | 23% | 62% | 9% |
+| 10 | 3% | 18% | 70% | 9% |
+| 11 | 2.5% (1 of 40) | 7.5% (3 of 40) | 80% (32 of 40) | 10% (4 of 40) |
+
+  Most random levels need a Hard technique, so Hard is the cheapest tier to generate and Easy remains the rare one.
+- **`--stats`** (20 seeds per cell, as §16; `tools/generate-levels.ts --stats` now includes `hard`; the easy and medium rows are re-measured, and their `tier-rej` and `unrated-rej` columns moved because former `unrated` candidates now count as `hard`, a tier reject):
+
+```
+size  tier    filled  median   p90  repair-rej  shape-rej  tier-rej  unrated-rej  ms/level
+   7  any      20/20       1      6         57%         2%        0%           0%         1
+   7  easy     20/20      16     76         62%         5%       29%           1%         9
+   7  medium   20/20      11     27         60%         6%       25%           2%         3
+   7  hard     20/20       2      6         53%         2%       10%           2%         1
+   8  any      20/20       2      7         68%         2%        0%           0%         2
+   8  easy     20/20      84    185         70%         5%       22%           2%        74
+   8  medium   20/20      11     45         71%         3%       19%           2%        13
+   8  hard     20/20       4     13         68%         8%        5%           2%         4
+   9  any      20/20       3      9         76%         1%        0%           0%         8
+   9  easy     20/20      64    263         79%         0%       19%           1%       235
+   9  medium   20/20      18    105         82%         0%       14%           1%        59
+   9  hard     20/20       4     13         81%         1%        3%           0%        11
+  10  any      20/20       8     15         89%         0%        0%           0%        54
+  10  easy     20/20     243   1027         87%         0%       12%           1%      2421
+  10  medium   20/20      32    110         87%         0%       10%           1%       371
+  10  hard     20/20       7     16         86%         1%        2%           1%        73
+  11  any      20/20      10     31         93%         0%        0%           0%       399
+  11  easy     16/20     337   1404         93%         0%        6%           0%     29154
+  11  medium   20/20      67    236         93%         0%        5%           1%      2898
+  11  hard     20/20       8     45         92%         1%        1%           1%       465
+```
+
+  Every Hard cell fills 20 of 20, including 11x11 at about 0.5 s per level, so no Hard cell is dropped and no steering was needed. The easy and medium attempt counts are identical to §16 (the same candidates are accepted); only the reject columns shifted.
+- **Curriculum (pack 1, 94 levels).** Appended after Medium 11 so tiers stay non-decreasing: Hard 7, 8, 9, 10 and 11, five each. Shipped cells: easy 7 to 10, medium 7 to 11, hard 7 to 11. Dropped: easy 11. Ids `hard-07-001` ... `hard-11-005`. The first 69 levels regenerate byte-for-byte (the diff is 25 appended levels only), and a second run is byte-identical. The pack is 32 easy, 37 medium and 25 hard levels.
+- **Hints** (`ENGINE_DESIGN.md` §8, `APP_DESIGN.md` §4.4): `nextHint` returns the first ladder step the player has not acted on, so the hint vocabulary is exactly the rating vocabulary. A full-board hint costs well under 1 ms on the 11x11 fixture (soft budget 10 ms).
