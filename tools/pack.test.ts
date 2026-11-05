@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { generate, type Level } from "../src/engine";
+import type { Tier } from "../src/engine";
+import { generate, type Level, rate } from "../src/engine";
 import {
   multiSolutionLevel7,
   uniqueLevel7,
@@ -73,8 +74,15 @@ describe("levelId", () => {
 });
 
 // Real 7x7 generation, the same call the CLI makes.
-const stubGenerate = ({ size, seed }: { size: number; seed: string }) =>
-  generate({ size, seed });
+const stubGenerate = ({
+  size,
+  seed,
+  tier,
+}: {
+  size: number;
+  seed: string;
+  tier?: Tier;
+}) => generate({ size, seed, tier });
 
 describe("collectRow", () => {
   const row: CurriculumRow = { pack: 1, size: 7, count: 2 };
@@ -90,6 +98,27 @@ describe("collectRow", () => {
       expect(l.tier).toBeUndefined();
     }
     expect(seen.size).toBe(2);
+  });
+
+  it("collects tiered rows with the tier in the id, level and generate call", () => {
+    const asked: (Tier | undefined)[] = [];
+    const { levels, failure } = collectRow(
+      { pack: 1, size: 7, tier: "easy", count: 2 },
+      1,
+      new Set(),
+      (o) => {
+        asked.push(o.tier);
+        return stubGenerate(o);
+      },
+    );
+    expect(failure).toBeUndefined();
+    expect(levels.map((l) => l.id)).toEqual(["easy-07-001", "easy-07-002"]);
+    expect(asked.every((t) => t === "easy")).toBe(true);
+    for (const l of levels) {
+      expect(l.tier).toBe("easy");
+      expect(rate(l)).toBe("easy");
+      expect(l.seed).toMatch(/^pack-1\/7\/easy\/\d+#\d+$/);
+    }
   });
 
   it("skips a duplicate and moves to the next seed", () => {
@@ -125,6 +154,16 @@ describe("verifyLevel", () => {
 
   it("rejects a non-unique level", () => {
     expect(verifyLevel(multiSolutionLevel7)).not.toEqual([]);
+  });
+
+  it("passes a correctly tiered level and rejects a mismatched one", () => {
+    const easy = {
+      ...stubGenerate({ size: 7, seed: "v", tier: "easy" }),
+      id: "x",
+    } as Level;
+    expect(easy.tier).toBe("easy");
+    expect(verifyLevel(easy)).toEqual([]);
+    expect(verifyLevel({ ...easy, tier: "medium" }).join()).toMatch(/rate/);
   });
 
   it("rejects a solution mismatch", () => {
@@ -216,32 +255,52 @@ describe("buildPack", () => {
 });
 
 describe("computeStats", () => {
-  const stats = computeStats(7, 5);
+  const stats = computeStats(7, undefined, 5);
 
   it("measures attempts to first success over fixed seeds", () => {
     expect(stats.size).toBe(7);
+    expect(stats.tier).toBeUndefined();
     expect(stats.seeds).toBe(5);
-    expect(stats.failed).toBe(0);
+    expect(stats.filled).toBe(5);
     expect(stats.medianAttempts).toBeGreaterThanOrEqual(1);
     expect(stats.p90Attempts).toBeGreaterThanOrEqual(stats.medianAttempts);
     expect(stats.attempts).toBe(
-      stats.seeds + stats.rejects.repair + stats.rejects.shape,
+      stats.seeds +
+        stats.rejects.repair +
+        stats.rejects.shape +
+        stats.rejects.tier +
+        stats.rejects.unrated,
     );
+    expect(stats.rejects.tier + stats.rejects.unrated).toBe(0);
     expect(stats.wallMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("measures a tiered cell, counting tier rejects", () => {
+    const easy = computeStats(7, "easy", 3);
+    expect(easy.tier).toBe("easy");
+    expect(easy.filled).toBe(3);
+    expect(easy.rejects.tier).toBeGreaterThan(0);
+  });
+
+  it("counts a cell it cannot fill as not filled", () => {
+    const hard = computeStats(7, "hard", 1, 30);
+    expect(hard.filled).toBe(0);
+    expect(hard.attempts).toBe(30);
+  });
+
   it("is deterministic apart from wall time", () => {
-    expect({ ...computeStats(7, 5), wallMs: 0 }).toEqual({
+    expect({ ...computeStats(7, undefined, 5), wallMs: 0 }).toEqual({
       ...stats,
       wallMs: 0,
     });
   });
 
-  it("formats one line per size under a header", () => {
-    const text = formatStats([stats]);
+  it("formats one line per cell under a header", () => {
+    const text = formatStats([stats, computeStats(7, "easy", 2)]);
     const lines = text.trimEnd().split("\n");
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatch(/size.*median.*p90.*repair.*shape.*ms/);
-    expect(lines[1]).toMatch(/^\s*7\b/);
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/size.*tier.*filled.*median.*p90.*tier-rej.*ms/);
+    expect(lines[1]).toMatch(/^\s*7\s+any\b/);
+    expect(lines[2]).toMatch(/^\s*7\s+easy\b/);
   });
 });
