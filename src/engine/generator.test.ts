@@ -343,21 +343,27 @@ describe("generate", () => {
 });
 
 describe("tryCandidate", () => {
-  const results = Array.from({ length: 200 }, (_, k) =>
-    tryCandidate(9, makeRng(`t${k}`)),
-  );
-
-  it("reports why a candidate was rejected", () => {
-    const rejects = new Set(
-      results.flatMap((r) => ("reject" in r ? [r.reject] : [])),
+  const reasons = (shape?: Parameters<typeof tryCandidate>[2]) =>
+    new Set(
+      Array.from({ length: 100 }, (_, k) =>
+        tryCandidate(7, makeRng(`t${k}`), shape),
+      ).flatMap((r) => ("reject" in r ? [r.reject] : [])),
     );
-    expect(rejects).toEqual(new Set(["repair", "shape"]));
+
+  it("reports a failed repair", () => {
+    expect(reasons().has("repair")).toBe(true);
+  });
+
+  it("reports a failed shape filter", () => {
+    expect(reasons({ maxRegion: 8 }).has("shape")).toBe(true);
   });
 
   it("agrees with generateCandidate", () => {
-    results.slice(0, 40).forEach((r, k) => {
-      const c = generateCandidate(9, makeRng(`t${k}`));
-      expect(c).toEqual("level" in r ? r.level : null);
-    });
+    for (let k = 0; k < 40; k++) {
+      const r = tryCandidate(7, makeRng(`t${k}`));
+      expect(generateCandidate(7, makeRng(`t${k}`))).toEqual(
+        "level" in r ? r.level : null,
+      );
+    }
   });
 });

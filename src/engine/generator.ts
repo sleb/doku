@@ -244,13 +244,15 @@ export interface GenerateOptions {
   signal?: AbortSignal;
 }
 
-// One attempt: solution, regions, uniqueness repair, shape filter. The result
-// has an empty id and no seed; generate() fills those in.
-export function generateCandidate(
+export type CandidateResult = { level: Level } | { reject: "repair" | "shape" };
+
+// One attempt: solution, regions, uniqueness repair, shape filter, reporting
+// which filter rejected it. The level has an empty id and no seed.
+export function tryCandidate(
   size: number,
   rng: Rng,
   shape?: Partial<ShapeLimits>,
-): Level | null {
+): CandidateResult {
   const limits = { ...defaultShape(size), ...shape };
   const solution = randomSolution(size, rng);
   const regions = growRegions(size, solution, rng, limits);
@@ -259,8 +261,19 @@ export function generateCandidate(
     rng,
     MAX_MOVES,
   );
-  if (!repaired || !passesShape(repaired.regions, limits)) return null;
-  return repaired;
+  if (!repaired) return { reject: "repair" };
+  if (!passesShape(repaired.regions, limits)) return { reject: "shape" };
+  return { level: repaired };
+}
+
+// tryCandidate without the reason. generate() fills in id and seed.
+export function generateCandidate(
+  size: number,
+  rng: Rng,
+  shape?: Partial<ShapeLimits>,
+): Level | null {
+  const result = tryCandidate(size, rng, shape);
+  return "level" in result ? result.level : null;
 }
 
 // Runs attempts `${seed}#0`, `${seed}#1`, ... and returns the first candidate
