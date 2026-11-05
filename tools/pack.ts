@@ -146,7 +146,7 @@ export function buildPack(
   curriculum: readonly CurriculumRow[],
   packNumber: number,
   others: readonly { pack: number; levels: readonly Level[] }[],
-  options: { generate: GenerateFn },
+  options: { generate: GenerateFn; filter?: (row: CurriculumRow) => boolean },
 ): BuildResult {
   const flat = others.flatMap((o) =>
     o.levels.map((level) => ({ pack: o.pack, level })),
@@ -159,7 +159,7 @@ export function buildPack(
   const levels: Level[] = [];
   const failures: string[] = [];
   curriculum.forEach((row, i) => {
-    if (row.pack !== packNumber) return;
+    if (row.pack !== packNumber || options.filter?.(row) === false) return;
     const res = collectRow(row, starts[i], seen, options.generate);
     if (res.failure) failures.push(res.failure);
     for (const level of res.levels) {

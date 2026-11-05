@@ -181,6 +181,19 @@ describe("buildPack", () => {
     for (const l of two.levels) expect(forms.has(canonicalForm(l))).toBe(false);
   });
 
+  it("builds only rows accepted by the filter, keeping ids", () => {
+    const res = buildPack(
+      [...curriculum, { pack: 1, size: 8, count: 1 }],
+      1,
+      [],
+      {
+        generate: gen,
+        filter: (row) => row.size === 8,
+      },
+    );
+    expect(res.levels.map((l) => l.id)).toEqual(["any-08-006"]);
+  });
+
   it("reports unfillable rows as failures", () => {
     const res = buildPack(curriculum, 1, [], { generate: () => null });
     expect(res.levels).toEqual([]);
