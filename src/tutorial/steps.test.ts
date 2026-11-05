@@ -83,8 +83,7 @@ describe("tutorial steps", () => {
       for (const t of [s.title, s.body, s.how.mark, s.how.face, s.onWrong])
         expect(t.trim().length).toBeGreaterThan(0);
       expect(s.highlight.length).toBeGreaterThan(0);
-      for (const h of s.highlight)
-        expect(h).toBeLessThan(s.level.size ** 2);
+      for (const h of s.highlight) expect(h).toBeLessThan(s.level.size ** 2);
     }
   });
 });

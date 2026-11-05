@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useStore } from "zustand";
+import type { StoreApi } from "zustand/vanilla";
 import { haptics } from "../../platform/haptics";
-import { useGameStore } from "../../store/gameStore";
+import { type GameStore, gameStore } from "../../store/gameStore";
 import { settingsStore } from "../../store/settings";
 
 /**
@@ -8,9 +10,11 @@ import { settingsStore } from "../../store/settings";
  * `onHoldGlow` handler. The ramp starts with the glow (never on a tap) and
  * is cancelled when the glow ends, the game leaves `playing`, or on unmount.
  */
-export function useHoldRamp(): (cell: number | null) => void {
+export function useHoldRamp(
+  store: StoreApi<GameStore> = gameStore,
+): (cell: number | null) => void {
   const cancelRef = useRef<(() => void) | null>(null);
-  const status = useGameStore((s) => s.status);
+  const status = useStore(store, (s) => s.status);
   const cancel = useCallback(() => {
     cancelRef.current?.();
     cancelRef.current = null;

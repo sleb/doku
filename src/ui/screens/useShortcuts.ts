@@ -1,8 +1,15 @@
 import { type RefObject, useEffect } from "react";
-import { gameStore } from "../../store/gameStore";
+import type { StoreApi } from "zustand/vanilla";
+import { type GameStore, gameStore } from "../../store/gameStore";
 import { settingsStore } from "../../store/settings";
 
 export interface ShortcutOptions {
+  /** The store the keys drive. Defaults to the app's game store. */
+  store?: StoreApi<GameStore>;
+  /** Whether Esc pauses. Default true; the tutorial has no pause. */
+  pause?: boolean;
+  /** Which of undo, redo and hint respond. Default all. */
+  only?: readonly ("undo" | "redo" | "hint")[];
   /** The board's hold owner: while a cell is held, undo/redo/hint do nothing. */
   holdOwner?: RefObject<number | null>;
 }
@@ -12,12 +19,19 @@ export interface ShortcutOptions {
  * Shift+Z / Ctrl-or-Cmd+Shift+Z / Ctrl+Y redo; h hint; f toggles whether a tap places faces; Esc pause. Undo, redo
  * and hint do nothing during a hold; Esc still pauses.
  */
-export function useShortcuts({ holdOwner }: ShortcutOptions = {}): void {
+export function useShortcuts({
+  holdOwner,
+  store = gameStore,
+  pause = true,
+  only = ["undo", "redo", "hint"],
+}: ShortcutOptions = {}): void {
+  // Compared by content, so an inline array does not rebind the listener.
+  const allowed = only.join();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // A dialog that already handled the key (Esc closing it) owns it.
       if (e.defaultPrevented || e.repeat || e.altKey) return;
-      if (gameStore.getState().status !== "playing") return;
+      if (store.getState().status !== "playing") return;
       const key = e.key.toLowerCase();
       if (e.key === "f" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
@@ -31,11 +45,13 @@ export function useShortcuts({ holdOwner }: ShortcutOptions = {}): void {
       else if (key === "h" && !e.ctrlKey && !e.metaKey) action = "hint";
       else if (key === "y" && e.ctrlKey && !e.metaKey) action = "redo";
       if (!action) return;
+      if (action === "pause" ? !pause : !allowed.split(",").includes(action))
+        return;
       if (action !== "pause" && holdOwner?.current != null) return;
       e.preventDefault();
-      gameStore.getState()[action]();
+      store.getState()[action]();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [holdOwner]);
+  }, [holdOwner, store, pause, allowed]);
 }

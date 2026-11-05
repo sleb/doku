@@ -1,4 +1,5 @@
 import { type Board, Cell, type Level } from "../engine";
+import type { Control } from "../ui/screens/ActionBar";
 
 /** An action that, with the rest of a step's goals, completes the step. */
 export interface Goal {
@@ -10,8 +11,6 @@ export interface Goal {
    */
   kind: "face" | "mark" | "wrong" | "undone";
 }
-
-export type Control = "undo" | "redo" | "hint";
 
 export interface TutorialStep {
   id: string;
@@ -35,11 +34,7 @@ export interface TutorialStep {
   onWrong: string;
 }
 
-function level(
-  n: number,
-  solution: number[],
-  regions: number[][],
-): Level {
+function level(n: number, solution: number[], regions: number[][]): Level {
   return { id: `tutorial-${n}`, size: regions.length, regions, solution };
 }
 
@@ -74,7 +69,8 @@ export const STEPS: readonly TutorialStep[] = [
     start: start(4, [2, 4, 11]),
     goal: [{ cell: 13, kind: "face" }],
     highlight: [13],
-    onWrong: "That cell is not the one. The last row's face goes in the highlighted cell.",
+    onWrong:
+      "That cell is not the one. The last row's face goes in the highlighted cell.",
   },
   {
     id: "lines",
@@ -101,7 +97,8 @@ export const STEPS: readonly TutorialStep[] = [
       { cell: 24, kind: "face" },
     ],
     highlight: [17, 24],
-    onWrong: "Not there. Use the highlighted cells: they are the only ones left in their rows and columns.",
+    onWrong:
+      "Not there. Use the highlighted cells: they are the only ones left in their rows and columns.",
   },
   {
     id: "touching",
@@ -125,7 +122,8 @@ export const STEPS: readonly TutorialStep[] = [
     start: start(5, [0]),
     goal: [{ cell: 6, kind: "mark" }],
     highlight: [6],
-    onWrong: "That cell can hold a face, so it should not be crossed out. Mark the highlighted one.",
+    onWrong:
+      "That cell can hold a face, so it should not be crossed out. Mark the highlighted one.",
   },
   {
     id: "notes",
@@ -153,7 +151,8 @@ export const STEPS: readonly TutorialStep[] = [
     ],
     highlight: [1, 6],
     controls: ["undo", "redo"],
-    onWrong: "That cell holds a face, so it should not be crossed out. Use the highlighted cells.",
+    onWrong:
+      "That cell holds a face, so it should not be crossed out. Use the highlighted cells.",
   },
   {
     id: "hearts",
@@ -181,7 +180,8 @@ export const STEPS: readonly TutorialStep[] = [
     ],
     highlight: [14, 11],
     showHearts: true,
-    onWrong: "Only the first highlighted cell is wrong on purpose. Try that one, then the second.",
+    onWrong:
+      "Only the first highlighted cell is wrong on purpose. Try that one, then the second.",
   },
   {
     id: "hint",

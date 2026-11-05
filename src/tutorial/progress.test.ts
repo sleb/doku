@@ -47,9 +47,9 @@ describe("evaluate", () => {
 
   test("a face goal completes when the face is placed", () => {
     const s = step("region");
-    expect(
-      evaluate(s, with_(fresh(s), { board: [[13, Cell.Face]] })),
-    ).toBe("complete");
+    expect(evaluate(s, with_(fresh(s), { board: [[13, Cell.Face]] }))).toBe(
+      "complete",
+    );
   });
 
   test("all goals are needed", () => {
