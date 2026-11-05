@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import { Cell, type Level } from "../../engine";
 import { LEVELS, levelIndex } from "../../levels/campaign";
@@ -58,9 +58,14 @@ export function useFeedback(
 ) {
   // Read at event time, so inline options never resubscribe.
   const opts = useRef(options);
-  opts.current = options;
+  useLayoutEffect(() => {
+    opts.current = options;
+  });
   useEffect(() => {
     let pauseAnnounced = false;
+    // A pause in the same tick as a level start (Start over) must not
+    // replace the level text.
+    let levelJustAnnounced = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const clear = () => {
       clearTimeout(timer);
@@ -86,12 +91,16 @@ export function useFeedback(
           const pos = (opts.current.describeLevel ?? campaignPosition)(
             next.level,
           );
-          if (pos)
+          if (pos) {
             say(announceLevelStart(pos.number, pos.count, next.level.size));
+            levelJustAnnounced = true;
+            queueMicrotask(() => (levelJustAnnounced = false));
+          }
         } else if (prev.status === "playing" && next.status === "paused") {
           // The first-run Rules dialog forces a pause; it announces itself.
           pauseAnnounced = settingsStore.getState().seenTutorial;
-          if (pauseAnnounced) say(announcePause());
+          if (levelJustAnnounced) pauseAnnounced = false;
+          else if (pauseAnnounced) say(announcePause());
         } else if (prev.status === "paused" && next.status === "playing") {
           if (pauseAnnounced) say(announceResume());
           pauseAnnounced = false;

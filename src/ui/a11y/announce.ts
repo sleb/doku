@@ -13,12 +13,14 @@ export interface AnnounceContext {
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 function spokenTime(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  const m = Math.floor(total / 60);
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   const parts = [];
+  if (h > 0) parts.push(plural(h, "hour"));
   if (m > 0) parts.push(plural(m, "minute"));
-  if (s > 0 || m === 0) parts.push(plural(s, "second"));
+  if (s > 0 || parts.length === 0) parts.push(plural(s, "second"));
   return parts.join(" ");
 }
 

@@ -56,6 +56,19 @@ describe("announce", () => {
     );
   });
 
+  test("win floors the time and speaks hours", () => {
+    const win: Outcome = { kind: "win", faces: 8, hearts: 3 };
+    expect(announce(win, { size: 8, elapsedMs: 59_600 })).toBe(
+      "Solved in 59 seconds.",
+    );
+    expect(announce(win, { size: 8, elapsedMs: 4_500_000 })).toBe(
+      "Solved in 1 hour 15 minutes.",
+    );
+    expect(announce(win, { size: 8, elapsedMs: 7_200_000 })).toBe(
+      "Solved in 2 hours.",
+    );
+  });
+
   test("win adds New best only when elapsed is at most the best", () => {
     const win: Outcome = { kind: "win", faces: 8, hearts: 3 };
     expect(announce(win, { size: 8, elapsedMs: 83_000, bestMs: 83_000 })).toBe(

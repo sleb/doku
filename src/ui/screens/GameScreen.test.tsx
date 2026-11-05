@@ -807,6 +807,17 @@ describe("GameScreen announcer", () => {
     expect(status()).toHaveTextContent("Tapping now marks cells.");
   });
 
+  test("Start over in Settings leaves the level-start text spoken", async () => {
+    progressStore.setState({ next: 3 });
+    renderGame(LEVELS[3]);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Pause" }));
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "Start over" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(status()).toHaveTextContent(`Level 1 of ${LEVELS.length}`);
+  });
+
   test("the first-run Rules pause is not announced", () => {
     settingsStore.setState({ seenTutorial: false });
     renderGame();
