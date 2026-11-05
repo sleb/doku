@@ -217,7 +217,7 @@ function nextHint(board: Board, level: Level): Hint | null;
 ```
 **As built (M5-06).** `nextHint` keeps the `(board, level)` form of the M4 stub (it compiles internally, like `rate`); the stub's `number | null` return is gone and every caller was updated. It runs `solveByTechniques(level, board)` (faces only, marks ignored) and returns the first step that either places a face or eliminates at least one cell the player has **not** already marked. So the hint is the simplest deduction the player has not acted on, and it advances as the player marks the cells it named. It is stateless, and every step is sound, so applying a hint never contradicts the solution. `null` means the board is complete or the ladder is stuck (possible only on an unrated level).
 
-`message` comes from `explain(deduction)` in `src/engine/hintText.ts`: one template per `TechniqueId`, pure, importing only engine types. Units are numbered from 1 for the player ("region 3", "row 4", "column 2"). `Hint`, `Deduction`, `TechniqueId` and `UnitRef` are exported from `index.ts`; `explain` stays internal.
+`message` comes from `explain(deduction)` in `src/engine/hintText.ts`: one template per `TechniqueId`, pure, importing only engine types. Rows and columns are numbered from 1 for the player ("row 4", "column 2"); regions go by the colour the board shows ("the red region"), using `REGION_NAMES` from `src/engine/regionNames.ts` (the single source of truth, also used by the board labels), and fall back to "region 12" past the end of the list. `Hint`, `Deduction`, `TechniqueId` and `UnitRef` are exported from `index.ts`; `explain` stays internal.
 
 **In the app** (`docs/APP_DESIGN.md` §4.4): a placement hint commits the face; an elimination hint only highlights and explains and writes no marks (marking is the player's move, and the next hint skips what they have marked).
 
@@ -230,12 +230,12 @@ interface GenerateOptions {
   seed: string;
   maxAttempts?: number;                   // default 2000
   shape?: Partial<ShapeLimits>;           // overrides defaultShape(size)
-  signal?: AbortSignal;
+  shouldStop?: () => boolean;             // polled per attempt and inside it; true returns null
 }
 function generate(o: GenerateOptions): Level | null;
 // One attempt, with the rejecting filter reported (used by --stats):
-function tryCandidate(size, rng, shape?, tier?):
-  { level: Level } | { reject: 'repair' | 'shape' | 'tier' | 'unrated' };
+function tryCandidate(size, rng, shape?, tier?, shouldStop?):
+  { level: Level } | { reject: 'repair' | 'shape' | 'tier' | 'unrated' | 'stopped' };
 ```
 
 Pipeline for each attempt (all randomness from `Rng` seeded by `hashSeed(seed + attempt)`):
@@ -251,11 +251,11 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 `seed.ts`: `makeRng(seed: string)` returns an `Rng` (`next()`, `int(n)`, `shuffle(arr)`, `pick(arr)`) backed by mulberry32 seeded from `hashSeed(string) → uint32` (FNV-1a over UTF-16 code units, then murmur3 fmix32). Only `Math.imul` and `>>> 0`, so streams are identical on every runtime; `makeRng("doku")` is pinned by a frozen vector. `int(n)` is `floor(next() * n)` and throws `RangeError` unless `n` is an integer >= 1. `shuffle` is Fisher-Yates on a copy, drawing `int(i + 1)` for `i` from `len-1` down to 1 (the draw order is contract: generator goldens depend on it). `pick([])` throws `RangeError`. `isolation.test.ts` fails on `Math.random` or `Date.` in engine sources.
 
-**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The Worker call is not built: v1 ships bundled packs. The app could later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only an `AbortSignal` for cancellation.
+**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The Worker call is not built: v1 ships bundled packs. The app could later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only the polled `shouldStop` callback for cancellation (the engine reads no clock, so a caller wanting a deadline closes over its own).
 
 ## 10. Public API (index.ts)
 
-Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (kept internal, see §2), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `nextHint` and its `Hint` type (M5-06), `rate` (exported in M5-04; `solveByTechniques` and the technique types stay internal), `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
+Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coord`, `compile` (kept internal, see §2), `validateLevel`, `loadLevel`, `emptyBoard`, `setCell`, `judgeTap`, `findConflicts`, `isSolved`, `REGION_NAMES`, `nextHint` and its `Hint` type (M5-06), `rate` (exported in M5-04; `solveByTechniques` and the technique types stay internal), `solve`, `countSolutions`, `generate`, `toIdx`, `toCoord`. Internals (`Candidates`, techniques, solvers) stay private to keep the surface small and refactorable.
 
 ## 11. Testing
 

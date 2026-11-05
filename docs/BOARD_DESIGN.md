@@ -34,7 +34,7 @@ src/
 │  │  ├─ Board.tsx
 │  │  ├─ Cell.tsx
 │  │  ├─ icons.tsx       # FaceIcon, WrongIcon (inline SVG)
-│  │  └─ palette.ts      # region class lookup + region names
+│  │  └─ palette.ts      # region class lookup (names: engine/regionNames.ts)
 │  ├─ hud/
 │  │  ├─ Hearts.tsx
 │  │  ├─ Timer.tsx       # M4
@@ -253,7 +253,7 @@ Tailwind only generates classes it can see statically, so region colors are decl
 
 ```ts
 export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
-export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
+// REGION_NAMES (["red", "orange", ..., ], same order as the tokens) lives in src/engine/regionNames.ts, so hint text can use it too; Cell.tsx imports it from the engine
 ```
 
 Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. (M2 history) The demo level became the first generated level in `src/levels/pack-1.json` (the original `demo-7` was replaced in M5-03), available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.

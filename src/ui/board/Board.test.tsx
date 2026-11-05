@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { Cell, emptyBoard } from "../../engine";
+import { Cell, emptyBoard, REGION_NAMES } from "../../engine";
 import {
   uniqueLevel7 as level,
   multiSolutionLevel7,
@@ -9,7 +9,6 @@ import {
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
-import { REGION_NAMES } from "./palette";
 
 const n = level.size;
 const none: ReadonlySet<number> = new Set();

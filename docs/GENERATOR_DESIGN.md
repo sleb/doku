@@ -33,7 +33,7 @@ export interface GenerateOptions {
   tier?: Tier;                   // omitted: any uniquely solvable level, no rating (§7); set: rate(level) === tier and Level.tier is set
   maxAttempts?: number;          // default 2000; the only budget, so results never depend on wall-clock
   shape?: Partial<ShapeLimits>;  // §5.4
-  signal?: AbortSignal;          // checked once per attempt; abort returns null
+  shouldStop?: () => boolean;    // polled per attempt and at checkpoints inside one (every repair move, before rate); true returns null
 }
 export function generate(o: GenerateOptions): Level | null;
 
@@ -192,7 +192,7 @@ bun tools/generate-levels.ts [--pack N] [--stats] [--only size:tier] [--max-atte
 - Output: `src/levels/pack-N.json` as `{ "levels": [...] }`, 2-space JSON, with `tier` and `seed` set. Output is byte-for-byte reproducible, so a re-run is a no-op diff.
 - Every written level is re-verified with `validateLevel`, `countSolutions === 1`, `solve` equal to `solution` and `rate === tier`. Verification failing is a bug and aborts the run.
 - `--stats`: no files written. For each size×tier prints attempts to first success (median/p90 over a fixed 20 seeds), the fraction of attempts rejected by each filter (not unique after repair, shape, wrong tier, unrated) and wall time. This table is the input to the open question on shippable combinations and to tuning §5.4.
-- Wall-clock limits live only here, via an `AbortSignal.timeout` per level (default 60 s). A timeout reports "unavailable" for that level; it never changes the content of levels that do generate.
+- Wall-clock limits live only here, via a `shouldStop` callback per level (default 60 s): the tool closes over a `performance.now()` deadline and the engine polls it, because `generate` is synchronous so a timer-based `AbortSignal` could never fire, and the engine may not read a clock itself. A timeout reports "unavailable" for that level; it never changes the content of levels that do generate.
 
 ### 8.3 De-duplication
 
@@ -215,7 +215,7 @@ Engine tests run under Vitest with small sizes and attempt budgets so `bun run t
 | `repairUniqueness` | On `multiSolutionLevel7` (fixture, `src/engine/__fixtures__/levels.ts`): returns a level with `countSolutions === 1`, `solution` unchanged, no solution cell moved. Every intermediate move keeps all regions connected (checked by wrapping `rng.pick`). Returns `null` when `maxMoves = 0` on a non-unique level. |
 | Uniqueness (property) | For each `n` in 7..11 and 25 seeds, `generate({ size, seed })` (no tier) returns a level with `countSolutions === 1`, `solve(level)` equal to `level.solution`, and no `validateLevel` issue. A `null` fails the test (it would mean the pipeline is not usable at that size). |
 | Determinism | `generate(o)` twice gives deep-equal levels; `generateCandidate(size, makeRng(level.seed))` reproduces `level`. A golden `generate({ size: 7, seed: "golden" })` snapshot guards unintended pipeline changes (update it deliberately). |
-| Budget and abort | `maxAttempts: 1` on a seed known to need more returns `null`; a pre-aborted signal returns `null` without work; bad `size` throws `RangeError`. |
+| Budget and abort | `maxAttempts: 1` on a seed known to need more returns `null`; a `shouldStop` that is true from the start returns `null` after one poll, one that fires mid-run (including inside `repairUniqueness`) returns `null`; bad `size` throws `RangeError`. |
 | Tier | Once `rate` exists: `rate(generate({ tier }))` equals `tier` for every tier the curriculum uses, 10 seeds each. |
 | Isolation | `isolation.test.ts` additionally fails if any file under `src/engine` contains `Math.random` or `Date.` (the generator's determinism promise). |
 | Immutability | `immutability.test.ts` is extended with `solutions` (and `generate`'s output not aliasing its inputs). Per its own rule, every new engine function is added. |
@@ -258,7 +258,7 @@ Stories 01 to 03 deliver value on their own (a real, varied, all-sizes pack) bef
 
 Deviations and measurements from the first implementation (`src/engine/generator.ts`).
 
-- **API.** `generate` takes no `tier` yet (arrives with `rate`). `generateCandidate` returns a level with `id: ""` and no `seed`; `generate` sets `id = seed = "${seed}#${k}"`. `index.ts` exports `generate`, `solutions` and the types `GenerateOptions`, `ShapeLimits`; the other steps are exported from `generator.ts` for tests only. A non-integer or out-of-range `size` throws `RangeError` before any work; an aborted signal returns `null`.
+- **API.** `generate` takes no `tier` yet (arrives with `rate`). `generateCandidate` returns a level with `id: ""` and no `seed`; `generate` sets `id = seed = "${seed}#${k}"`. `index.ts` exports `generate`, `solutions` and the types `GenerateOptions`, `ShapeLimits`; the other steps are exported from `generator.ts` for tests only. A non-integer or out-of-range `size` throws `RangeError` before any work; a true `shouldStop` returns `null`.
 - **Repair looks at 8 rivals, not 1** (`RIVALS`). With one rival, all its differing faces can sit mid-region (cut vertices), leaving no legal move and a dead end; examining 8 rivals per move widens the candidate set. Candidates are deduplicated `(cell, to)` pairs; the pick is still uniform. `maxMoves` is 60 (internal). On the pathological `multiSolutionLevel7` fixture (row regions, 646 placements) only about 1 seed in 75 converges within 60 moves, so its test uses a scanned seed; real candidates converge far more often (below).
 - **Region size targets** are the simple version: `k` singletons (`k` uniform in `[0, maxSingletons]`), every other region starts at `minRegion`, and the spare cells are handed out one at a time to a random region still below `maxRegion`. Growth then picks a region weighted by its remaining target, falling back to any region with a frontier.
 - **Shape defaults** unchanged (`minRegion` 2, `maxSingletons` 1 for n <= 8 and 2 for n >= 9, `maxRegion` = ceil(0.35 n^2)). `growRegions` meets them in at least 90% of draws (tested).
@@ -278,7 +278,7 @@ Deviations and measurements from the first implementation (`src/engine/generator
 
 Deviations from §8 and measurements from the first pack tool (`tools/generate-levels.ts`, `tools/pack.ts`, `tools/curriculum.ts`).
 
-- **Split.** `pack.ts` holds the pure logic (`canonicalForm`, `levelId`, `rowStartIndexes`, `collectRow`, `verifyLevel`, `buildPack`, `computeStats`, `formatStats`) and is unit tested (`tools/pack.test.ts`, vitest `node` project, 7x7 only); `generate-levels.ts` is the thin CLI (argv, `fs`, exit codes, `AbortSignal.timeout`). The generator gained `tryCandidate`, which reports why a candidate was rejected (`repair` or `shape`); `generateCandidate` is a wrapper, so draw order and the golden snapshot are unchanged.
+- **Split.** `pack.ts` holds the pure logic (`canonicalForm`, `levelId`, `rowStartIndexes`, `collectRow`, `verifyLevel`, `buildPack`, `computeStats`, `formatStats`) and is unit tested (`tools/pack.test.ts`, vitest `node` project, 7x7 only); `generate-levels.ts` is the thin CLI (argv, `fs`, exit codes, `performance.now()` deadline passed as `shouldStop`). The generator gained `tryCandidate`, which reports why a candidate was rejected (`repair` or `shape`); `generateCandidate` is a wrapper, so draw order and the golden snapshot are unchanged.
 - **Curriculum.** `CurriculumRow = { pack, size, tier?, count }`. Seeds are `pack-N/<size>/<tier|any>/<i>`; a duplicate board consumes a seed. Ids are `<tier|any>-<size 2 digits>-<index 3 digits>`, 1-based, numbered per (tier, size) over the whole curriculum so they stay unique across packs; the tool also refuses to write on a collision with another pack's file. A row that needs more than 50 seeds per wanted level gives up and is reported.
 - **Serialization.** 2-space JSON with number arrays on one line, which is what Biome emits, so `biome check` accepts a generated pack unchanged.
 - **CLI.** `--pack N` (default 1), `--stats`, `--only size[:tier]`, `--max-attempts K`, `--timeout SECONDS` (default 60 per level). `--only` builds just those rows but ids still come from the full curriculum; it **writes nothing** (a partial pack must not overwrite the real one). An unfilled row exits 1. `rate === tier` verification landed with #91 (§16).
@@ -321,7 +321,7 @@ The ladder for Easy and Medium (`compile.ts`, `candidates.ts`, `techniques.ts`, 
 Tiered generation and the tiered campaign.
 
 - **Filter.** `generate({ size, tier, seed })` runs the same attempts `${seed}#k` as before; after a candidate survives uniqueness and shape it is rated, and kept only if `rate(candidate) === tier`. The returned level has `tier` set and `unrated` is never returned. With `tier` omitted `rate` is never called (tested with a spy), so untiered output and the golden snapshot are unchanged. `maxAttempts` stays 2000; `expert` exhausted it and returned `null` until M5-07 (`hard` fills since M5-06, §17; `expert` since §18).
-- **`tryCandidate(size, rng, shape?, tier?)`** adds the reject reasons `tier` and `unrated`; `generate` and `--stats` share it.
+- **`tryCandidate(size, rng, shape?, tier?, shouldStop?)`** adds the reject reasons `tier` and `unrated` (and `stopped` when `shouldStop` fires; `--stats` never passes it); `generate` and `--stats` share it.
 - **Pack tool.** `GenerateFn` takes `tier`; `collectRow` passes `row.tier`; `verifyLevel` additionally fails when `level.tier` is set and `rate(level) !== level.tier`. `computeStats(size, tier?, seeds = 20)` measures every size x {untiered, easy, medium} cell; `--stats` prints them. A seed that needs more than 2000 attempts or 60 s counts as not filled.
 - **Fill criterion.** A cell ships if at least 18 of the 20 stats seeds fill within 2000 attempts and 60 s each. Counts are chosen within what the cell can produce; the real regeneration run is the final check.
 - **Steering (§7.3) not built.** The only cell we wanted that failed the criterion is Easy 11x11, which `DESIGN.md` §4.1 already allows to drop, and dropping it leaves the curve intact (Medium 11x11 fills). Local search would be built only if a wanted cell failed and dropping it hurt the curve. No `rateWithTrace` export.

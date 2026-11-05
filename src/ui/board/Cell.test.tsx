@@ -7,10 +7,10 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { Cell } from "../../engine";
+import { Cell, REGION_NAMES } from "../../engine";
 import { CellView } from "./Cell";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
-import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
+import { GLYPH_COLOR, REGION_BG, WRONG_COLOR } from "./palette";
 
 type Props = Parameters<typeof CellView>[0];
 

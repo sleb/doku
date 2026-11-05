@@ -664,6 +664,16 @@ describe("hint", () => {
     });
   });
 
+  it("a placement hint that wins the level leaves no hint on display", () => {
+    const start = begin();
+    const board = start.board.slice();
+    for (const c of sol.slice(0, -1)) board[c] = Cell.Face;
+    const won = hint({ ...start, board });
+    expect(won.status).toBe("won");
+    expect(live(won).board[sol[sol.length - 1]]).toBe(Cell.Face);
+    expect(live(won).hintShown).toBeNull();
+  });
+
   it("asking again for the hint on display spends nothing", () => {
     const s2 = live(hint(afterPlace()));
     expect(hint(s2)).toBe(s2);

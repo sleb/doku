@@ -187,7 +187,7 @@ export function hint(state: GameState): GameState {
     ...next,
     hearts: next.hearts - 1,
     hintsUsed: next.hintsUsed + 1,
-    hintShown: shown,
+    hintShown: next.status === "playing" ? shown : null,
   };
 }
 

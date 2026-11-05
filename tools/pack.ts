@@ -1,5 +1,6 @@
 // Pure pack-building logic for tools/generate-levels.ts: canonical forms,
-// ids, de-duplication, verification and serialization. No fs, no clock.
+// ids, de-duplication, verification and serialization. No fs; the only clock
+// is `performance.now()` in computeStats, which times the --stats run.
 import {
   countSolutions,
   type Level,
@@ -9,6 +10,7 @@ import {
   type Tier,
   validateLevel,
 } from "../src/engine";
+// Deep import on purpose: tryCandidate is a tool-only seam (ENGINE_DESIGN §10 keeps the public surface small).
 import { tryCandidate } from "../src/engine/generator";
 
 export interface CurriculumRow {
@@ -129,8 +131,11 @@ export function verifyLevel(level: Level): string[] {
   if (issues.length > 0) return issues;
   const out: string[] = [];
   if (countSolutions(level) !== 1) out.push("not uniquely solvable");
-  if (level.tier && rate(level) !== level.tier) {
-    out.push(`rate() is ${rate(level)}, level says ${level.tier}`);
+  if (level.tier) {
+    const rating = rate(level);
+    if (rating !== level.tier) {
+      out.push(`rate() is ${rating}, level says ${level.tier}`);
+    }
   }
   const solved = solve(level);
   if (!solved || solved.join() !== level.solution.join()) {
@@ -180,6 +185,8 @@ export function buildPack(
     for (const level of res.levels) {
       if (ids.has(level.id)) throw new Error(`duplicate level id ${level.id}`);
       ids.add(level.id);
+      // Deliberately independent of the generator: re-check every level with
+      // the public engine API as a safety net.
       const problems = verifyLevel(level);
       if (problems.length > 0) {
         throw new Error(
@@ -245,7 +252,7 @@ export function computeStats(
       );
       used++;
       if ("level" in result) ok = true;
-      else rejects[result.reject]++;
+      else if (result.reject !== "stopped") rejects[result.reject]++;
     }
     attempts += used;
     if (ok) perSeed.push(used);

@@ -47,6 +47,22 @@ export function unitIndexes(
   return [Math.floor(cell / n), n + (cell % n), 2 * n + p.regionOf[cell]];
 }
 
+/** The up to 4 cells sharing an edge with `cell`, in up, down, left, right order. */
+export function orthogonalNeighborsOf(
+  p: Pick<Puzzle, "n">,
+  cell: number,
+): number[] {
+  const { n } = p;
+  const r = Math.floor(cell / n);
+  const c = cell % n;
+  const out: number[] = [];
+  if (r > 0) out.push(cell - n);
+  if (r < n - 1) out.push(cell + n);
+  if (c > 0) out.push(cell - 1);
+  if (c < n - 1) out.push(cell + 1);
+  return out;
+}
+
 /** The up to 8 cells touching `cell`, diagonals included. */
 export function neighborsOf(p: Pick<Puzzle, "n">, cell: number): number[] {
   const { n } = p;

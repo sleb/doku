@@ -1,11 +1,18 @@
+import { REGION_NAMES } from "./regionNames";
 import type { Deduction, TechniqueId, UnitRef } from "./techniques";
 
 // One template per technique. Pure: it reads only the deduction, so the UI can
-// show the text without knowing anything about the solver. Units are numbered
-// from 1 for the player.
+// show the text without knowing anything about the solver. Rows and columns are
+// numbered from 1 for the player; regions go by the colour the board shows
+// ("the red region"), falling back to a number past the end of the name list.
 
 const noun = (u: UnitRef) => (u.kind === "col" ? "column" : u.kind);
-const label = (u: UnitRef) => `${noun(u)} ${u.id + 1}`;
+const regionName = (u: UnitRef): string | undefined =>
+  u.kind === "region" ? REGION_NAMES[u.id] : undefined;
+const label = (u: UnitRef) => {
+  const name = regionName(u);
+  return name ? `the ${name} region` : `${noun(u)} ${u.id + 1}`;
+};
 const plural = (kind: UnitRef["kind"]) =>
   `${kind === "col" ? "column" : kind}s`;
 
@@ -14,10 +21,14 @@ function list(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-// "regions 3 and 4" from units that share a kind.
+// "the red and orange regions" or "rows 3 and 4", from units that share a kind.
 function group(units: UnitRef[]): string {
-  const word = units.length === 1 ? noun(units[0]) : plural(units[0].kind);
-  return `${word} ${list(units.map((u) => String(u.id + 1)))}`;
+  if (units.length === 1) return label(units[0]);
+  const names = units.map(regionName);
+  if (names.every((n) => n !== undefined)) {
+    return `the ${list(names as string[])} regions`;
+  }
+  return `${plural(units[0].kind)} ${list(units.map((u) => String(u.id + 1)))}`;
 }
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
