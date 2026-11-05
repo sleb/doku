@@ -213,7 +213,7 @@ describe("repairUniqueness", () => {
   });
 });
 
-describe("tryCandidate", () => {
+describe("tryCandidate with shouldStop", () => {
   it("reports a stop requested between steps", () => {
     expect(
       tryCandidate(7, makeRng("s"), undefined, undefined, () => true),
