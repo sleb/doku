@@ -29,7 +29,7 @@ export function TopBar({
       <button
         type="button"
         onClick={onPause}
-        className="min-h-11 min-w-11 rounded border border-stone-300 px-3"
+        className="min-h-11 min-w-11 rounded border border-line px-3"
       >
         Pause
       </button>

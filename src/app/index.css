@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 @theme {
+  --color-surface: #ffffff;
+  --color-ink: #1c1917;
+  --color-ink-muted: #57534e;
+  --color-line: #78716c;
+  --color-accent: #292524;
+  --color-on-accent: #ffffff;
+  --color-focus: #1d4ed8;
+  --color-subtle: #e7e5e4;
   --color-region-0: #fca5a5;
   --color-region-1: #fdba74;
   --color-region-2: #fcd34d;
@@ -25,6 +33,23 @@
   --color-region-a-10: #a1915e;
 }
 
+/* Chrome only: the board keeps its light palette in both themes (POLISH_DESIGN 8.1). */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-surface: #1c1917;
+  --color-ink: #fafaf9;
+  --color-ink-muted: #a8a29e;
+  --color-line: #78716c;
+  --color-accent: #fafaf9;
+  --color-on-accent: #1c1917;
+  --color-focus: #60a5fa;
+  --color-subtle: #44403c;
+}
+
 :root {
   --safe-top: max(env(safe-area-inset-top), 0.5rem);
   --safe-right: max(env(safe-area-inset-right), 0.5rem);
@@ -41,10 +66,11 @@ html,
 body {
   overscroll-behavior: none;
   overflow: hidden;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 body {
+  color: var(--color-ink);
   touch-action: manipulation;
 }
 

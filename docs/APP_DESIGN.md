@@ -213,7 +213,7 @@ interface Settings {
 - The haptics subscription in `GameScreen` plays a buzz only if `settings.haptics`, read at event time (resolves `MOBILE_DESIGN.md` §6.3). The desktop adapter is already a no-op.
 - `seenTutorial` (renamed from `seenTutorial`) triggers the rules dialog on first launch (§7.3) and is set when it is dismissed.
 
-`sound`, `theme`, `palette`, `patterns` and `inputMode` are bound in the dialog and persisted, but their consumers land in M6-03/07/09/10. `Haptics.supported()` (Tauri and mobile) hides the Haptics row elsewhere. The settings dialog also hosts "Start over" (§7.3), the one destructive action.
+`sound`, `theme`, `palette`, `patterns` and `inputMode` are bound in the dialog and persisted, but their consumers land in M6-03/07/09; `theme` is consumed by `src/app/theme.ts` (POLISH_DESIGN §8.1). `Haptics.supported()` (Tauri and mobile) hides the Haptics row elsewhere. The settings dialog also hosts "Start over" (§7.3), the one destructive action.
 
 ## 7. UI
 

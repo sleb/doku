@@ -19,7 +19,7 @@ function Section({
 }) {
   return (
     <section className="flex w-full flex-col gap-2">
-      <h3 className="text-sm font-semibold uppercase text-stone-600">
+      <h3 className="text-sm font-semibold uppercase text-ink-muted">
         {title}
       </h3>
       {children}
@@ -52,8 +52,8 @@ function RadioGroup<T extends string>({
             onClick={() => onChange(v)}
             className={`flex-1 rounded border px-3 py-2 min-h-11 ${
               value === v
-                ? "border-stone-800 bg-stone-800 text-white"
-                : "border-stone-300"
+                ? "border-accent bg-accent text-on-accent"
+                : "border-line"
             }`}
           >
             {text}
@@ -142,7 +142,7 @@ export function SettingsDialog({
                 onStartOver();
                 onClose();
               }}
-              className="rounded bg-stone-800 px-4 py-2 min-h-11 text-white"
+              className="rounded bg-accent px-4 py-2 min-h-11 text-on-accent"
             >
               Confirm
             </button>
@@ -151,7 +151,7 @@ export function SettingsDialog({
               // biome-ignore lint/a11y/noAutofocus: focus must move into the confirm
               autoFocus
               onClick={() => setConfirming(false)}
-              className="rounded border border-stone-300 px-4 py-2 min-h-11"
+              className="rounded border border-line px-4 py-2 min-h-11"
             >
               Cancel
             </button>
@@ -161,7 +161,7 @@ export function SettingsDialog({
             ref={startOverButton}
             type="button"
             onClick={() => setConfirming(true)}
-            className="rounded border border-stone-300 px-4 py-2 min-h-11"
+            className="rounded border border-line px-4 py-2 min-h-11"
           >
             Start over
           </button>
@@ -169,7 +169,7 @@ export function SettingsDialog({
         <button
           type="button"
           onClick={onClose}
-          className="rounded bg-stone-800 px-4 py-2 min-h-11 text-white"
+          className="rounded bg-accent px-4 py-2 min-h-11 text-on-accent"
         >
           Done
         </button>
