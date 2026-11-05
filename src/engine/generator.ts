@@ -1,3 +1,4 @@
+import { orthogonalNeighborsOf } from "./compile";
 import { rate } from "./difficulty";
 import { makeRng, type Rng } from "./seed";
 import { solutions } from "./solver";
@@ -55,13 +56,6 @@ export function passesShape(regions: number[][], shape: ShapeLimits): boolean {
   return true;
 }
 
-const DIRS = [
-  [-1, 0],
-  [1, 0],
-  [0, -1],
-  [0, 1],
-];
-
 // Region r grows around the solution cell of row r. Sizes are targeted first
 // (a few singletons, the rest in [minRegion, maxRegion]) and cells are then
 // added one at a time to a region chosen in proportion to its remaining target.
@@ -75,21 +69,10 @@ export function growRegions(
   const frontier: number[][] = Array.from({ length: n }, () => []);
   const size = Array<number>(n).fill(0);
 
-  const neighbours = (cell: number): number[] => {
-    const r = Math.floor(cell / n);
-    const c = cell % n;
-    const out: number[] = [];
-    for (const [dr, dc] of DIRS) {
-      const rr = r + dr;
-      const cc = c + dc;
-      if (rr >= 0 && rr < n && cc >= 0 && cc < n) out.push(rr * n + cc);
-    }
-    return out;
-  };
   const assign = (cell: number, region: number): void => {
     owner[cell] = region;
     size[region]++;
-    for (const nb of neighbours(cell)) {
+    for (const nb of orthogonalNeighborsOf({ n }, cell)) {
       if (owner[nb] === -1) frontier[region].push(nb);
     }
   };
@@ -164,13 +147,7 @@ function connectedWithout(
   const stack = [cells[0]];
   while (stack.length > 0) {
     const cur = stack.pop() as number;
-    const r = Math.floor(cur / n);
-    const c = cur % n;
-    for (const [dr, dc] of DIRS) {
-      const rr = r + dr;
-      const cc = c + dc;
-      if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue;
-      const nb = rr * n + cc;
+    for (const nb of orthogonalNeighborsOf({ n }, cur)) {
       if (nb !== skip && grid[nb] === id && !seen.has(nb)) {
         seen.add(nb);
         stack.push(nb);
@@ -211,12 +188,8 @@ export function repairUniqueness(
         const from = grid[cell];
         if (!connectedWithout(grid, n, from, cell)) return;
         const targets = new Set<number>();
-        for (const [dr, dc] of DIRS) {
-          const rr = r + dr;
-          const cc = c + dc;
-          if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue;
-          const to = grid[rr * n + cc];
-          if (to !== from) targets.add(to);
+        for (const nb of orthogonalNeighborsOf({ n }, cell)) {
+          if (grid[nb] !== from) targets.add(grid[nb]);
         }
         for (const to of [...targets].sort((x, y) => x - y)) {
           if (seen.has(`${cell}:${to}`)) continue;
