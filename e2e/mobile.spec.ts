@@ -132,3 +132,26 @@ test("reload resumes the whole game, paused, with touch input", async ({
   await page.getByRole("button", { name: "Resume" }).tap();
   await expect(dialog).toBeHidden();
 });
+
+test("with Tap: Face on, tapping every solution cell wins", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Tap places faces" }).tap();
+  for (let r = 0; r < size; r++) await cell(page, r, solution[r]).tap();
+  await expect(
+    page.getByRole("heading", { name: "You solved it" }),
+  ).toBeVisible();
+});
+
+test("the action bar row fits at 320px", async ({ page }) => {
+  await open(page, 320, 568);
+  const hint = await box(page, "button[aria-label^='Hint']");
+  const tap = await box(page, "button[aria-label='Tap places faces']");
+  expect(Math.max(hint.x + hint.width, tap.x + tap.width)).toBeLessThanOrEqual(
+    320,
+  );
+  expect(tap.x).toBeGreaterThanOrEqual(0);
+  expect(tap.height).toBeGreaterThanOrEqual(44);
+  await expectBoardInViewport(page);
+});

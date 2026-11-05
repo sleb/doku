@@ -13,6 +13,10 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
         <li>Tap a cell to mark it ✕.</li>
         <li>Hold a cell to place a face.</li>
         <li>
+          Or switch the <strong>Tap: Face</strong> button (or press <kbd>f</kbd>
+          ) so a tap places a face.
+        </li>
+        <li>
           <kbd>Arrows</kbd> move, <kbd>x</kbd> marks, hold <kbd>Space</kbd>{" "}
           places a face.
         </li>

@@ -4,6 +4,7 @@ import { Cell } from "../../engine";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { idleState, MAX_HEARTS } from "../../store/game";
 import { gameStore } from "../../store/gameStore";
+import { defaultSettings, settingsStore } from "../../store/settings";
 import { useShortcuts } from "./useShortcuts";
 
 function press(init: KeyboardEventInit): KeyboardEvent {
@@ -26,6 +27,7 @@ const future = () => {
 };
 
 beforeEach(() => {
+  settingsStore.setState({ ...defaultSettings });
   gameStore.setState(idleState, false);
   gameStore.getState().startLevel(level);
   gameStore.getState().toggleMark(1);
@@ -107,6 +109,33 @@ describe("useShortcuts", () => {
       expect(marked()).toBe(2);
       expect(e.defaultPrevented).toBe(false);
     }
+  });
+
+  describe("f toggles the tap mode", () => {
+    test("flips inputMode back and forth and prevents default", () => {
+      renderHook(() => useShortcuts());
+      const e = press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("face");
+      expect(e.defaultPrevented).toBe(true);
+      press({ key: "F" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+    });
+
+    test("ignores modified f, repeats, and non-playing states", () => {
+      renderHook(() => useShortcuts());
+      press({ key: "f", ctrlKey: true });
+      press({ key: "f", metaKey: true });
+      press({ key: "f", repeat: true });
+      gameStore.setState({ status: "paused" }, false);
+      press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+    });
+
+    test("still works during a hold", () => {
+      renderHook(() => useShortcuts({ holdOwner: { current: 5 } }));
+      press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("face");
+    });
   });
 
   describe("during a hold", () => {
