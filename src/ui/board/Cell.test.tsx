@@ -8,6 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { Cell } from "../../engine";
+import { holdCell } from "../../test/hold";
 import { CellView } from "./Cell";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
 import { GLYPH_COLOR, REGION_BG, REGION_NAMES, WRONG_COLOR } from "./palette";
@@ -622,5 +623,84 @@ describe("CellView fx", () => {
     rerender(<CellView {...props} fx="place" fxSeq={2} />);
     expect(wrap(container as HTMLElement)).not.toBe(first);
     expect(container.querySelectorAll("[data-fx]")).toHaveLength(1);
+  });
+
+  describe("face input mode", () => {
+    test("a click places a face once and does not mark", async () => {
+      const b = renderCell({ inputMode: "face" });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("Enter places a face once", async () => {
+      const b = renderCell({ inputMode: "face" });
+      b.focus();
+      await userEvent.setup().keyboard("{Enter}");
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
+    test("Space places immediately, once, with no hold", () => {
+      const b = renderCell({ inputMode: "face" });
+      const down = fireEvent.keyDown(b, { key: " " });
+      expect(down).toBe(false); // preventDefault
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+      fireEvent.keyDown(b, { key: " ", repeat: true });
+      fireEvent.keyUp(b, { key: " " });
+      expect(b.onPlaceFace).toHaveBeenCalledTimes(1);
+      expect(b.hasAttribute("data-holding")).toBe(false);
+    });
+
+    test("x still toggles the mark", () => {
+      const b = renderCell({ inputMode: "face" });
+      fireEvent.keyDown(b, { key: "x" });
+      expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("a full pointer hold places once, not twice", () => {
+      const b = renderCell({ inputMode: "face" });
+      holdCell(b);
+      fireEvent.click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+      expect(b.onToggleMark).not.toHaveBeenCalled();
+    });
+
+    test("a disabled cell never places", async () => {
+      const b = renderCell({ inputMode: "face", disabled: true });
+      await userEvent.setup().click(b);
+      fireEvent.keyDown(b, { key: " " });
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("another cell's hold blocks click, Enter and Space placement", async () => {
+      const b = renderCell({ inputMode: "face", holdOwner: { current: 3 } });
+      b.focus();
+      const user = userEvent.setup();
+      await user.click(b);
+      await user.keyboard("{Enter}");
+      fireEvent.keyDown(b, { key: " " });
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("this cell's own hold owner does not block placement", async () => {
+      const b = renderCell({ inputMode: "face", holdOwner: { current: 17 } });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
+    test("a player mark accepts a face", async () => {
+      const b = renderCell({ inputMode: "face", state: Cell.Mark });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+  });
+
+  test("mark mode: click marks, Space does not place immediately", async () => {
+    const b = renderCell();
+    await userEvent.setup().click(b);
+    expect(b.onToggleMark).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(b, { key: " " });
+    expect(b.onPlaceFace).not.toHaveBeenCalled();
   });
 });

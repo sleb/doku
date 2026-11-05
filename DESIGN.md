@@ -106,7 +106,7 @@ State (when not idle): `level`, `board`, `wrong` (cells the player got wrong, lo
 
 Actions: `startLevel`, `toggleMark` (single tap or `x`: add or remove a ✕ note, free), `placeFace` (press-and-hold or hold `Space`: correct → face, wrong → lost heart and a locked red ✕; faces and wrong ✕s are uneditable), `undo`/`redo` (notes only), `hint` (a correct face in the first open row for one heart; refused on the last heart), `tick` (clock, driven by `useClock`), `pause`/`resume`, `restart`.
 
-Secondary stores: `progressStore` (`next`, `bestMs`) and `settingsStore` (`haptics`, `sound`, `theme`, `palette`, `patterns`, `inputMode`, `seenTutorial`; the new fields are stored but not yet consumed). A `dailyStore` is not built (stars and the daily puzzle are dropped from the app design).
+Secondary stores: `progressStore` (`next`, `bestMs`) and `settingsStore` (`haptics`, `sound`, `theme`, `palette`, `patterns`, `inputMode`, `seenTutorial`; `inputMode` is consumed by the board (POLISH_DESIGN §9.1); the other new fields are stored but not yet consumed). A `dailyStore` is not built (stars and the daily puzzle are dropped from the app design).
 
 ## 6. Persistence (`src/platform/storage.ts`)
 

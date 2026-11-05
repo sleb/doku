@@ -40,6 +40,7 @@ export function GameScreen() {
   );
   const { restart, toggleMark, placeFace, pause, resume } =
     gameStore.getState();
+  const inputMode = useSettingsStore((s) => s.inputMode);
   const [sheet, setSheet] = useState<"rules" | "settings" | null>(null);
   const holdOwner = useRef<number | null>(null);
   const boardArea = useRef<HTMLDivElement>(null);
@@ -107,6 +108,7 @@ export function GameScreen() {
               wrong={wrong}
               conflicts={conflicts}
               disabled={finished || paused}
+              inputMode={inputMode}
               celebrate={result.pending && status === "won"}
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}

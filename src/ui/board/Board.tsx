@@ -25,6 +25,8 @@ export interface BoardProps {
   disabled: boolean;
   /** True during the win wave (result modal pending); sets `data-celebrate` and a `--row` per row. */
   celebrate?: boolean;
+  /** "face": a click places a face. Defaults to "mark". */
+  inputMode?: "mark" | "face";
   onToggleMark: (index: number) => void;
   onPlaceFace: (index: number) => void;
   /** Index of the cell being held, if any. GameScreen owns it so shortcuts can see it; defaults to an internal ref. */
@@ -40,6 +42,7 @@ export function Board({
   conflicts,
   disabled,
   celebrate,
+  inputMode,
   onToggleMark,
   onPlaceFace,
   holdOwner: sharedHoldOwner,
@@ -148,6 +151,7 @@ export function Board({
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
                 disabled={disabled || isLocked(board, wrong, g.index)}
+                inputMode={inputMode}
                 tabIndex={g.index === active ? 0 : -1}
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}

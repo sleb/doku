@@ -191,6 +191,24 @@ describe("Board", () => {
     });
   });
 
+  test("inputMode face: a click places a face instead of marking", async () => {
+    const h = handlers();
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        inputMode="face"
+        {...h}
+      />,
+    );
+    await userEvent.click(screen.getAllByRole("button")[4]);
+    expect(h.onPlaceFace).toHaveBeenCalledExactlyOnceWith(4);
+    expect(h.onToggleMark).not.toHaveBeenCalled();
+  });
+
   describe("roving tabindex", () => {
     const renderBoard = () =>
       render(

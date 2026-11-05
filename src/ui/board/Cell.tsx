@@ -13,6 +13,8 @@ export interface CellProps {
   isWrong: boolean;
   isConflict: boolean;
   disabled: boolean;
+  /** "face": a click, Enter or Space places a face (no timed hold needed). Default "mark". */
+  inputMode?: "mark" | "face";
   /** Roving tabindex: 0 on the board's active cell, -1 elsewhere. */
   tabIndex?: number;
   onToggleMark: (index: number) => void;
@@ -44,6 +46,7 @@ export const CellView = memo(function CellView({
   isWrong,
   isConflict,
   disabled,
+  inputMode,
   tabIndex,
   onToggleMark,
   onPlaceFace,
@@ -53,11 +56,15 @@ export const CellView = memo(function CellView({
   fxSeq,
 }: CellProps) {
   const hold = useHold(
-    () => onPlaceFace(index),
+    () => {
+      // Another cell's hold owns the board: a stray touch must not place.
+      const owner = holdOwner?.current;
+      if (owner == null || owner === index) onPlaceFace(index);
+    },
     disabled,
     (active) => {
       if (!holdOwner) return;
-      if (active) holdOwner.current = index;
+      if (active) holdOwner.current ??= index;
       else if (holdOwner.current === index) holdOwner.current = null;
     },
   );
@@ -68,14 +75,19 @@ export const CellView = memo(function CellView({
     return () => onGlow(null, index);
   }, [holding, onGlow, index]);
   // A second finger or palm on a neighbor must not mark it mid-hold.
-  const toggleMark = () => {
-    if (disabled) return;
+  const free = () => {
     const owner = holdOwner?.current;
-    if (owner == null || owner === index) onToggleMark(index);
+    return owner == null || owner === index;
+  };
+  const toggleMark = () => {
+    if (!disabled && free()) onToggleMark(index);
   };
   // Keep the last seq so the wrapper (and icon) keep their identity when fx clears.
   const seqRef = useRef(fxSeq);
   if (fx) seqRef.current = fxSeq;
+  const placeNow = () => {
+    if (!disabled && free()) onPlaceFace(index);
+  };
   const label = stateLabel(state, isWrong);
   const className = [
     "cell relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
@@ -137,6 +149,7 @@ export const CellView = memo(function CellView({
         e.preventDefault();
         if (e.repeat) return; // a held key must not flicker or restart
         if (isX) toggleMark();
+        else if (inputMode === "face") placeNow();
         else hold.start("key");
       }}
       onKeyUp={(e) => {
@@ -147,7 +160,9 @@ export const CellView = memo(function CellView({
         }
       }}
       onClick={() => {
-        if (!hold.swallowClick()) toggleMark();
+        if (hold.swallowClick()) return;
+        if (inputMode === "face") placeNow();
+        else toggleMark();
       }}
     >
       {fx === "place" ? (

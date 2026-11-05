@@ -314,13 +314,14 @@ The pattern index is the region index, so regions keep their pattern for the who
 
 ### 9.1 Click-only placement (#57)
 
-`inputMode: "mark" | "face"`. A toggle button in the `ActionBar` ("Tap: ✕" ↔ "Tap: Face", `aria-pressed`, ≥ 44 px) and the same switch in Settings ("Tap places faces").
+`inputMode: "mark" | "face"`. A toggle button in the `ActionBar` (static visible text "Tap places faces", state via `aria-pressed` styling, ≥ 44 px) and the same switch in Settings ("Tap places faces").
 
 - `"mark"` (default): exactly today's behaviour. Click and Enter toggle ✕, hold places a face.
 - `"face"`: click, tap, and Enter/Space on a focused cell call `placeFace` directly (no hold, no 250 ms delay). Holding still works and is not required. `x` still toggles a ✕, so notes are reachable from the keyboard in either mode. Because a placement is irreversible and costs a heart when wrong, the mode is always visible (the toggle shows its state, and a pressed state announces through `aria-pressed`) and persists; it never auto-enables.
 - Implementation: `Cell` takes `inputMode` and branches in its single `onClick`/key handler (`mark` → `toggleMark`, `face` → `onPlaceFace`); the hold machinery is unchanged and unused in `face` mode (it is still armed so a hold cannot double-place: `swallowClick` already guards click-after-hold).
 - Keyboard shortcut: `f` toggles the mode (plain key only, same guards as `h`). Added to the Rules cheat sheet.
 - Closes #57, including its three scenarios (placing without a hold, safe default, mode announced).
+- **Landed in M6-07:** `GameScreen` selects `inputMode` and passes it as a string through `Board` to `CellView`. In `face` mode click and Enter (native click) place once (ignored while another cell's hold is active); Space keydown places at once (not on `repeat`, no glow); a pointer hold still arms and `swallowClick` prevents a double placement; a player ✕ accepts a face. The ActionBar toggle's visible text equals its accessible name "Tap places faces" (WCAG 2.5.3) with `aria-pressed`, and plain lowercase `f` (no Shift or Caps-Lock) toggles the mode (allowed during a hold). The announced scenario is met by `aria-pressed`; the live-region text for `f` is deferred to M6-08.
 
 ### 9.2 Screen-reader announcements
 
@@ -411,7 +412,7 @@ Titled `M6-NN`, each strictly TDD, each plannable with `/doku-plan`. Order is by
 | 04 | Cell and heart animations | `fxStore`, place and wrong effects, heart pop, reduced-motion rules, `Dialog` open transition |
 | 05 | Win and loss sequence | wave, `useDelayedStatus`, skip, result modal delay |
 | 06 | Hold glow and haptic ramp | `HoldGlow` overlay replacing the cell-border trace, `Cell.onGlow`/`Board.onHoldGlow`, `holdRamp.ts`, `haptics.ramp()`, heavier `place` tap, ring contrast constants, e2e glow test update (§6.5) |
-| 07 | Click-only placement (#57) | `inputMode`, ActionBar toggle, `f` shortcut, Settings switch, Rules cheat-sheet row |
+| 07 | Click-only placement (#57) | `inputMode`, ActionBar toggle, `f` shortcut, Rules cheat-sheet row (landed; the Settings switch already exists from M6-02) |
 | 08 | Announcer | `announce`, `<Announcer>`, level/pause/mode announcements, "conflict" in labels |
 | 09 | Patterns and accessible palette | `patterns.ts`, accessible tokens, `regionClass`, palette tests with CVD simulation |
 | 10 | Theme | semantic tokens migration, `data-theme`, no-flash script, `resolveTheme`, Theme control, contrast test |

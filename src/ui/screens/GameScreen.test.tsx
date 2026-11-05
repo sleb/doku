@@ -728,3 +728,42 @@ describe("GameScreen", () => {
     });
   });
 });
+
+describe("tap places faces mode", () => {
+  beforeEach(() => {
+    settingsStore.setState({ inputMode: "face" });
+  });
+
+  test("the solution can be won with clicks only", async () => {
+    renderGame();
+    const user = userEvent.setup();
+    for (const i of solution) await user.click(cell(i));
+    expect(gameStore.getState().status).toBe("won");
+  });
+
+  test("a wrong click costs a heart", async () => {
+    renderGame();
+    const before = gameStore.getState();
+    if (before.status === "idle") throw new Error("idle");
+    await userEvent.setup().click(cell(nonSolution[0]));
+    const after = gameStore.getState();
+    if (after.status === "idle") throw new Error("idle");
+    expect(after.hearts).toBe(before.hearts - 1);
+  });
+
+  test("the default mode still marks on click", async () => {
+    settingsStore.setState({ inputMode: "mark" });
+    renderGame();
+    await userEvent.setup().click(cell(nonSolution[0]));
+    expect(label(nonSolution[0])).toBe("marked");
+  });
+
+  test("the action bar toggle switches mode at runtime", async () => {
+    settingsStore.setState({ inputMode: "mark" });
+    renderGame();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Tap places faces" }));
+    await user.click(cell(solution[0]));
+    expect(label(solution[0])).toBe("face");
+  });
+});
