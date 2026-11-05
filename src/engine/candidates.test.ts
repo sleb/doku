@@ -47,7 +47,8 @@ describe("candidates", () => {
     const board = new Uint8Array(49);
     board[10] = Cell.Face;
     const marks = new Uint8Array(board);
-    for (let i = 0; i < 49; i++) if (!marks[i] && i % 5 === 0) marks[i] = Cell.Mark;
+    for (let i = 0; i < 49; i++)
+      if (!marks[i] && i % 5 === 0) marks[i] = Cell.Mark;
     const a = fromBoard(p, board);
     const b = fromBoard(p, marks);
     expect(b).toEqual(a);

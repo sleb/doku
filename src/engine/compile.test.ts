@@ -29,10 +29,13 @@ describe("compile", () => {
       const q = compile(level);
       const seen = new Uint8Array(q.n * q.n * 3);
       for (const u of q.units) {
-        for (const cell of u.cells) seen[cell * 3 + ["row", "col", "region"].indexOf(u.kind)]++;
+        for (const cell of u.cells)
+          seen[cell * 3 + ["row", "col", "region"].indexOf(u.kind)]++;
       }
       expect(seen.every((v) => v === 1)).toBe(true);
-      const sizes = q.units.slice(2 * q.n).reduce((s, u) => s + u.cells.length, 0);
+      const sizes = q.units
+        .slice(2 * q.n)
+        .reduce((s, u) => s + u.cells.length, 0);
       expect(sizes).toBe(q.n * q.n);
     }
   });
