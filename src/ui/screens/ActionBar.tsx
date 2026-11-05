@@ -2,7 +2,7 @@ import { gameStore, useGameStore } from "../../store/gameStore";
 import { settingsStore, useSettingsStore } from "../../store/settings";
 
 const button =
-  "min-h-11 min-w-11 rounded border border-stone-300 px-3 disabled:opacity-40";
+  "min-h-11 min-w-11 rounded border border-line px-3 disabled:opacity-40";
 
 /**
  * Undo/Redo for note toggles, and Hint (places a correct face for a heart), and the tap-places-faces toggle.
@@ -45,7 +45,7 @@ export function ActionBar() {
       </button>
       <button
         type="button"
-        className={`${button} max-w-24 text-xs leading-tight aria-pressed:border-stone-900 aria-pressed:bg-stone-200 aria-pressed:font-semibold`}
+        className={`${button} max-w-24 text-xs leading-tight aria-pressed:border-ink aria-pressed:bg-subtle aria-pressed:font-semibold`}
         aria-pressed={faceMode}
         disabled={!playing}
         onClick={() =>

@@ -29,7 +29,7 @@ export function RulesDialog({ onClose }: { onClose: () => void }) {
         type="button"
         data-autofocus
         onClick={onClose}
-        className="rounded bg-stone-800 px-4 py-2 min-h-11 text-white"
+        className="rounded bg-accent px-4 py-2 min-h-11 text-on-accent"
       >
         Got it
       </button>

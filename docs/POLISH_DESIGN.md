@@ -263,25 +263,24 @@ The tutorial boards are below the app's 7..11 size range (`MIN_SIZE` is a *loade
 
 ### 8.1 Theme tokens
 
-Today `index.css` hard-codes `background: #fff` and components use literal Tailwind colors (`stone-800`, `border-stone-300`, `text-white`). The theme work introduces **semantic tokens** and migrates the chrome to them:
+The chrome uses **semantic tokens** (landed in M6-10) declared in `@theme` in `src/app/index.css`, with dark overrides in `:root[data-theme="dark"]` (which also sets `color-scheme`). Components use the generated utilities (`bg-surface`, `text-ink`, `border-line`, `bg-accent text-on-accent`, ...); there are no `dark:` utilities and no custom variant, because tokens alone suffice. A guard test (`src/ui/themeMigration.test.ts`) fails on literal Tailwind chrome colours outside `src/ui/board`, with a small allowlist (`bg-black/50` scrim, the red heart).
 
-```css
-@theme {
-  --color-surface: ...;      /* page and dialog background */
-  --color-ink: ...;          /* primary text */
-  --color-ink-muted: ...;
-  --color-line: ...;         /* borders, dividers */
-  --color-accent: ...;       /* primary button background */
-  --color-on-accent: ...;
-  --color-focus: ...;
-}
-:root[data-theme="dark"] { --color-surface: ...; /* … */ }
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-```
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `surface` | `#ffffff` | `#1c1917` | page and dialog background |
+| `ink` | `#1c1917` | `#fafaf9` | primary text |
+| `ink-muted` | `#57534e` | `#a8a29e` | section headings |
+| `line` | `#78716c` | `#78716c` | borders, empty-heart stroke |
+| `accent` | `#292524` | `#fafaf9` | primary button background |
+| `on-accent` | `#ffffff` | `#1c1917` | text on `accent` |
+| `focus` | `#1d4ed8` | `#60a5fa` | focus ring (applied by M6-13) |
+| `subtle` | `#e7e5e4` | `#44403c` | pressed/selected fill |
+
+`src/app/tokens.test.ts` enforces WCAG contrast from the CSS itself: ink, ink-muted and ink-on-subtle at least 4.5:1, on-accent on accent at least 4.5:1, and line, focus and accent at least 3:1 on surface, in both themes; it also asserts the dark block has no region tokens. Borders went from about 1.5:1 to at least 3:1, which is visible and intended.
 
 - **The board is theme-independent.** Region colors, the dark glyph (`GLYPH_COLOR`), the wrong ✕ and the thick region borders keep their light-theme values in dark mode. The M3 contrast guarantees (glyph ≥ 3:1 on every region) were chosen against these exact pastels, and re-deriving 11 distinguishable dark region colors with new glyph colors is a second palette project for little gain: a bright board on a dark frame is a normal look for puzzle games. (If playtesting disagrees, §12 Q4.)
-- `settings.theme === "system"` follows `prefers-color-scheme`; `light`/`dark` override it. `src/app/theme.ts` has a pure `resolveTheme(setting, prefersDark)` and `applyTheme` which sets `data-theme` on `<html>` and keeps it in sync via a `matchMedia` listener.
-- **No flash:** `index.html` gets a tiny inline script that reads the theme from `localStorage` (`doku:settings`) and sets `data-theme` before first paint, plus `<meta name="color-scheme" content="light dark">`. On Tauri the persisted settings live in the store plugin, not `localStorage`, so the first frame follows the OS and is corrected after hydrate; this is acceptable for a personal app and noted for the manual pass. `theme-color` meta is set from the resolved theme for mobile browsers and the iOS status bar (verify on device).
+- `settings.theme === "system"` follows `prefers-color-scheme`; `light`/`dark` override it. `src/app/theme.ts` has a pure `resolveTheme(setting, prefersDark)` and `applyTheme(setting)`, which sets `data-theme` on `<html>` and the `theme-color` meta, listens to `matchMedia` only while the setting is `system`, tolerates a missing `matchMedia`, and returns an unsubscribe. `boot.ts` applies it after `hydrateSettings` and re-applies on every `theme` change.
+- **No flash:** `index.html` gets a tiny inline script that reads the theme from `localStorage` (`doku:settings`) and sets `data-theme` before first paint, plus `<meta name="color-scheme" content="light dark">` (`src/app/noFlash.test.ts` runs the script from `index.html` against stubs, including corrupt and throwing storage). A guard test asserts no capability grants `set-theme`. On Tauri the persisted settings live in the store plugin, not `localStorage`, so the first frame follows the OS and is corrected after hydrate; this is acceptable for a personal app and noted for the manual pass. `theme-color` meta is set from the resolved theme for mobile browsers and the iOS status bar (verify on device).
 - Desktop window chrome follows the OS and is not synced to the in-app override (no `setTheme` capability grant; decided, §12 Q5).
 
 ### 8.2 Region palette as data

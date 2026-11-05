@@ -1,7 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { boot } from "../../app/boot";
 import { haptics } from "../../platform/haptics";
+import { MemoryStorage } from "../../platform/storage";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { SettingsDialog } from "./SettingsDialog";
 
@@ -123,6 +125,16 @@ test("Theme radiogroup sets theme", async () => {
   expect(within(group).getByRole("radio", { name: "Dark" })).toBeChecked();
   await userEvent.click(within(group).getByRole("radio", { name: "Light" }));
   expect(settingsStore.getState().theme).toBe("light");
+});
+
+test("choosing Dark switches the document theme once booted", async () => {
+  await boot(new MemoryStorage(), { devLevel: 0 });
+  open();
+  const group = screen.getByRole("radiogroup", { name: "Theme" });
+  await userEvent.click(within(group).getByRole("radio", { name: "Dark" }));
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  await userEvent.click(within(group).getByRole("radio", { name: "Light" }));
+  expect(document.documentElement.dataset.theme).toBe("light");
 });
 
 test("Colors radiogroup sets palette", async () => {

@@ -8,9 +8,14 @@ import {
   persistProgress,
   progressStore,
 } from "../store/progress";
-import { hydrateSettings, persistSettings } from "../store/settings";
+import {
+  hydrateSettings,
+  persistSettings,
+  settingsStore,
+} from "../store/settings";
 import { installAutosave } from "./autosave";
 import { recordWins, startCurrent } from "./campaign";
+import { applyTheme } from "./theme";
 
 /** Loads saved state, then starts saving changes. Resolves before first paint. */
 let teardown: Array<() => void> = [];
@@ -23,7 +28,7 @@ export async function boot(
   for (const stop of teardown) stop();
   teardown = [];
   await hydrateSettings(storage);
-  teardown.push(persistSettings(storage));
+  teardown.push(persistSettings(storage), followTheme());
   if (devLevel !== null) {
     gameStore.getState().startLevel(LEVELS[devLevel]);
     return;
@@ -60,4 +65,34 @@ export function devLevelOverride(
   if (!isDev) return null;
   const index = levelIndex(new URLSearchParams(search).get("level") ?? "");
   return index < 0 ? null : index;
+}
+
+/** Applies the theme setting now and on every change; the returned stop undoes both. */
+function followTheme(): () => void {
+  mirrorTheme(settingsStore.getState().theme);
+  let stopApply = applyTheme(settingsStore.getState().theme);
+  let current = settingsStore.getState().theme;
+  const unsubscribe = settingsStore.subscribe(({ theme }) => {
+    if (theme === current) return;
+    current = theme;
+    mirrorTheme(theme);
+    stopApply();
+    stopApply = applyTheme(theme);
+  });
+  return () => {
+    unsubscribe();
+    stopApply();
+  };
+}
+
+/**
+ * The saved theme lives in the platform store, which index.html cannot read before first
+ * paint, so mirror it into localStorage (key read by the inline no-flash script).
+ */
+function mirrorTheme(theme: string): void {
+  try {
+    localStorage.setItem("doku:theme", theme);
+  } catch {
+    // Storage unavailable: worst case is a first-paint flash.
+  }
 }

@@ -21,28 +21,28 @@ export function PauseDialog({
         type="button"
         data-autofocus
         onClick={onResume}
-        className={`${button} bg-stone-800 text-white`}
+        className={`${button} bg-accent text-on-accent`}
       >
         Resume
       </button>
       <button
         type="button"
         onClick={onRestart}
-        className={`${button} border border-stone-300`}
+        className={`${button} border border-line`}
       >
         Restart level
       </button>
       <button
         type="button"
         onClick={onRules}
-        className={`${button} border border-stone-300`}
+        className={`${button} border border-line`}
       >
         Rules
       </button>
       <button
         type="button"
         onClick={onSettings}
-        className={`${button} border border-stone-300`}
+        className={`${button} border border-line`}
       >
         Settings
       </button>
