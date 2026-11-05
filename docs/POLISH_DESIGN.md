@@ -2,7 +2,14 @@
 
 Companion to `DESIGN.md` §7 (Theming), §8 (`audio` adapter) and §12 for milestone 6 ("Polish"). Milestone 4 shipped a complete but plain app; this milestone adds the feel (sound, animation), the access (color-blind support, click-only placement, screen-reader announcements, dark theme) and the first-run experience (an interactive tutorial). It consumes the engine, board, mobile and app work as-is except where stated (`docs/ENGINE_DESIGN.md`, `docs/BOARD_DESIGN.md`, `docs/MOBILE_DESIGN.md`, `docs/APP_DESIGN.md`). If this document and `DESIGN.md` disagree on polish, fix whichever is wrong in the docs-sync story (§12).
 
-**Status:** draft for review. Nothing here is implemented.
+**Status:** implemented (M6-01 to M6-13: #97 to #108, and #57 for M6-07) and synced to the other docs (M6-14). Automated coverage is unit, jsdom and Playwright (desktop Chromium plus the two mobile projects), including axe, target-size, focus-outline and zoom specs. **Not run:** every device pass in §11 (physical iPhone hold ramp, ringer switch, haptics plus sound feel, Dynamic Type, the macOS and iOS VoiceOver passes, status bar, Android) and the color-blind "real eyes" check. §12 lists the questions answered and those carried over. Where a section below still reads as a plan and a "Landed" note differs, the note is current; the notable differences from the original plan are:
+- `Outcome` is a union that also has a `hint` kind carrying `message` (§3.1, §9.4); `OutcomeKind` stays the four kinds haptics and sound take.
+- `Sound.unlock()` returns `Promise<boolean>` and the listeners are `pointerup`, `touchend`, `click` and `keydown` (capture) until the context is running, not `pointerdown` (§5.2).
+- Press feedback is a brightness dip, not a scale (§6.4, §9.3); the hold-glow burst was dropped (§6.5).
+- The tutorial `goal` kinds include `undone`, and the step ids and the `hearts` step differ from the draft list (§7.2, §7.5).
+- The hint banner is not a live region; the announcer is the only speaker (§9.2, §9.4).
+- Cell labels and hint text share one palette-aware region-naming rule, so the accessible palette and patterns say "region N" (§8.3, §9.4).
+- The tutorial highlight, the focus ring and the Dialog scroll padding were reworked in M6-13 (§9.3).
 
 ## 1. Goals and non-goals
 
@@ -55,13 +62,13 @@ The game store, `game.ts` and the engine are **not** changed by this milestone. 
 
 ```ts
 // src/platform/outcome.ts
-export type OutcomeKind = "place" | "wrong" | "win" | "lose";
-export interface Outcome {
-  kind: OutcomeKind;
-  cell?: number;      // the cell the player acted on (place, wrong, and a lose caused by a wrong tap); absent for win
-  faces: number;      // faces on the board after the change (drives the rising pitch, §5.3)
-  hearts: number;     // hearts after the change (announcements)
-}
+export type OutcomeKind = "place" | "wrong" | "win" | "lose";   // what haptics and sound take
+// As built: a union, each member also carrying `faces` (faces after the change, drives the
+// rising pitch, §5.3) and `hearts` (hearts after, for announcements).
+export type Outcome =
+  | { kind: "win" }                                   // no cell
+  | { kind: "place" | "wrong" | "lose"; cell: number } // the cell acted on; a lose keeps the wrong tap's cell
+  | { kind: "hint"; cell?: number; message: string };  // cell only for a placement hint
 export function outcomeFor(prev: GameState, next: GameState): Outcome | null;
 ```
 
@@ -106,7 +113,7 @@ Same shape and discipline as `haptics.ts`: injected deps, always resolves, never
 ```ts
 export interface Sound {
   play(kind: OutcomeKind, faces: number, size: number): Promise<void>;   // always resolves, like Haptics.play; callers may ignore it
-  unlock(): void;                                 // call from a user gesture
+  unlock(): Promise<boolean>;                     // call from a user gesture; resolves true once the context is running
   suspend(): void; resume(): void;                // visibility
 }
 export interface SoundDeps {
@@ -117,7 +124,7 @@ export function createSound(deps?: SoundDeps): Sound;
 export const sound: Sound;
 ```
 
-- **Autoplay policy.** Browsers and WKWebView start an `AudioContext` suspended until a user gesture. The context is created lazily and `unlock()` (`ctx.resume()`) runs on the first `pointerdown` or `keydown` anywhere, installed by `useFeedback`. `play` before unlock is a silent no-op, not a queued sound (the first move is always a gesture, so nothing audible is lost).
+- **Autoplay policy.** Browsers and WKWebView start an `AudioContext` suspended until a user gesture. The context is created lazily and `unlock()` (`ctx.resume()`) runs on `pointerup`, `touchend`, `click` and `keydown` (capture phase, so it precedes a cell handler), installed by `useFeedback` and removed once `unlock()` reports the context running (`pointerdown` is not a user activation on touch, which is why it is not used). `play` while the context is not running asks it to resume and drops the cue rather than queueing it (the context clock is frozen, so scheduling would burst later).
 - **Silent switch.** On iOS, Web Audio is muted by the hardware ringer switch, which is the behaviour a game should have (`DESIGN.md` §8 says "respect silent switch"). This is believed, not verified in WKWebView: it is item one on the manual list (§11). If it turns out not to hold, the fallback is a native audio-session category via a Tauri plugin, which would be a deliberate scope change.
 - **Backgrounding.** `suspend()` on `visibilitychange → hidden` and `pagehide`, `resume()` on visible, so a sound never leaks over another app or plays from a paused game.
 - **Voice limit.** At most 4 live voices (one voice = one `play` call, however many notes); a new `play` while at the limit stops the oldest. A voice is freed when its last oscillator ends. Holding down Space and mashing cannot stack into noise.
@@ -407,7 +414,7 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 
 ## 11. Manual verification (cannot run in CI)
 
-- **Run once before release, results recorded in the milestone PR:** the VoiceOver passes below were not run in CI or by the implementer.
+- **Run once before release, results recorded in the milestone PR. Status at M6-14: none of the items below has been run** (CI covers only the automated suites in §10; the implementer did not run VoiceOver, a ringer switch, a physical iPhone or a deficiency simulator).
 - **Desktop (`bun tauri dev` and a release build):** sound plays on first interaction and not before; backgrounding the window silences it; dark theme follows the OS and the in-app override; window chrome vs dark theme looks acceptable; VoiceOver (macOS) reads cell labels and the announcer text on a full level; keyboard-only run through the tutorial.
 - **iOS (simulator and device):** sound muted by the ringer switch (the §5.2 assumption); sound unlocks on the first tap; VoiceOver reads the board and announcements; Dynamic Type at the largest size; reduce-motion and increase-contrast OS settings; dark mode and status bar; haptics and sound together do not feel doubled (§12 Q6); **on a physical iPhone, the hold ramp reads as a build-up ending in a distinct tap, not a buzz or a single blur, and the ring is visible around a fingertip on 7×7 and 11×11 (tune `HOLD_RAMP`, §12 Q10)**.
 - **Android:** all of the above once #64 lands.
@@ -415,18 +422,21 @@ Animation and sound *quality* are judged by playing (§11), not by assertions; t
 
 ## 12. Open questions
 
+Answered:
 1. **Resolved: hint UI ownership (§9.4).** Presentation (ring, banner, announcement) belongs here and shipped as M6-12 once M5 landed.
 2. **Resolved: accessible palette thresholds.** Floors set when tuned (M6-09): ΔE 12.5 per simulation over all pairs (§8.3).
-3. **Reduced-motion switch.** Only the OS preference is honoured. Add an in-app "Reduce motion" setting only if someone needs animations off on a platform whose OS flag is not reachable (older WebViews).
-4. **Dark board.** The board is the same in both themes (§8.1). If a bright board in a dark frame is jarring in play, a dark region palette is a follow-up with its own glyph/contrast pass.
-5. **Resolved: window theme sync.** The native title bar follows the OS; no `setTheme` grant. The in-app theme override affects the web content only.
-6. **Haptics + sound overlap.** On a phone both fire on every outcome. Proposal: keep both on by default; if that is too much in play, make sound default off on mobile only. Decide by playing on a device.
-7. **Tutorial length.** Six steps is a guess; cut to the first three plus hearts if testers find it long. Copy is edited in review.
-8. **Win celebration.** The row wave is the cheapest satisfying effect; confetti or a screen-wide burst is possible with CSS and is not planned.
-9. **Daily puzzle.** Out of scope here (§1). If it returns, it needs a place in the UI first, which is a decision about reversing `DESIGN.md` §13.13, not polish.
-10. **Hold ramp feel.** Pulse spacing (100 ms), styles and the `heavy` placement tap are guesses; iOS coalesces rapid impacts and Android's style mapping is unknown. If it feels like a buzz, fall back to fewer, wider pulses (for example 0/150/300/450). Decided on a device.
+5. **Resolved: window theme sync.** The native title bar follows the OS; no `setTheme` grant (`src/app/windowTheme.test.ts` guards it). The in-app theme override affects the web content only.
+8. **Resolved: win celebration.** The row wave shipped (`win-hop`, 45 ms per row); confetti or a screen-wide burst is not planned.
+9. **Resolved: daily puzzle.** Stays out (§1, `DESIGN.md` §13.13); the stale `DESIGN.md` §12 line was corrected in M6-14. Returning it needs a UI decision first, not polish.
 
-## 13. Suggested issue breakdown (milestone "polish")
+Carried over (need playtesting or a device; none was run):
+3. **Reduced-motion switch.** Only the OS preference is honoured (`prefersReducedMotion()`). Add an in-app "Reduce motion" setting only if someone needs animations off on a platform whose OS flag is not reachable (older WebViews).
+4. **Dark board.** The board is the same in both themes (§8.1) and shipped that way. If a bright board in a dark frame is jarring in play, a dark region palette is a follow-up with its own glyph/contrast pass.
+6. **Haptics + sound overlap.** On a phone both fire on every outcome (the defaults are both on). If that is too much in play, make sound default off on mobile only. Decide by playing on a device.
+7. **Tutorial length and copy.** Six steps shipped (`region`, `lines`, `touching`, `notes`, `hearts`, `hint`); the copy is a first draft. Cut to the first three plus hearts if testers find it long.
+10. **Hold ramp feel.** `HOLD_RAMP` (soft 0 and 100 ms, light 200 and 300, medium 400, then the heavy `place` tap), the 100 ms spacing and the `heavy` placement tap are guesses; iOS coalesces rapid impacts and Android's style mapping is unknown. If it feels like a buzz, fall back to fewer, wider pulses (for example 0/150/300/450). Decided on a physical iPhone.
+
+## 13. Issue breakdown (milestone "polish"; stories 01 to 14 are done)
 
 Titled `M6-NN`, each strictly TDD, each plannable with `/doku-plan`. Order is by value and dependency; stories 01 to 03 are the shared plumbing the rest hang from.
 
@@ -445,7 +455,7 @@ Titled `M6-NN`, each strictly TDD, each plannable with `/doku-plan`. Order is by
 | 11 | Interactive tutorial | `steps.ts`, `<Tutorial>`, private store, `ActionBar` store prop, `seenTutorial`, Pause → Replay |
 | 12 | Hint presentation | hint ring, banner as the explanation, announcement (M5 landed) |
 | 13 | Accessibility e2e and audit | `@axe-core/playwright` specs, 200 % zoom spec, touch-target audit, focus-ring unification, fixes |
-| 14 | Docs sync | `DESIGN.md` §7, §8, §12, §13 (and the daily-puzzle line), `APP_DESIGN.md` §1, §6, §7, `BOARD_DESIGN.md` §4.3, §4.4 and §8.8 (overlay replaces the border trace), `MOBILE_DESIGN.md` §3, §6 and non-goals (ramp, `place` style), README |
+| 14 | Docs sync (this pass) | `DESIGN.md` §7, §8, §12, §13 (and the daily-puzzle line), `APP_DESIGN.md` §1, §6, §7, `BOARD_DESIGN.md` §4.3, §4.4 and §8.8 (overlay replaces the border trace), `MOBILE_DESIGN.md` §3, §6 and non-goals (ramp, `place` style), README |
 
 **Cut line if time is short:** 01 to 08 and 11 are the milestone; 09 and 10 next; 12 is optional; 13 must run before the milestone is called done, on whatever has shipped.
 
