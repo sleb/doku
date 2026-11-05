@@ -1,8 +1,8 @@
 import { memo, type RefObject } from "react";
-import { Cell } from "../../engine";
+import { Cell, REGION_NAMES } from "../../engine";
 import { HOLD_MS } from "./hold";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
-import { REGION_BG, REGION_NAMES } from "./palette";
+import { REGION_BG } from "./palette";
 import { useHold } from "./useHold";
 
 export interface CellProps {

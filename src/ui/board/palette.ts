@@ -13,21 +13,6 @@ export const REGION_BG = [
   "bg-region-10",
 ] as const;
 
-// Same order as the --color-region-N tokens in app/index.css.
-export const REGION_NAMES = [
-  "red",
-  "orange",
-  "amber",
-  "lime",
-  "emerald",
-  "teal",
-  "sky",
-  "indigo",
-  "violet",
-  "pink",
-  "stone",
-] as const;
-
 // Face/mark glyph stroke; must reach 3:1 contrast on every region color.
 export const GLYPH_COLOR = "#1f1f1f";
 
