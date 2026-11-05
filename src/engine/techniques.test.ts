@@ -8,8 +8,19 @@ import {
   singleCandidate,
   TECHNIQUES,
 } from "./techniques";
+import type { Level } from "./types";
 
-const p = compile(uniqueLevel7);
+// uniqueLevel7 with regions 4 and 6 reshaped into diagonal pairs, so no region
+// is a singleton or confined to a line and a fresh board forces nothing.
+const level: Level = {
+  ...uniqueLevel7,
+  regions: uniqueLevel7.regions.map((row, r) => {
+    if (r === 5) return row.map((g, c) => (c === 3 ? 4 : c === 5 ? 6 : g));
+    if (r === 6) return row.map((g, c) => (c === 5 ? 5 : g));
+    return row;
+  }),
+};
+const p = compile(level);
 const fresh = (): Candidates => fromBoard(p);
 const at = (r: number, c: number) => r * 7 + c;
 const cellsWhere = (pred: (r: number, c: number, region: number) => boolean) =>
@@ -49,8 +60,17 @@ describe("single-candidate", () => {
 
   it("ignores satisfied units and returns null when nothing is forced", () => {
     expect(singleCandidate(p, fresh())).toBeNull();
-    const placed = placeFace(p, c, at(3, 5));
-    expect(singleCandidate(p, placed)).toBeNull();
+    const placed = placeFace(p, fresh(), at(0, 0));
+    // The placed cell is the lone alive cell of its (satisfied) units.
+    const d = singleCandidate(p, placed);
+    expect(d?.place).not.toBe(at(0, 0));
+    for (const u of d?.because.units ?? []) {
+      expect([
+        { kind: "row", id: 0 },
+        { kind: "col", id: 0 },
+        { kind: "region", id: 0 },
+      ]).not.toContainEqual(u);
+    }
   });
 });
 
