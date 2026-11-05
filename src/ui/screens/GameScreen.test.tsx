@@ -124,11 +124,28 @@ describe("win and loss sequence", () => {
     renderGame();
     expect(screen.queryByTestId("result-skip")).toBeNull();
     place(solution);
-    fireEvent.pointerDown(screen.getByTestId("result-skip"));
+    fireEvent.click(screen.getByTestId("result-skip"));
     expect(
       screen.getByRole("dialog", { name: "You solved it" }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("result-skip")).toBeNull();
+  });
+
+  test("the whole layout is inert while pending, but not the skip layer or modal", () => {
+    renderGame();
+    expect(
+      screen.getByRole("button", { name: /pause/i }).closest("[inert]"),
+    ).toBeNull();
+    place(solution);
+    expect(
+      screen.getByRole("button", { name: /pause/i }).closest("[inert]"),
+    ).not.toBeNull();
+    expect(screen.getByTestId("result-skip").closest("[inert]")).toBeNull();
+    act(() => {
+      fireEvent.keyDown(window, { key: "a" });
+    });
+    const dialog = screen.getByRole("dialog", { name: "You solved it" });
+    expect(dialog.closest("[inert]")).toBeNull();
   });
 
   test("the board is celebrating only while the win is pending", () => {

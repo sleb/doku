@@ -83,6 +83,7 @@ export function GameScreen() {
   return (
     <>
       <GameLayout
+        inert={result.pending}
         header={
           <TopBar
             level={level}

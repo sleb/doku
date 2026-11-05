@@ -9,7 +9,7 @@ export function ResultSkip({ onSkip }: { onSkip: () => void }) {
       aria-hidden="true"
       data-testid="result-skip"
       className="fixed inset-0 z-[5]"
-      onPointerDown={onSkip}
+      onClick={onSkip}
     />
   );
 }
