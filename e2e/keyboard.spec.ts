@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { cell, hearts, open, press } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 
-const { solution } = levelById("demo-7");
+const { solution } = levelBySize(7);
 
 test("a level can be played from the keyboard alone", async ({ page }) => {
-  await open(page, 800, 900, "demo-7");
+  await open(page, 800, 900, levelBySize(7).id);
 
   // The board is one Tab stop, on the active cell.
   await expect(page.locator("button[data-index][tabindex='0']")).toHaveCount(1);

@@ -12,10 +12,10 @@ import {
   touchOut,
   touchUp,
 } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 import { resumeScenario } from "./resumeFlow";
 
-const { size, solution } = levelById("demo-7");
+const { size, solution } = levelBySize(7);
 
 const SETTLE_MS = HOLD_TOTAL_MS + 300;
 

@@ -68,7 +68,7 @@ describe("tutorial steps", () => {
     const step = STEPS.find((s) => s.controls?.includes("hint"));
     if (!step) throw new Error("no hint step");
     expect(step.goal).toEqual([
-      { cell: nextHint(step.start, step.level), kind: "face" },
+      { cell: nextHint(step.start, step.level)?.deduction.place, kind: "face" },
     ]);
   });
 

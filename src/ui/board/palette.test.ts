@@ -1,12 +1,12 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
+import { REGION_NAMES } from "../../engine";
 import {
   BOARD_FRAME_COLOR,
   GLYPH_COLOR,
   HOLD_RING_COLOR,
   HOLD_UNDERSTROKE_COLOR,
-  REGION_NAMES,
   regionClass,
   WRONG_COLOR,
 } from "./palette";

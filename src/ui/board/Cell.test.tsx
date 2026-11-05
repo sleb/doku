@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { Cell } from "../../engine";
+import { Cell, REGION_NAMES } from "../../engine";
 import { holdCell } from "../../test/hold";
 import { CellView } from "./Cell";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
@@ -40,7 +40,7 @@ function renderCell(over: Partial<Props> = {}) {
 }
 
 const REGION = 5;
-const NAME = `region ${REGION + 1}`;
+const NAME = `${REGION_NAMES[REGION]} region`;
 
 const icon = (b: HTMLElement) => b.querySelector("[data-icon]");
 
@@ -799,5 +799,33 @@ describe("CellView fx", () => {
     expect(b.onToggleMark).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(b, { key: " " });
     expect(b.onPlaceFace).not.toHaveBeenCalled();
+  });
+});
+
+describe("CellView hint markers", () => {
+  test("has no marker by default", () => {
+    expect(renderCell().getAttribute("data-hint")).toBeNull();
+  });
+
+  test.each([
+    ["cause", "dashed"],
+    ["target", "solid"],
+  ] as const)(
+    "%s is drawn with a %s outline, not colour alone",
+    (hint, kind) => {
+      const b = renderCell({ hint });
+      expect(b.getAttribute("data-hint")).toBe(hint);
+      const marker = b.querySelector("[data-hint-marker]");
+      expect(marker?.className).toMatch(
+        kind === "dashed" ? /border-dashed/ : /border-solid/,
+      );
+      expect(b.getAttribute("aria-description")).toMatch(/hint/i);
+    },
+  );
+
+  test("does not change the accessible name", () => {
+    expect(renderCell({ hint: "target" }).getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${NAME}, empty`,
+    );
   });
 });

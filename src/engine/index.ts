@@ -1,8 +1,16 @@
 export { emptyBoard } from "./board";
+export { rate } from "./difficulty";
+export type { GenerateOptions, ShapeLimits } from "./generator";
+export { generate } from "./generator";
+export type { Hint } from "./hints";
 export { nextHint } from "./hints";
+export { REGION_NAMES } from "./regionNames";
 export type { Conflict, ConflictReason, TapJudgement } from "./rules";
 export { findConflicts, isSolved, judgeTap } from "./rules";
-export { countSolutions, solve } from "./solver";
+export type { Rng } from "./seed";
+export { makeRng } from "./seed";
+export { countSolutions, solutions, solve } from "./solver";
+export type { Deduction, TechniqueId, UnitRef } from "./techniques";
 export type { Board, Coord, Level, Tier } from "./types";
 export { Cell } from "./types";
 export type { LevelIssue, LevelRule } from "./validate";

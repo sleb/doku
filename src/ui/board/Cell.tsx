@@ -1,5 +1,5 @@
 import { memo, type RefObject, useEffect, useRef } from "react";
-import { Cell } from "../../engine";
+import { Cell, REGION_NAMES } from "../../engine";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
 import { type PaletteName, regionClass } from "./palette";
 import { patternStyle } from "./patterns";
@@ -13,6 +13,8 @@ export interface CellProps {
   state: Cell;
   isWrong: boolean;
   isConflict: boolean;
+  /** A hint on display: `cause` cells force it, `target` cells it rules out. */
+  hint?: "cause" | "target";
   disabled: boolean;
   /** "face": a click, Enter or Space places a face (no timed hold needed). Default "mark". */
   inputMode?: "mark" | "face";
@@ -52,6 +54,7 @@ export const CellView = memo(function CellView({
   state,
   isWrong,
   isConflict,
+  hint,
   disabled,
   highlight = false,
   inputMode,
@@ -126,9 +129,17 @@ export const CellView = memo(function CellView({
   return (
     <button
       type="button"
-      aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
+      aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
       data-conflict={isConflict ? "true" : undefined}
       data-highlight={highlight ? "true" : undefined}
+      data-hint={hint}
+      aria-description={
+        hint === "cause"
+          ? "Hint: part of the reason"
+          : hint === "target"
+            ? "Hint: cannot hold a face"
+            : undefined
+      }
       className={className}
       style={patterns ? patternStyle(region) : undefined}
       data-holding={hold.holding ? "true" : undefined}
@@ -182,6 +193,15 @@ export const CellView = memo(function CellView({
         else toggleMark();
       }}
     >
+      {hint ? (
+        <span
+          data-hint-marker
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-1 rounded-sm border-2 border-blue-700 ${
+            hint === "cause" ? "border-dashed" : "border-solid bg-blue-700/15"
+          }`}
+        />
+      ) : null}
       {fx === "place" ? (
         <span
           key={`ring${fxSeq}`}

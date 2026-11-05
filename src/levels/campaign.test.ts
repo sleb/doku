@@ -1,16 +1,42 @@
 import { describe, expect, test } from "vitest";
-import { countSolutions, validateLevel } from "../engine";
-import { uniqueLevel7, uniqueLevel11 } from "../engine/__fixtures__/levels";
+import { countSolutions, rate, validateLevel } from "../engine";
 import { MAX_SIZE, MIN_SIZE } from "../engine/validate";
 import { LEVELS, levelIndex } from "./campaign";
 
-const byId = (id: string) => LEVELS[levelIndex(id)];
-
 describe("campaign", () => {
-  test("has 8 levels including a 7x7 and an 11x11", () => {
-    expect(LEVELS).toHaveLength(8);
-    expect(LEVELS.some((l) => l.size === 7)).toBe(true);
-    expect(LEVELS.some((l) => l.size === 11)).toBe(true);
+  test("covers several sizes and ramps in tier", () => {
+    const sizes = new Set(LEVELS.map((l) => l.size));
+    expect(sizes.size).toBeGreaterThanOrEqual(4);
+    for (const size of sizes) {
+      expect(size).toBeGreaterThanOrEqual(MIN_SIZE);
+      expect(size).toBeLessThanOrEqual(MAX_SIZE);
+    }
+    expect(new Set(LEVELS.map((l) => l.tier)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  test("every level has a tier that rate() agrees with", () => {
+    for (const level of LEVELS) {
+      expect(level.tier, level.id).toBeDefined();
+      expect(rate(level), level.id).toBe(level.tier);
+    }
+  });
+
+  test("tiers never decrease along the pack", () => {
+    const order = ["easy", "medium", "hard", "expert"];
+    const ranks = LEVELS.map((l) => order.indexOf(l.tier ?? ""));
+    expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
+  });
+
+  test("ends with three Expert levels at each of sizes 7 to 11", () => {
+    const counts: Record<string, number> = {};
+    for (const l of LEVELS)
+      counts[l.tier ?? ""] = (counts[l.tier ?? ""] ?? 0) + 1;
+    expect(counts).toEqual({ easy: 32, medium: 37, hard: 25, expert: 15 });
+    const expert = LEVELS.filter((l) => l.tier === "expert");
+    expect(expert).toEqual(LEVELS.slice(-15));
+    expect(expert.map((l) => l.size)).toEqual(
+      [7, 8, 9, 10, 11].flatMap((n) => [n, n, n]),
+    );
   });
 
   test("every level is valid, in range and uniquely solvable", () => {
@@ -31,13 +57,5 @@ describe("campaign", () => {
       expect(levelIndex(l.id)).toBe(i);
     });
     expect(levelIndex("nope")).toBe(-1);
-  });
-
-  test("demo levels match the fixtures apart from id", () => {
-    expect({ ...byId("demo-7"), id: "" }).toEqual({ ...uniqueLevel7, id: "" });
-    expect({ ...byId("demo-11"), id: "" }).toEqual({
-      ...uniqueLevel11,
-      id: "",
-    });
   });
 });

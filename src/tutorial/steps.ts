@@ -188,7 +188,7 @@ export const STEPS: readonly TutorialStep[] = [
   {
     id: "hint",
     title: "Hints",
-    body: "Stuck? Hint places one correct face for a heart. Press it now.",
+    body: "Stuck? Hint finds the next sure move and, here, places the face for it, for a heart. Press it now.",
     how: {
       mark: "Press the Hint button, or H.",
       face: "Press the Hint button, or H.",
@@ -206,8 +206,8 @@ export const STEPS: readonly TutorialStep[] = [
       ],
     ),
     start: start(6, [5, 9]),
-    goal: [{ cell: 12, kind: "face" }],
-    highlight: [12],
+    goal: [{ cell: 20, kind: "face" }],
+    highlight: [20],
     controls: ["undo", "redo", "hint"],
     showHearts: true,
     onWrong: "Use the Hint button for this one.",

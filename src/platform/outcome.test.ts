@@ -143,7 +143,8 @@ describe("outcomeFor", () => {
 
   it("carries the cell for a hint landing on a pre-marked cell", () => {
     const base = fresh();
-    const target = nextHint(base.board as never, level) as number;
+    const target = nextHint(base.board as never, level)?.deduction
+      .place as number;
     const prev = toggleMark(base, target);
     const o = outcomeFor(prev, hint(prev)) as Outcome;
     expect(o.kind).toBe("place");

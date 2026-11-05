@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { open, seed, solve, storageJson, storageValue } from "./helpers";
-import { levelCount, levelIds } from "./levels";
+import { levelBySize, levelCount, levelIds } from "./levels";
 
 type Progress = { next: number; bestMs: Record<string, number> };
 
@@ -22,13 +22,13 @@ const progressAt = (next: number, extra: Record<string, number> = {}) => ({
 
 test("progress survives a reload", async ({ page }) => {
   await page.goto("/");
-  await solve(page, "demo-7");
+  await solve(page, levelBySize(7).id);
   await expect(solved(page)).toBeVisible();
   await page.getByRole("button", { name: "Next level" }).click();
   await expect(level(page, 2)).toBeVisible();
 
   await expect.poll(async () => (await progress(page))?.next).toBe(1);
-  expect((await progress(page))?.bestMs).toHaveProperty("demo-7");
+  expect((await progress(page))?.bestMs).toHaveProperty(levelBySize(7).id);
 
   await page.reload();
   await expect(paused(page)).toBeVisible();
@@ -49,8 +49,16 @@ test("the last level finishes the campaign", async ({ page }) => {
 
   const finished = page.getByRole("heading", { name: "You finished" });
   await expect(finished).toBeVisible();
-  // Seven bests of a minute plus a sub-minute win.
-  await expect(page.getByText(/^Total of best times: 7:\d\d$/)).toBeVisible();
+  // One-minute bests for every earlier level plus a sub-minute win, so the
+  // total is levelCount - 1 minutes and some seconds.
+  const minutes = levelCount - 1;
+  const clock =
+    minutes >= 60
+      ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`
+      : String(minutes);
+  await expect(
+    page.getByText(new RegExp(`^Total of best times: ${clock}:\\d\\d$`)),
+  ).toBeVisible();
   await expect(page.getByRole("grid")).toHaveCount(0);
   await expect.poll(() => storageValue(page, "save")).toBeNull();
   const done = await progress(page);

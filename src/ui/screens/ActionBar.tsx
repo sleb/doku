@@ -16,7 +16,7 @@ export interface ActionBarProps {
 }
 
 /**
- * Undo/Redo for note toggles, and Hint (places a correct face for a heart), and the tap-places-faces toggle.
+ * Undo/Redo for note toggles, Hint (explains the next deduction for a heart), and the tap-places-faces toggle.
  * Four 44px buttons in one row so the bar does not grow taller.
  */
 export function ActionBar({

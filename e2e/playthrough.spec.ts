@@ -1,9 +1,9 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "../src/ui/board/hold";
 import { cell, hearts, press } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 
-const { size, solution } = levelById("demo-7");
+const { size, solution } = levelBySize(7);
 
 // Margin for "nothing happened" waits, past the hold threshold.
 const SETTLE_MS = HOLD_TOTAL_MS + 300;

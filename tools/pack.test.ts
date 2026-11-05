@@ -1,0 +1,319 @@
+import { describe, expect, it } from "vitest";
+import type { Tier } from "../src/engine";
+import { generate, type Level, rate } from "../src/engine";
+import {
+  multiSolutionLevel7,
+  uniqueLevel7,
+} from "../src/engine/__fixtures__/levels";
+import {
+  buildPack,
+  type CurriculumRow,
+  canonicalForm,
+  collectRow,
+  computeStats,
+  formatStats,
+  levelId,
+  rowStartIndexes,
+  verifyLevel,
+} from "./pack";
+
+const rotate = (g: number[][]): number[][] =>
+  g[0].map((_, c) => g.map((row) => row[c]).reverse());
+const mirror = (g: number[][]): number[][] =>
+  g.map((row) => [...row].reverse());
+
+function symmetries(g: number[][]): number[][][] {
+  const out: number[][][] = [];
+  let cur = g;
+  for (let i = 0; i < 4; i++) {
+    out.push(cur, mirror(cur));
+    cur = rotate(cur);
+  }
+  return out;
+}
+
+describe("canonicalForm", () => {
+  it("is identical across all 8 symmetries", () => {
+    const forms = symmetries(uniqueLevel7.regions).map((regions) =>
+      canonicalForm({ ...uniqueLevel7, regions }),
+    );
+    expect(new Set(forms).size).toBe(1);
+  });
+
+  it("ignores region relabelling", () => {
+    const n = uniqueLevel7.size;
+    const regions = uniqueLevel7.regions.map((row) =>
+      row.map((id) => n - 1 - id),
+    );
+    expect(canonicalForm({ ...uniqueLevel7, regions })).toBe(
+      canonicalForm(uniqueLevel7),
+    );
+  });
+
+  it("differs for a different level", () => {
+    expect(canonicalForm(multiSolutionLevel7)).not.toBe(
+      canonicalForm(uniqueLevel7),
+    );
+  });
+});
+
+describe("levelId", () => {
+  it("pads size and index", () => {
+    expect(levelId(undefined, 7, 3)).toBe("any-07-003");
+    expect(levelId("easy", 11, 12)).toBe("easy-11-012");
+  });
+
+  it("numbers per (tier, size) over the whole curriculum, 1-based", () => {
+    const curriculum: CurriculumRow[] = [
+      { pack: 1, size: 7, count: 2 },
+      { pack: 1, size: 8, count: 3 },
+      { pack: 2, size: 7, count: 4 },
+    ];
+    expect(rowStartIndexes(curriculum)).toEqual([1, 1, 3]);
+  });
+});
+
+// Real 7x7 generation, the same call the CLI makes.
+const stubGenerate = ({
+  size,
+  seed,
+  tier,
+}: {
+  size: number;
+  seed: string;
+  tier?: Tier;
+}) => generate({ size, seed, tier });
+
+describe("collectRow", () => {
+  const row: CurriculumRow = { pack: 1, size: 7, count: 2 };
+
+  it("collects exactly count levels with ids and row seeds", () => {
+    const seen = new Set<string>();
+    const gen = (o: { size: number; seed: string }) => stubGenerate(o);
+    const { levels, failure } = collectRow(row, 1, seen, gen);
+    expect(failure).toBeUndefined();
+    expect(levels.map((l) => l.id)).toEqual(["any-07-001", "any-07-002"]);
+    for (const l of levels) {
+      expect(l.seed).toMatch(/^pack-1\/7\/any\/\d+#\d+$/);
+      expect(l.tier).toBeUndefined();
+    }
+    expect(seen.size).toBe(2);
+  });
+
+  it("collects tiered rows with the tier in the id, level and generate call", () => {
+    const asked: (Tier | undefined)[] = [];
+    const { levels, failure } = collectRow(
+      { pack: 1, size: 7, tier: "easy", count: 2 },
+      1,
+      new Set(),
+      (o) => {
+        asked.push(o.tier);
+        return stubGenerate(o);
+      },
+    );
+    expect(failure).toBeUndefined();
+    expect(levels.map((l) => l.id)).toEqual(["easy-07-001", "easy-07-002"]);
+    expect(asked.every((t) => t === "easy")).toBe(true);
+    for (const l of levels) {
+      expect(l.tier).toBe("easy");
+      expect(rate(l)).toBe("easy");
+      expect(l.seed).toMatch(/^pack-1\/7\/easy\/\d+#\d+$/);
+    }
+  });
+
+  it("skips a duplicate and moves to the next seed", () => {
+    const calls: string[] = [];
+    const seen = new Set([canonicalForm(uniqueLevel7)]);
+    const alt = collectRow({ ...row, count: 1 }, 1, seen, ({ size, seed }) => {
+      calls.push(seed);
+      return calls.length < 3
+        ? { ...uniqueLevel7, id: seed, seed }
+        : stubGenerate({ size, seed });
+    });
+    expect(calls).toEqual([
+      "pack-1/7/any/0",
+      "pack-1/7/any/1",
+      "pack-1/7/any/2",
+    ]);
+    expect(alt.levels).toHaveLength(1);
+  });
+
+  it("reports a failure when generate returns null", () => {
+    const { levels, failure } = collectRow(row, 1, new Set(), () => null);
+    expect(levels).toEqual([]);
+    expect(failure).toMatch(/size 7/);
+  });
+});
+
+describe("verifyLevel", () => {
+  const real = { ...stubGenerate({ size: 7, seed: "v" }), id: "x" } as Level;
+
+  it("passes a real generated level", () => {
+    expect(verifyLevel(real)).toEqual([]);
+  });
+
+  it("rejects a non-unique level", () => {
+    expect(verifyLevel(multiSolutionLevel7)).not.toEqual([]);
+  });
+
+  it("passes a correctly tiered level and rejects a mismatched one", () => {
+    const easy = {
+      ...stubGenerate({ size: 7, seed: "v", tier: "easy" }),
+      id: "x",
+    } as Level;
+    expect(easy.tier).toBe("easy");
+    expect(verifyLevel(easy)).toEqual([]);
+    expect(verifyLevel({ ...easy, tier: "medium" }).join()).toMatch(/rate/);
+  });
+
+  it("rejects a solution mismatch", () => {
+    const solution = [...uniqueLevel7.solution].reverse();
+    expect(verifyLevel({ ...uniqueLevel7, solution })).not.toEqual([]);
+  });
+
+  it("rejects an invalid level", () => {
+    expect(verifyLevel({ ...uniqueLevel7, size: 6 })).not.toEqual([]);
+  });
+});
+
+describe("buildPack", () => {
+  const curriculum: CurriculumRow[] = [
+    { pack: 1, size: 7, count: 2 },
+    { pack: 1, size: 7, count: 2 },
+    { pack: 2, size: 8, count: 5 },
+  ];
+  const gen = (o: { size: number; seed: string }) => stubGenerate(o);
+
+  it("is byte-identical across runs, in row order, only the requested pack", () => {
+    const a = buildPack(curriculum, 1, [], { generate: gen });
+    const b = buildPack(curriculum, 1, [], { generate: gen });
+    expect(a.json).toBe(b.json);
+    expect(a.failures).toEqual([]);
+    expect(a.levels.map((l) => l.id)).toEqual([
+      "any-07-001",
+      "any-07-002",
+      "any-07-003",
+      "any-07-004",
+    ]);
+    expect(a.json.endsWith("}\n")).toBe(true);
+    // Number arrays stay on one line, the way Biome formats JSON.
+    expect(a.json).toContain('"solution": [');
+    expect(a.json.split("\n").some((l) => /^\s*\d+,?$/.test(l))).toBe(false);
+    expect(JSON.parse(a.json).levels).toEqual(a.levels);
+  });
+
+  it("refuses an id already used by another pack", () => {
+    const other = [
+      { pack: 9, levels: [{ ...uniqueLevel7, id: "any-07-002" }] },
+    ];
+    expect(() => buildPack(curriculum, 1, other, { generate: gen })).toThrow(
+      /any-07-002/,
+    );
+  });
+
+  it("skips boards already in lower-numbered packs", () => {
+    const first = buildPack(curriculum, 1, [], { generate: gen });
+    const two = buildPack(
+      [...curriculum, { pack: 2, size: 7, count: 2 }],
+      2,
+      [{ pack: 1, levels: first.levels }],
+      { generate: gen },
+    );
+    const forms = new Set(first.levels.map(canonicalForm));
+    for (const l of two.levels) expect(forms.has(canonicalForm(l))).toBe(false);
+  });
+
+  it("builds only rows accepted by the filter, keeping ids", () => {
+    const res = buildPack(
+      [...curriculum, { pack: 1, size: 8, count: 1 }],
+      1,
+      [],
+      {
+        generate: gen,
+        filter: (row) => row.size === 8,
+      },
+    );
+    expect(res.levels.map((l) => l.id)).toEqual(["any-08-006"]);
+  });
+
+  it("reports unfillable rows as failures", () => {
+    const res = buildPack(curriculum, 1, [], { generate: () => null });
+    expect(res.levels).toEqual([]);
+    expect(res.failures).toHaveLength(2);
+  });
+
+  it("aborts on a level that fails verification", () => {
+    const bad = ({ seed }: { size: number; seed: string }): Level => ({
+      ...multiSolutionLevel7,
+      id: seed,
+      seed,
+    });
+    expect(() => buildPack(curriculum, 1, [], { generate: bad })).toThrow(
+      /verif/i,
+    );
+  });
+});
+
+describe("computeStats", () => {
+  const stats = computeStats(7, undefined, 5);
+
+  it("measures attempts to first success over fixed seeds", () => {
+    expect(stats.size).toBe(7);
+    expect(stats.tier).toBeUndefined();
+    expect(stats.seeds).toBe(5);
+    expect(stats.filled).toBe(5);
+    expect(stats.medianAttempts).toBeGreaterThanOrEqual(1);
+    expect(stats.p90Attempts).toBeGreaterThanOrEqual(stats.medianAttempts);
+    expect(stats.attempts).toBe(
+      stats.seeds +
+        stats.rejects.repair +
+        stats.rejects.shape +
+        stats.rejects.tier +
+        stats.rejects.unrated,
+    );
+    expect(stats.rejects.tier + stats.rejects.unrated).toBe(0);
+    expect(stats.wallMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("measures a tiered cell, counting tier rejects", () => {
+    const easy = computeStats(7, "easy", 3);
+    expect(easy.tier).toBe("easy");
+    expect(easy.filled).toBe(3);
+    expect(easy.rejects.tier).toBeGreaterThan(0);
+  });
+
+  it("counts a cell it cannot fill as not filled", () => {
+    const expert = computeStats(7, "expert", 1, 1);
+    expect(expert.filled).toBe(0);
+    expect(expert.attempts).toBe(1);
+  });
+
+  it("fills an expert cell and counts what it rejects", () => {
+    const expert = computeStats(7, "expert", 2);
+    expect(expert.tier).toBe("expert");
+    expect(expert.filled).toBe(2);
+  });
+
+  it("fills a hard cell and counts what it rejects", () => {
+    const hard = computeStats(7, "hard", 3);
+    expect(hard.tier).toBe("hard");
+    expect(hard.filled).toBe(3);
+    expect(hard.rejects.tier).toBeGreaterThanOrEqual(0);
+  });
+
+  it("is deterministic apart from wall time", () => {
+    expect({ ...computeStats(7, undefined, 5), wallMs: 0 }).toEqual({
+      ...stats,
+      wallMs: 0,
+    });
+  });
+
+  it("formats one line per cell under a header", () => {
+    const text = formatStats([stats, computeStats(7, "easy", 2)]);
+    const lines = text.trimEnd().split("\n");
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/size.*tier.*filled.*median.*p90.*tier-rej.*ms/);
+    expect(lines[1]).toMatch(/^\s*7\s+any\b/);
+    expect(lines[2]).toMatch(/^\s*7\s+easy\b/);
+  });
+});

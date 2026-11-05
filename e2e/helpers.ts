@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { levelById } from "./levels";
+import { levelById, levelBySize } from "./levels";
 
 /** Hold Space on a focused cell until it commits (state assertion), then release. */
 export async function press(page: Page, target: Locator): Promise<void> {
@@ -19,7 +19,7 @@ export async function open(
   page: Page,
   w: number,
   h: number,
-  level = "demo-11",
+  level = levelBySize(11).id,
 ) {
   await page.setViewportSize({ width: w, height: h });
   await page.goto(`/?level=${level}`);

@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { cell } from "./helpers";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 
-const { size, solution } = levelById("demo-7");
+const { size, solution } = levelBySize(7);
 const toggle = (page: import("@playwright/test").Page) =>
   page.getByRole("button", { name: "Tap places faces" });
 

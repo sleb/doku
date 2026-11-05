@@ -67,8 +67,8 @@ test("360x300 stays stacked: board fits and cells are not smaller than stacked g
   const header = await box(page, "header");
   // Stacked: header above the board, not in a side column that squeezes it.
   expect(header.y + header.height).toBeLessThanOrEqual(board.y + 0.5);
-  // The wide layout would give ~16px cells here; stacked gives ~14px with the 44px Pause button and the 44px controls row (Undo/Redo).
-  expect(await firstCellWidth(page)).toBeGreaterThanOrEqual(13.5);
+  // The wide layout would give ~16px cells here; stacked gives ~14px with the 44px Pause button and the 44px controls row (Undo/Redo), ~13px when a two-digit level number makes the header 56px tall.
+  expect(await firstCellWidth(page)).toBeGreaterThanOrEqual(12.5);
 });
 
 test("stacked layout keeps >= 8px between header and board", async ({

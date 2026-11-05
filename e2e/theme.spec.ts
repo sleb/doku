@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { levelBySize } from "./levels";
 
 const seed = (theme?: string) => (page: Page) =>
   page.addInitScript((t) => {
@@ -24,14 +25,14 @@ const cellBg = (page: Page) =>
 
 test("saved dark applies on load", async ({ page }) => {
   await seed("dark")(page);
-  await page.goto("/?level=demo-11");
+  await page.goto(`/?level=${levelBySize(11).id}`);
   expect(await dataTheme(page)).toBe("dark");
   expect(await bodyBg(page)).toBe("rgb(28, 25, 23)");
 });
 
 test("system follows the OS scheme live", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
-  await page.goto("/?level=demo-11");
+  await page.goto(`/?level=${levelBySize(11).id}`);
   expect(await dataTheme(page)).toBe("light");
   await page.emulateMedia({ colorScheme: "dark" });
   await expect.poll(() => dataTheme(page)).toBe("dark");
@@ -50,7 +51,7 @@ test("Light persists across reload and beats a dark OS", async ({ page }) => {
 });
 
 test("region colours are the same in both themes", async ({ page }) => {
-  await page.goto("/?level=demo-11");
+  await page.goto(`/?level=${levelBySize(11).id}`);
   await page.emulateMedia({ colorScheme: "light" });
   await expect.poll(() => dataTheme(page)).toBe("light");
   const light = await cellBg(page);

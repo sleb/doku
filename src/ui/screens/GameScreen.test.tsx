@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { recordWins } from "../../app/campaign";
+import { emptyBoard, nextHint } from "../../engine";
+import { uniqueLevel7 } from "../../engine/__fixtures__/levels";
 import { LEVELS } from "../../levels/campaign";
 import { haptics } from "../../platform/haptics";
 import { idleState } from "../../store/game";
@@ -398,7 +400,9 @@ describe("GameScreen", () => {
       );
       expect(play().mock.calls).toEqual([["place"]]);
       expect(screen.getByRole("img", { name: "2 of 3 hearts" })).toBeTruthy();
-      expect(label(solution[0])).toMatch(/face/i);
+      const first = nextHint(emptyBoard(level), level);
+      expect(first?.deduction.place).toBeDefined();
+      expect(label(first?.deduction.place as number)).toMatch(/face/i);
     });
 
     test("a cross tap is silent", async () => {
@@ -731,7 +735,7 @@ describe("tap places faces mode", () => {
 });
 
 describe("GameScreen announcer", () => {
-  const status = () => screen.getByRole("status");
+  const status = () => screen.getByTestId("announcer");
 
   beforeEach(() => {
     announcerStore.getState().reset();
@@ -795,5 +799,48 @@ describe("palette and patterns settings", () => {
     expect(anyPatterned).toBe(true);
     act(() => settingsStore.setState({ patterns: false }));
     expect(cell(0).style.backgroundImage).toBe("");
+  });
+});
+
+describe("hint display", () => {
+  const hintBtn = () =>
+    screen.getByRole("button", { name: "Hint, costs one heart" });
+
+  test("shows the explanation in a status region and rings the cells", async () => {
+    renderGame();
+    expect(screen.getByTestId("hint-banner").textContent).toBe("");
+    await userEvent.click(hintBtn());
+    const first = nextHint(emptyBoard(level), level);
+    expect(screen.getByTestId("hint-banner").textContent).toBe(first?.message);
+    const cause = first?.deduction.because.cells ?? [];
+    for (const i of cause) {
+      expect(cell(i).getAttribute("data-hint")).toBe("cause");
+    }
+  });
+
+  test("an elimination hint marks its target cells and costs a heart", async () => {
+    // uniqueLevel7: the first step places, the second eliminates.
+    renderGame(uniqueLevel7);
+    await userEvent.click(hintBtn());
+    await userEvent.click(hintBtn());
+    const s = gameStore.getState();
+    if (s.status === "idle") throw new Error("idle");
+    const shown = s.hintShown;
+    expect(shown?.targets.length).toBeGreaterThan(0);
+    for (const i of shown?.targets ?? []) {
+      expect(cell(i).getAttribute("data-hint")).toBe("target");
+      expect(label(i)).toBe("empty");
+    }
+    expect(screen.getByRole("img", { name: "1 of 3 hearts" })).toBeTruthy();
+    expect((hintBtn() as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("the display clears when the player marks a cell", async () => {
+    renderGame();
+    await userEvent.click(hintBtn());
+    await userEvent.click(hintBtn());
+    await userEvent.click(cell(nonSolution[0]));
+    expect(screen.getByTestId("hint-banner").textContent).toBe("");
+    expect(document.querySelector("[data-hint]")).toBeNull();
   });
 });

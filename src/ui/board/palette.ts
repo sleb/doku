@@ -34,21 +34,6 @@ export function regionClass(palette: PaletteName, region: number): string {
   return (palette === "accessible" ? ACCESSIBLE_BG : DEFAULT_BG)[region];
 }
 
-// Same order as the --color-region-N tokens (the accessible palette's --color-region-a-N tokens differ in hue, but the names are the shared region identity) in app/index.css.
-export const REGION_NAMES = [
-  "red",
-  "orange",
-  "amber",
-  "lime",
-  "emerald",
-  "teal",
-  "sky",
-  "indigo",
-  "violet",
-  "pink",
-  "stone",
-] as const;
-
 // Face/mark glyph stroke; must reach 3:1 contrast on every region color.
 export const GLYPH_COLOR = "#1f1f1f";
 

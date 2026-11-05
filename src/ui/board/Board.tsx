@@ -22,6 +22,10 @@ export interface BoardProps {
   board: BoardData;
   wrong: ReadonlySet<number>;
   conflicts: ReadonlySet<number>;
+  /** Cells that force the hint on display (drawn dashed). */
+  causes?: ReadonlySet<number>;
+  /** Cells the hint on display rules out (drawn solid, tinted). */
+  targets?: ReadonlySet<number>;
   /** True when the game is not `playing`; locks the whole board. */
   disabled: boolean;
   /** True during the win wave (result modal pending); sets `data-celebrate` and a `--row` per row. */
@@ -47,6 +51,8 @@ export function Board({
   board,
   wrong,
   conflicts,
+  causes,
+  targets,
   disabled,
   highlight,
   celebrate,
@@ -161,6 +167,13 @@ export function Board({
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
                 highlight={highlight?.has(g.index)}
+                hint={
+                  targets?.has(g.index)
+                    ? "target"
+                    : causes?.has(g.index)
+                      ? "cause"
+                      : undefined
+                }
                 disabled={disabled || isLocked(board, wrong, g.index)}
                 inputMode={inputMode}
                 palette={palette}

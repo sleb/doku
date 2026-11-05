@@ -11,6 +11,7 @@ import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
 import { ActionBar } from "./ActionBar";
 import { GameLayout } from "./GameLayout";
+import { HintBanner } from "./HintBanner";
 import { PauseDialog } from "./PauseDialog";
 import { ResultModal } from "./ResultModal";
 import { ResultSkip } from "./ResultSkip";
@@ -42,6 +43,9 @@ export function GameScreen({
   // other status reads 0 so clock ticks do not re-render the screen and board.
   const elapsedMs = useGameStore((s) => (s.status === "won" ? s.elapsedMs : 0));
   const hintsUsed = useGameStore((s) => ("hintsUsed" in s ? s.hintsUsed : 0));
+  const hintShown = useGameStore((s) =>
+    "hintShown" in s ? s.hintShown : null,
+  );
   const bestMs = useProgressStore((s) =>
     level ? s.bestMs[level.id] : undefined,
   );
@@ -81,6 +85,12 @@ export function GameScreen({
     [board, level],
   );
 
+  const hintCells = useMemo(() => new Set(hintShown?.cells ?? []), [hintShown]);
+  const hintTargets = useMemo(
+    () => new Set(hintShown?.targets ?? []),
+    [hintShown],
+  );
+
   if (status === "idle" || !level || !board || !wrong) return null;
 
   const levelNumber = levelIndex(level.id) + 1;
@@ -111,6 +121,8 @@ export function GameScreen({
               board={board}
               wrong={wrong}
               conflicts={conflicts}
+              causes={hintCells}
+              targets={hintTargets}
               disabled={finished || paused}
               inputMode={inputMode}
               palette={palette}
@@ -123,7 +135,12 @@ export function GameScreen({
             />
           </div>
         }
-        controls={<ActionBar />}
+        controls={
+          <>
+            <HintBanner />
+            <ActionBar />
+          </>
+        }
       />
       {sheet === "rules" && <RulesDialog onClose={() => setSheet(null)} />}
       {sheet === "settings" && (

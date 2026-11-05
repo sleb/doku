@@ -7,6 +7,7 @@ export function Announcer() {
   return (
     <div
       role="status"
+      data-testid="announcer"
       aria-live="polite"
       aria-atomic="true"
       className="sr-only"

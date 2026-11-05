@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Doku is a Tauri 2 + React + TypeScript puzzle game. The repo is currently the Tauri scaffold plus design docs; the engine (GitHub milestone "engine", issues #5–#18) is not yet implemented.
+Doku is a Tauri 2 + React + TypeScript puzzle game. Milestones 1 to 5 (engine, board, mobile, full app, generator) are implemented; milestone 6 (polish) is planned. `DESIGN.md` §12 has the milestone list and status.
 
 ## Where things are documented
 
@@ -11,7 +11,7 @@ Read these before building, and update them (not this file) when a decision chan
 - `README.md`: build/run commands (Bun) and the docs index.
 - `DESIGN.md`: architecture, layering, milestones, decisions. Notably §2 (pure-TS engine, thin Rust shell), §4 (wrong tap = deviation from the unique solution) and §13 (decisions).
 - `docs/ENGINE_DESIGN.md`: engine internals. Takes precedence over `DESIGN.md` on low-level detail; keep the two in sync.
-- GitHub issues in the "engine" milestone: milestone 1 user stories, titled `M1-NN: ...`.
+- GitHub issues, grouped into one GitHub milestone per design milestone, titled `MN-NN: ...`; each milestone has a tracking issue titled "Milestone N plan: ...". The per-milestone low-level designs are listed in the `README.md` docs index.
 
 ## Conventions
 

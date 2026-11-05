@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { Cell, emptyBoard } from "../../engine";
+import { Cell, emptyBoard, REGION_NAMES } from "../../engine";
 import {
   uniqueLevel7 as level,
   multiSolutionLevel7,
@@ -75,7 +75,7 @@ describe("Board", () => {
       [3, 0],
       [6, 6],
     ]) {
-      const name = `Row ${r + 1}, column ${c + 1}, region ${level.regions[r][c] + 1}, empty`;
+      const name = `Row ${r + 1}, column ${c + 1}, ${REGION_NAMES[level.regions[r][c]]} region, empty`;
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
   });
@@ -486,5 +486,30 @@ describe("Board", () => {
         vi.useRealTimers();
       }
     });
+  });
+});
+
+describe("Board hint markers", () => {
+  test("marks causes and targets by index", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        causes={new Set([3, 4])}
+        targets={new Set([10])}
+        disabled={false}
+        {...handlers()}
+      />,
+    );
+    const marked = Array.from(document.querySelectorAll("[data-hint]")).map(
+      (e) => [e.getAttribute("data-index"), e.getAttribute("data-hint")],
+    );
+    expect(marked).toEqual([
+      ["3", "cause"],
+      ["4", "cause"],
+      ["10", "target"],
+    ]);
   });
 });

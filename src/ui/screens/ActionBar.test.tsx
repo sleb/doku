@@ -91,11 +91,21 @@ describe("ActionBar", () => {
     expect((hintBtn() as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("clicking Hint places the first row's face", async () => {
+  test("clicking Hint places the ladder's first face", async () => {
     const user = userEvent.setup();
     render(<ActionBar />);
     await user.click(hintBtn());
-    expect(cellAt(level.solution[0])).toBe(Cell.Face);
+    expect(cellAt(4 * level.size + 2)).toBe(Cell.Face);
+  });
+
+  test("an elimination hint spends a heart and writes no marks", async () => {
+    const user = userEvent.setup();
+    render(<ActionBar />);
+    await user.click(hintBtn());
+    const before = Array.from(gameStore.getState().board ?? []);
+    await user.click(hintBtn());
+    expect(Array.from(gameStore.getState().board ?? [])).toEqual(before);
+    expect(gameStore.getState().hearts).toBe(1);
   });
 
   test("Hint shows a non-wrapping cost marker and is 44px", () => {

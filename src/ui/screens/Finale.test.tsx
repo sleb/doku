@@ -24,9 +24,7 @@ test("shows the total of best times", () => {
   render(<Finale onStartOver={() => {}} />);
   const total = (LEVELS.length - 1) * 60 + 65;
   expect(
-    screen.getByText(
-      `Total of best times: ${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`,
-    ),
+    screen.getByText(`Total of best times: ${formatClock(total)}`),
   ).toBeInTheDocument();
 });
 
