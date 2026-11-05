@@ -1,8 +1,9 @@
 import { useGameStore } from "../../store/gameStore";
 
 /**
- * The explanation of the hint on display. Always rendered, with room for a few
- * lines, so a hint appearing never resizes the board. A polite live region, so
+ * The explanation of the hint on display. Always mounted but empty, and so
+ * zero-height, until a hint is shown: the cramped layouts keep every pixel for
+ * the board, and the board re-fits while a hint is up. A polite live region, so
  * screen readers hear the hint when it arrives.
  */
 export function HintBanner() {
@@ -12,9 +13,9 @@ export function HintBanner() {
   return (
     <p
       role="status"
-      className="mx-auto mb-2 min-h-[3.5rem] max-w-prose px-4 text-center text-sm leading-snug text-stone-800"
+      className="mx-auto max-w-prose px-4 text-center text-sm leading-snug text-stone-800"
     >
-      {message}
+      {message || null}
     </p>
   );
 }
