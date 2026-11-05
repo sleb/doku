@@ -104,7 +104,8 @@ test("animates in with a class only: focus and input are unaffected", async () =
   const onClose = vi.fn();
   render(<Page onClose={onClose} />);
   const dialog = screen.getByRole("dialog", { name: "Hello" });
-  expect(dialog.parentElement).toHaveClass("dialog-in");
+  expect(dialog.parentElement).toHaveClass("dialog-backdrop");
+  expect(dialog).toHaveClass("dialog-in");
   expect(dialog.parentElement).not.toHaveAttribute("inert");
   expect(screen.getByRole("button", { name: "first" })).toHaveFocus();
   await user.keyboard("{Escape}");

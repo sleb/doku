@@ -149,6 +149,19 @@ describe("useFeedback sound", () => {
     expect(sound.unlock).toHaveBeenCalledTimes(1);
   });
 
+  test("unlock runs before a bubble-phase handler below the window", () => {
+    renderHook(() => useFeedback());
+    const el = document.createElement("button");
+    document.body.append(el);
+    let unlocked = -1;
+    el.addEventListener("click", () => {
+      unlocked = vi.mocked(sound.unlock).mock.calls.length;
+    });
+    el.click();
+    el.remove();
+    expect(unlocked).toBe(1);
+  });
+
   test("pointerdown alone does not unlock", () => {
     renderHook(() => useFeedback());
     window.dispatchEvent(new Event("pointerdown"));

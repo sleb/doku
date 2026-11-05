@@ -1,4 +1,4 @@
-import { Fragment, memo, type RefObject } from "react";
+import { memo, type RefObject, useRef } from "react";
 import { Cell } from "../../engine";
 import { HOLD_MS } from "./hold";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
@@ -65,6 +65,9 @@ export const CellView = memo(function CellView({
     const owner = holdOwner?.current;
     if (owner == null || owner === index) onToggleMark(index);
   };
+  // Keep the last seq so the wrapper (and icon) keep their identity when fx clears.
+  const seqRef = useRef(fxSeq);
+  if (fx) seqRef.current = fxSeq;
   const label = stateLabel(state, isWrong);
   const className = [
     "cell relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
@@ -157,25 +160,21 @@ export const CellView = memo(function CellView({
           />
         </svg>
       ) : null}
-      {fx ? (
-        <Fragment key={fxSeq}>
-          {fx === "place" ? (
-            <span
-              aria-hidden="true"
-              data-fx-ring
-              className="fx-ring pointer-events-none absolute inset-0"
-            />
-          ) : null}
-          <span
-            data-fx={fx}
-            className="fx-icon flex size-full items-center justify-center"
-          >
-            {icon}
-          </span>
-        </Fragment>
-      ) : (
-        icon
-      )}
+      {fx === "place" ? (
+        <span
+          key={`ring${fxSeq}`}
+          aria-hidden="true"
+          data-fx-ring
+          className="fx-ring pointer-events-none absolute inset-0 text-neutral-900"
+        />
+      ) : null}
+      <span
+        key={seqRef.current}
+        data-fx={fx}
+        className="fx-icon flex size-full items-center justify-center"
+      >
+        {icon}
+      </span>
     </button>
   );
 });

@@ -179,12 +179,16 @@ body {
 .fx-ring {
   border-radius: 9999px;
   margin: 15%;
-  border: 3px solid #171717;
+  border: 3px solid currentColor;
   animation: fx-ring 220ms ease-out forwards;
 }
 
 [data-pop="true"] {
   animation: heart-pop 280ms ease-out;
+}
+
+.dialog-backdrop {
+  animation: fx-fade 120ms ease-out;
 }
 
 .dialog-in {

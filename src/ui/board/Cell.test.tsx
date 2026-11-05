@@ -517,6 +517,27 @@ describe("CellView fx", () => {
     expect(b.querySelector("[data-fx-ring]") !== null).toBe(fx === "place");
   });
 
+  test("the icon keeps its DOM node when fx clears", () => {
+    const props = {
+      index: 17,
+      row: 1,
+      col: 2,
+      region: REGION,
+      state: Cell.Face,
+      isWrong: false,
+      isConflict: false,
+      disabled: false,
+      onToggleMark: vi.fn(),
+      onPlaceFace: vi.fn(),
+    } as const;
+    const { container, rerender } = render(
+      <CellView {...props} fx="place" fxSeq={1} />,
+    );
+    const icon = container.querySelector("[data-icon]");
+    rerender(<CellView {...props} />);
+    expect(container.querySelector("[data-icon]")).toBe(icon);
+  });
+
   test("the shake is not on the button", () => {
     const b = renderCell({ state: Cell.Face, fx: "place", fxSeq: 1 });
     expect(b.hasAttribute("data-fx")).toBe(false);

@@ -49,19 +49,20 @@ export function useFeedback(store: StoreApi<GameStore> = gameStore) {
     };
   }, [store]);
 
+  // Capture phase, so unlock runs before a cell handler plays the first cue.
   // Audio starts suspended until a user-activation gesture (pointerdown is
   // not one on touch). Keep trying until the context is actually running.
   useEffect(() => {
     const events = ["pointerup", "touchend", "click", "keydown"] as const;
     const remove = () => {
-      for (const e of events) window.removeEventListener(e, unlock);
+      for (const e of events) window.removeEventListener(e, unlock, true);
     };
     const unlock = () => {
       void sound.unlock().then((running) => {
         if (running) remove();
       });
     };
-    for (const e of events) window.addEventListener(e, unlock);
+    for (const e of events) window.addEventListener(e, unlock, true);
     const suspend = () => sound.suspend();
     const onVisibility = () =>
       document.visibilityState === "hidden" ? sound.suspend() : sound.resume();

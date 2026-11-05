@@ -73,21 +73,21 @@ export function Dialog({
   return (
     <div
       ref={root}
-      className="dialog-in fixed inset-0 z-10 flex items-center justify-center bg-black/50 safe-padding"
+      className="dialog-backdrop fixed inset-0 z-10 flex items-center justify-center bg-black/50 safe-padding"
     >
       <div
         onKeyDown={onKeyDown}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-full min-h-0 flex-col items-center gap-4 rounded-lg bg-white p-6 shadow-lg"
+        className="dialog-in flex max-h-full min-h-0 flex-col items-center gap-4 rounded-lg bg-white p-6 shadow-lg"
       >
         <h2 id={titleId} className="text-xl font-semibold">
           {title}
         </h2>
         <div
           data-testid="dialog-body"
-          className="flex min-h-0 w-full flex-1 flex-col items-center gap-4 overflow-y-auto"
+          className="flex min-h-0 -mx-1 w-[calc(100%+0.5rem)] flex-1 flex-col items-center gap-4 overflow-y-auto px-1"
         >
           {children}
         </div>
