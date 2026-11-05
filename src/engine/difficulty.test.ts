@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { withoutLookahead } from "./__fixtures__/capLadder";
 import { uniqueLevel7 } from "./__fixtures__/levels";
-import { mediumLevel11, rated } from "./__fixtures__/rated";
+import { expertLevel1, mediumLevel11, rated } from "./__fixtures__/rated";
 import { rate } from "./difficulty";
 import { generate } from "./generator";
 import { solveByTechniques } from "./solver";
@@ -27,10 +28,13 @@ describe("rate goldens", () => {
     }
   });
 
-  it("unrated levels stall before every unit is satisfied", () => {
-    for (const { level, tier } of rated.filter((g) => g.tier === "unrated")) {
-      expect(solveByTechniques(level).solved, level.id).toBe(false);
-      expect(tier).toBe("unrated");
+  it("expert levels need a lookahead step and none of the others do", () => {
+    for (const { level, tier } of rated) {
+      const steps = solveByTechniques(level).steps;
+      expect(
+        steps.some((s) => s.technique === "lookahead"),
+        level.id,
+      ).toBe(tier === "expert");
     }
   });
 });
@@ -46,11 +50,7 @@ describe("rate", () => {
   });
 
   it("rates a level the ladder cannot finish as unrated", () => {
-    const stuck = Array.from({ length: 30 }, (_, i) =>
-      generate({ size: 7, seed: `rate/${i}` }),
-    ).find((l) => l && !solveByTechniques(l).solved);
-    expect(stuck).toBeTruthy();
-    expect(rate(stuck as NonNullable<typeof stuck>)).toBe("unrated");
+    expect(withoutLookahead(() => rate(expertLevel1))).toBe("unrated");
   });
 
   it("returns a tier or unrated for a fixture", () => {

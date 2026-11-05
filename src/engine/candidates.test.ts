@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { uniqueLevel7 } from "./__fixtures__/levels";
-import { eliminate, fromBoard, placeFace } from "./candidates";
+import { contradiction, eliminate, fromBoard, placeFace } from "./candidates";
 import { compile } from "./compile";
 import { Cell } from "./types";
 
@@ -73,5 +73,25 @@ describe("candidates", () => {
     expect(c1).not.toBe(c0);
     expect(c1.alive).not.toBe(c0.alive);
     expect(c2.aliveCount).not.toBe(c0.aliveCount);
+  });
+});
+
+describe("contradiction", () => {
+  it("is false on a fresh board", () => {
+    expect(contradiction(fromBoard(p))).toBe(false);
+  });
+
+  it("is true once an unsatisfied unit has no alive cell", () => {
+    const row0 = Array.from(p.units[0].cells);
+    expect(contradiction(eliminate(p, fromBoard(p), row0))).toBe(true);
+  });
+
+  it("is false when the empty unit is already satisfied", () => {
+    const placed = placeFace(p, fromBoard(p), 0);
+    // Row 0 holds its face; kill that face's cell too: the unit is satisfied.
+    const c = eliminate(p, placed, [0]);
+    expect(c.satisfied[0]).toBe(1);
+    expect(c.aliveCount[0]).toBe(0);
+    expect(contradiction(c)).toBe(false);
   });
 });

@@ -3,8 +3,8 @@ import type { Level } from "../types";
 // Frozen 7x7 levels with their expected rating, found with a throwaway search
 // over generate() and checked by hand against the technique trace. Easy needs
 // no region/line confinement step; medium needs at least one; hard needs at
-// least one Hard technique; unrated stalls because finishing it needs a
-// technique the ladder does not have yet (lookahead, #93).
+// least one Hard technique; expert needs one assumption that
+// techniques 1 to 6 cannot make (lookahead, #93).
 
 export const easyLevel1: Level = {
   id: "golden-easy-1",
@@ -96,8 +96,8 @@ export const hardLevel2: Level = {
   solution: [5, 2, 6, 1, 3, 0, 4],
 };
 
-export const unratedLevel1: Level = {
-  id: "golden-unrated-1",
+export const expertLevel1: Level = {
+  id: "golden-expert-1",
   size: 7,
   regions: [
     [0, 0, 0, 1, 1, 1, 2],
@@ -111,8 +111,8 @@ export const unratedLevel1: Level = {
   solution: [0, 2, 5, 1, 4, 6, 3],
 };
 
-export const unratedLevel2: Level = {
-  id: "golden-unrated-2",
+export const expertLevel2: Level = {
+  id: "golden-expert-2",
   size: 7,
   regions: [
     [2, 2, 0, 0, 1, 1, 1],
@@ -129,7 +129,7 @@ export const unratedLevel2: Level = {
 export const rated: {
   name: string;
   level: Level;
-  tier: "easy" | "medium" | "hard" | "unrated";
+  tier: "easy" | "medium" | "hard" | "expert";
 }[] = [
   { name: "easy1", level: easyLevel1, tier: "easy" },
   { name: "easy2", level: easyLevel2, tier: "easy" },
@@ -137,8 +137,8 @@ export const rated: {
   { name: "medium2", level: mediumLevel2, tier: "medium" },
   { name: "hard1", level: hardLevel1, tier: "hard" },
   { name: "hard2", level: hardLevel2, tier: "hard" },
-  { name: "unrated1", level: unratedLevel1, tier: "unrated" },
-  { name: "unrated2", level: unratedLevel2, tier: "unrated" },
+  { name: "expert1", level: expertLevel1, tier: "expert" },
+  { name: "expert2", level: expertLevel2, tier: "expert" },
 ];
 
 // 11x11 medium level, for the rate performance test.

@@ -66,3 +66,16 @@ export function eliminate(
   for (const cell of cells) kill(p, next, cell);
   return next;
 }
+
+// The first unsatisfied unit with no alive cell, or -1 when there is none.
+// Such a unit can never hold its face.
+export function emptiedUnit(c: Candidates): number {
+  for (let u = 0; u < c.aliveCount.length; u++) {
+    if (!c.satisfied[u] && c.aliveCount[u] === 0) return u;
+  }
+  return -1;
+}
+
+export function contradiction(c: Candidates): boolean {
+  return emptiedUnit(c) >= 0;
+}
