@@ -133,7 +133,7 @@ test("reload resumes the whole game, paused, with touch input", async ({
   await expect(dialog).toBeHidden();
 });
 
-test("with Tap: Face on, tapping every solution cell wins", async ({
+test("with Tap places faces on, tapping every solution cell wins", async ({
   page,
 }) => {
   await page.goto("/");
@@ -147,7 +147,7 @@ test("with Tap: Face on, tapping every solution cell wins", async ({
 test("the action bar row fits at 320px", async ({ page }) => {
   await open(page, 320, 568);
   const hint = await box(page, "button[aria-label^='Hint']");
-  const tap = await box(page, "button[aria-label='Tap places faces']");
+  const tap = await box(page, "button[aria-pressed]");
   expect(Math.max(hint.x + hint.width, tap.x + tap.width)).toBeLessThanOrEqual(
     320,
   );

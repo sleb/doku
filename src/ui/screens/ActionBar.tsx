@@ -45,8 +45,7 @@ export function ActionBar() {
       </button>
       <button
         type="button"
-        className={button}
-        aria-label="Tap places faces"
+        className={`${button} max-w-24 text-xs leading-tight aria-pressed:border-stone-900 aria-pressed:bg-stone-200 aria-pressed:font-semibold`}
         aria-pressed={faceMode}
         disabled={!playing}
         onClick={() =>
@@ -55,7 +54,7 @@ export function ActionBar() {
             .set({ inputMode: faceMode ? "mark" : "face" })
         }
       >
-        {faceMode ? "Tap: Face" : "Tap: ✕"}
+        Tap places faces
       </button>
     </div>
   );

@@ -46,6 +46,6 @@ test("Escape closes", async () => {
 test("cheat sheet mentions the tap toggle and the f key", () => {
   render(<RulesDialog onClose={() => {}} />);
   const dialog = screen.getByRole("dialog", { name: "Rules" });
-  expect(dialog).toHaveTextContent(/Tap: Face/);
+  expect(dialog).toHaveTextContent(/Tap places faces/);
   expect(screen.getByText("f", { selector: "kbd" })).toBeInTheDocument();
 });

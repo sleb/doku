@@ -673,6 +673,22 @@ describe("CellView fx", () => {
       expect(b.onPlaceFace).not.toHaveBeenCalled();
     });
 
+    test("another cell's hold blocks click, Enter and Space placement", async () => {
+      const b = renderCell({ inputMode: "face", holdOwner: { current: 3 } });
+      b.focus();
+      const user = userEvent.setup();
+      await user.click(b);
+      await user.keyboard("{Enter}");
+      fireEvent.keyDown(b, { key: " " });
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("this cell's own hold owner does not block placement", async () => {
+      const b = renderCell({ inputMode: "face", holdOwner: { current: 17 } });
+      await userEvent.setup().click(b);
+      expect(b.onPlaceFace).toHaveBeenCalledExactlyOnceWith(17);
+    });
+
     test("a player mark accepts a face", async () => {
       const b = renderCell({ inputMode: "face", state: Cell.Mark });
       await userEvent.setup().click(b);

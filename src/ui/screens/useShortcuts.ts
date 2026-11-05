@@ -19,7 +19,7 @@ export function useShortcuts({ holdOwner }: ShortcutOptions = {}): void {
       if (e.defaultPrevented || e.repeat || e.altKey) return;
       if (gameStore.getState().status !== "playing") return;
       const key = e.key.toLowerCase();
-      if (key === "f" && !e.ctrlKey && !e.metaKey) {
+      if (e.key === "f" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         const { inputMode, set } = settingsStore.getState();
         set({ inputMode: inputMode === "face" ? "mark" : "face" });

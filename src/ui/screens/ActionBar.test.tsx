@@ -128,23 +128,29 @@ describe("ActionBar", () => {
 describe("ActionBar tap-mode toggle", () => {
   const toggle = () => screen.getByRole("button", { name: "Tap places faces" });
 
-  test("is a 44px toggle, off by default, showing Tap: ✕", () => {
+  test("is a 44px toggle, off by default, with a static label", () => {
     render(<ActionBar />);
     expect(toggle().getAttribute("aria-pressed")).toBe("false");
-    expect(toggle().textContent).toBe("Tap: ✕");
+    expect(toggle().textContent).toContain("Tap places faces");
     expect(toggle().className).toMatch(/min-h-11/);
     expect(toggle().className).toMatch(/min-w-11/);
   });
 
-  test("clicking flips inputMode and the label", async () => {
+  test("clicking flips inputMode and aria-pressed", async () => {
     const user = userEvent.setup();
     render(<ActionBar />);
     await user.click(toggle());
     expect(settingsStore.getState().inputMode).toBe("face");
     expect(toggle().getAttribute("aria-pressed")).toBe("true");
-    expect(toggle().textContent).toBe("Tap: Face");
+    expect(toggle().textContent).toContain("Tap places faces");
     await user.click(toggle());
     expect(settingsStore.getState().inputMode).toBe("mark");
+  });
+
+  test("visible text contains the accessible name (label in name)", () => {
+    render(<ActionBar />);
+    expect(toggle().hasAttribute("aria-label")).toBe(false);
+    expect(toggle().textContent).toContain("Tap places faces");
   });
 
   test("follows the Settings switch", () => {

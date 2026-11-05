@@ -13,7 +13,9 @@ test("by default a click only marks", async ({ page }) => {
   await expect(target).toHaveAccessibleName(/, marked$/);
 });
 
-test("with Tap: Face on, clicks alone win the level", async ({ page }) => {
+test("with Tap places faces on, clicks alone win the level", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(toggle(page)).toHaveAttribute("aria-pressed", "false");
   await toggle(page).click();

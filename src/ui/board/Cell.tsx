@@ -56,11 +56,15 @@ export const CellView = memo(function CellView({
   fxSeq,
 }: CellProps) {
   const hold = useHold(
-    () => onPlaceFace(index),
+    () => {
+      // Another cell's hold owns the board: a stray touch must not place.
+      const owner = holdOwner?.current;
+      if (owner == null || owner === index) onPlaceFace(index);
+    },
     disabled,
     (active) => {
       if (!holdOwner) return;
-      if (active) holdOwner.current = index;
+      if (active) holdOwner.current ??= index;
       else if (holdOwner.current === index) holdOwner.current = null;
     },
   );
@@ -71,16 +75,18 @@ export const CellView = memo(function CellView({
     return () => onGlow(null, index);
   }, [holding, onGlow, index]);
   // A second finger or palm on a neighbor must not mark it mid-hold.
-  const toggleMark = () => {
-    if (disabled) return;
+  const free = () => {
     const owner = holdOwner?.current;
-    if (owner == null || owner === index) onToggleMark(index);
+    return owner == null || owner === index;
+  };
+  const toggleMark = () => {
+    if (!disabled && free()) onToggleMark(index);
   };
   // Keep the last seq so the wrapper (and icon) keep their identity when fx clears.
   const seqRef = useRef(fxSeq);
   if (fx) seqRef.current = fxSeq;
   const placeNow = () => {
-    if (!disabled) onPlaceFace(index);
+    if (!disabled && free()) onPlaceFace(index);
   };
   const label = stateLabel(state, isWrong);
   const className = [

@@ -117,6 +117,13 @@ describe("useShortcuts", () => {
       const e = press({ key: "f" });
       expect(settingsStore.getState().inputMode).toBe("face");
       expect(e.defaultPrevented).toBe(true);
+      press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+    });
+
+    test("ignores Shift+F and Caps-Lock capital F", () => {
+      renderHook(() => useShortcuts());
+      press({ key: "F", shiftKey: true });
       press({ key: "F" });
       expect(settingsStore.getState().inputMode).toBe("mark");
     });
