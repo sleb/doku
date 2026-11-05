@@ -76,6 +76,16 @@ test("makes siblings inert while open and restores them after", () => {
   expect(outside).not.toHaveAttribute("inert");
 });
 
+test("leaves a live region (role status) un-inert so it still announces", () => {
+  render(
+    <>
+      <div role="status">live</div>
+      <Dialog title="T">x</Dialog>
+    </>,
+  );
+  expect(screen.getByRole("status")).not.toHaveAttribute("inert");
+});
+
 test("does not leave a pre-inert sibling un-inert", () => {
   const host = document.createElement("div");
   const pre = document.createElement("div");

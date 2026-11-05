@@ -5,6 +5,8 @@ import { gameStore, useGameStore } from "../../store/gameStore";
 import { useProgressStore } from "../../store/progress";
 import { conflictCells } from "../../store/selectors";
 import { settingsStore, useSettingsStore } from "../../store/settings";
+import { Announcer } from "../a11y/Announcer";
+import { useInputModeAnnouncement } from "../a11y/useInputModeAnnouncement";
 import { Board } from "../board/Board";
 import { TopBar } from "../hud/TopBar";
 import { ActionBar } from "./ActionBar";
@@ -50,6 +52,7 @@ export function GameScreen() {
   useAutoPause();
   useShortcuts({ holdOwner });
   useFeedback();
+  useInputModeAnnouncement();
   const onHoldGlow = useHoldRamp();
 
   // Back from a pause, hand focus to the board's active cell if it fell to the
@@ -85,6 +88,7 @@ export function GameScreen() {
   const finished = status === "won" || status === "lost";
   return (
     <>
+      <Announcer />
       <GameLayout
         inert={result.pending}
         header={

@@ -62,6 +62,18 @@ describe("CellView", () => {
     expect(icon(b)?.getAttribute("data-icon")).toBe(kind);
   });
 
+  test.each([
+    [Cell.Empty, "empty"],
+    [Cell.Face, "face"],
+  ] as const)(
+    "a conflicting %s cell appends conflict last, once",
+    (state, label) => {
+      expect(
+        renderCell({ state, isConflict: true }).getAttribute("aria-label"),
+      ).toBe(`Row 2, column 3, ${NAME} region, ${label}, conflict`);
+    },
+  );
+
   test("an empty cell has no icon", () => {
     expect(icon(renderCell())).toBeNull();
   });

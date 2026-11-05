@@ -111,7 +111,7 @@ export const CellView = memo(function CellView({
   return (
     <button
       type="button"
-      aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}`}
+      aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}${isConflict ? ", conflict" : ""}`}
       data-conflict={isConflict ? "true" : undefined}
       className={className}
       data-holding={hold.holding ? "true" : undefined}
