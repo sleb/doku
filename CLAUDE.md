@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Doku is a Tauri 2 + React + TypeScript puzzle game. Milestones 1 to 6 (engine, board, mobile, full app, generator, polish) are implemented; the on-device and VoiceOver passes for polish are still to be run. `DESIGN.md` §12 has the milestone list and status.
+Doku is a Tauri 2 + React + TypeScript puzzle game. `DESIGN.md` §12 has the milestone list and status.
 
 ## Where things are documented
 
