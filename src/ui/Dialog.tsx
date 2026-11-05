@@ -80,7 +80,7 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex flex-col items-center gap-4 rounded-lg bg-white p-6 shadow-lg"
+        className="flex max-h-full min-h-0 flex-col items-center gap-4 rounded-lg bg-white p-6 shadow-lg"
       >
         <h2 id={titleId} className="text-xl font-semibold">
           {title}

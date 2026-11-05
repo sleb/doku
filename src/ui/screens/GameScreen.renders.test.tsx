@@ -20,7 +20,7 @@ import { GameScreen } from "./GameScreen";
 
 beforeEach(() => {
   gameStore.setState(idleState, false);
-  settingsStore.setState({ ...defaultSettings, seenRules: true });
+  settingsStore.setState({ ...defaultSettings, seenTutorial: true });
 });
 
 test("a clock tick does not re-render the board", () => {

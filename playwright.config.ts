@@ -16,7 +16,7 @@ export default defineConfig({
           localStorage: [
             {
               name: "doku:settings",
-              value: JSON.stringify({ haptics: true, seenRules: true }),
+              value: JSON.stringify({ haptics: true, seenTutorial: true }),
             },
           ],
         },
