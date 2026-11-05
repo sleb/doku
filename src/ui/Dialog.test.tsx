@@ -87,3 +87,14 @@ test("does not leave a pre-inert sibling un-inert", () => {
   expect(pre).toHaveAttribute("inert");
   host.remove();
 });
+
+test("children scroll inside a capped panel", () => {
+  render(<Page />);
+  const panel = screen.getByRole("dialog");
+  expect(panel).toHaveClass("max-h-full", "min-h-0");
+  const scroller = screen.getByTestId("dialog-body");
+  expect(scroller).toHaveClass("flex-1", "min-h-0", "overflow-y-auto");
+  expect(scroller).toContainElement(
+    screen.getByRole("button", { name: "first" }),
+  );
+});

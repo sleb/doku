@@ -149,7 +149,7 @@ test("Tap places faces switch maps to inputMode", async () => {
 
 test("the body scrolls inside the safe area", () => {
   open();
-  const body = screen.getByTestId("settings-body");
+  const body = screen.getByTestId("dialog-body");
   expect(body).toHaveClass("overflow-y-auto");
   expect(body).toHaveClass("flex-1", "min-h-0");
   expect(screen.getByRole("dialog")).toHaveClass("max-h-full", "min-h-0");
