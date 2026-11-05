@@ -121,8 +121,11 @@ describe("solutions", () => {
     expect(found[0]).not.toEqual(found[1]);
     for (const placement of found) {
       expect(
-        isSolved(toBoard(multiSolutionLevel7, placement), multiSolutionLevel7),
-      ).toBe(true);
+        findConflicts(
+          toBoard(multiSolutionLevel7, placement),
+          multiSolutionLevel7,
+        ),
+      ).toEqual([]);
     }
   });
 
