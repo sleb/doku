@@ -24,12 +24,12 @@ The 30 pt cells cannot be fixed by layout alone (the grid is N columns wide on a
 
 ## 3. Input: unchanged
 
-Mobile keeps the desktop gesture exactly: tap toggles a ✕, press and hold places a face (250 ms of nothing, then the 500 ms border glow, `docs/BOARD_DESIGN.md` §4.3). There is no tool toggle and no mobile-specific gesture. `useHold`, `CellView` and the glow are not changed by this milestone except for tuning found on a device (§10 question 2).
+Mobile keeps the desktop gesture exactly: tap toggles a ✕, press and hold places a face (250 ms of nothing, then the 500 ms glow, now a finger-sized ring around the cell (`docs/POLISH_DESIGN.md` §6.5), `docs/BOARD_DESIGN.md` §4.3). There is no tool toggle and no mobile-specific gesture. `useHold`, `CellView` and the glow are not changed by this milestone except for tuning found on a device (§10 question 2).
 
 The work here is only verification, since #55 was never run on a touch device:
 - Touch capture release, so drag-off cancels the hold.
 - No text selection or callout on long-press (`.cell` rules).
-- The glow stays visible beside a fingertip and paints correctly in WKWebView (the stroke/`pathLength` concern in `BOARD_DESIGN.md` §4.3).
+- The glow stays visible beside a fingertip (the ring is about 3 cells wide, so the fingertip no longer hides it; physical-device check and `HOLD_RAMP` haptic tuning on 7×7 and 11×11 still to do) and paints correctly in WKWebView (the stroke/`pathLength` concern in `BOARD_DESIGN.md` §4.3).
 - The hold does not conflict with Android's long-press behaviors.
 
 Issue #57 (click-only placement for screen readers and switch control) is an accessibility issue, independent of mobile, and is not part of this milestone.

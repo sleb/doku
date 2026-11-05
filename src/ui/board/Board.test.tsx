@@ -9,6 +9,7 @@ import {
 import { holdCell } from "../../test/hold";
 import { Board } from "./Board";
 import { cellGeometry } from "./geometry";
+import { HOLD_DELAY_MS, HOLD_TOTAL_MS } from "./hold";
 import { REGION_NAMES } from "./palette";
 
 const n = level.size;
@@ -371,6 +372,81 @@ describe("Board", () => {
       expect(activeIndex()).toBe(2);
       await userEvent.keyboard("{ArrowRight}");
       expect(activeIndex()).toBe(3);
+    });
+  });
+
+  describe("hold glow", () => {
+    const setup = (onHoldGlow = vi.fn()) => {
+      render(
+        <Board
+          level={level}
+          board={emptyBoard(level)}
+          wrong={none}
+          conflicts={none}
+          disabled={false}
+          onHoldGlow={onHoldGlow}
+          {...handlers()}
+        />,
+      );
+      const cell = (r: number, c: number) =>
+        screen.getByRole("button", {
+          name: new RegExp(`^Row ${r + 1}, column ${c + 1},`),
+        });
+      return { onHoldGlow, cell };
+    };
+    const glows = () => document.querySelectorAll("[data-hold-glow]");
+
+    test("one glow, centred on the held cell, only while holding", () => {
+      const { cell, onHoldGlow } = setup();
+      vi.useFakeTimers();
+      try {
+        expect(glows()).toHaveLength(0);
+        fireEvent.pointerDown(cell(2, 4), { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS - 1));
+        expect(glows()).toHaveLength(0);
+        act(() => vi.advanceTimersByTime(1));
+        expect(glows()).toHaveLength(1);
+        const g = glows()[0] as HTMLElement;
+        expect(g.style.left).toBe("calc(var(--cell) * 4.5)");
+        expect(g.style.top).toBe("calc(var(--cell) * 2.5)");
+        expect(onHoldGlow).toHaveBeenLastCalledWith(2 * n + 4);
+        act(() => vi.advanceTimersByTime(HOLD_TOTAL_MS));
+        expect(glows()).toHaveLength(0);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(null);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test("a plain click never shows the glow", async () => {
+      const { cell, onHoldGlow } = setup();
+      await userEvent.click(cell(1, 1));
+      expect(glows()).toHaveLength(0);
+      expect(onHoldGlow).not.toHaveBeenCalled();
+    });
+
+    test("a released cell does not clear another cell's glow", () => {
+      const { cell, onHoldGlow } = setup();
+      vi.useFakeTimers();
+      try {
+        const a = cell(0, 0);
+        const b = cell(3, 3);
+        fireEvent.pointerDown(a, { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
+        fireEvent.pointerDown(b, { button: 0, pointerId: 2 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
+        expect(onHoldGlow).toHaveBeenLastCalledWith(3 * n + 3);
+        onHoldGlow.mockClear();
+        fireEvent.pointerUp(a, { button: 0, pointerId: 1 });
+        expect(glows()).toHaveLength(1);
+        expect(onHoldGlow).not.toHaveBeenCalled();
+        fireEvent.pointerUp(b, { button: 0, pointerId: 2 });
+        expect(glows()).toHaveLength(0);
+        expect(onHoldGlow).toHaveBeenCalledTimes(1);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(null);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

@@ -319,22 +319,82 @@ describe("CellView", () => {
       expect(holding(b)).toBeUndefined();
     });
 
-    test("data-holding and the glow track the hold lifecycle", () => {
-      const b = renderCell();
+    test("data-holding and onGlow track the hold lifecycle", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
       expect(holding(b)).toBeUndefined();
-      expect(b.querySelector("[data-hold-glow]")).toBeNull();
       down(b);
       expect(holding(b)).toBeUndefined();
+      expect(onGlow).not.toHaveBeenCalled();
       tick(HOLD_DELAY_MS);
       expect(holding(b)).toBe("true");
-      const glow = b.querySelector("[data-hold-glow]") as SVGElement;
-      expect(glow.getAttribute("class")).toContain("pointer-events-none");
-      expect(glow.querySelector("rect")?.style.animationDuration).toBe(
-        `${HOLD_MS}ms`,
-      );
+      expect(onGlow).toHaveBeenLastCalledWith(17);
+      expect(b.querySelector("[data-hold-glow]")).toBeNull();
       tick(HOLD_MS);
       expect(holding(b)).toBeUndefined();
-      expect(b.querySelector("[data-hold-glow]")).toBeNull();
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test.each([
+      ["release", (b: HTMLElement) => fireEvent.pointerUp(b)],
+      ["drag-off", (b: HTMLElement) => fireEvent.pointerLeave(b)],
+      ["blur", (b: HTMLElement) => fireEvent.blur(b)],
+    ])("onGlow(null) on %s", (_n, end) => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
+      down(b);
+      tick(HOLD_DELAY_MS);
+      end(b);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test("onGlow(null) when disabled mid-hold and on unmount", () => {
+      const onGlow = vi.fn();
+      const props = {
+        index: 17,
+        row: 1,
+        col: 2,
+        region: REGION,
+        state: Cell.Empty,
+        isWrong: false,
+        isConflict: false,
+        onToggleMark: vi.fn(),
+        onPlaceFace: vi.fn(),
+        onGlow,
+      };
+      const { rerender, unmount } = render(
+        <CellView {...props} disabled={false} />,
+      );
+      const b = screen.getByRole("button");
+      down(b);
+      tick(HOLD_DELAY_MS);
+      rerender(<CellView {...props} disabled={true} />);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+      rerender(<CellView {...props} disabled={false} />);
+      down(b);
+      tick(HOLD_DELAY_MS);
+      expect(onGlow).toHaveBeenLastCalledWith(17);
+      unmount();
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test("a keyboard hold reports the glow too", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
+      fireEvent.keyDown(b, { key: " " });
+      tick(HOLD_DELAY_MS);
+      expect(onGlow).toHaveBeenLastCalledWith(17);
+    });
+
+    test("a click or tap never reports a glow", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow });
+      down(b);
+      tick(HOLD_DELAY_MS - 1);
+      fireEvent.pointerUp(b);
+      fireEvent.click(b, { detail: 1 });
+      tick(5000);
+      expect(onGlow).not.toHaveBeenCalled();
     });
 
     test("no glow before the delay; a short click never shows it", () => {
@@ -342,7 +402,6 @@ describe("CellView", () => {
       down(b);
       tick(HOLD_DELAY_MS - 1);
       expect(holding(b)).toBeUndefined();
-      expect(b.querySelector("[data-hold-glow]")).toBeNull();
       fireEvent.pointerUp(b);
       fireEvent.click(b, { detail: 1 });
       expect(b.onToggleMark).toHaveBeenCalledExactlyOnceWith(17);

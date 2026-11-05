@@ -22,6 +22,7 @@ import {
   WIN_DELAY_MS,
 } from "./useDelayedStatus";
 import { useFeedback } from "./useFeedback";
+import { useHoldRamp } from "./useHoldRamp";
 import { useShortcuts } from "./useShortcuts";
 
 export function GameScreen() {
@@ -48,6 +49,7 @@ export function GameScreen() {
   useAutoPause();
   useShortcuts({ holdOwner });
   useFeedback();
+  const onHoldGlow = useHoldRamp();
 
   // Back from a pause, hand focus to the board's active cell if it fell to the
   // page (the board is hidden while paused, so it cannot hold focus then).
@@ -109,6 +111,7 @@ export function GameScreen() {
               onToggleMark={toggleMark}
               onPlaceFace={placeFace}
               holdOwner={holdOwner}
+              onHoldGlow={onHoldGlow}
             />
           </div>
         }
