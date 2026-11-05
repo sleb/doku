@@ -121,11 +121,23 @@ describe("useShortcuts", () => {
       expect(settingsStore.getState().inputMode).toBe("mark");
     });
 
-    test("ignores Shift+F and Caps-Lock capital F", () => {
+    test("ignores Shift+F but works with Caps Lock (capital F)", () => {
       renderHook(() => useShortcuts());
       press({ key: "F", shiftKey: true });
-      press({ key: "F" });
       expect(settingsStore.getState().inputMode).toBe("mark");
+      press({ key: "F" });
+      expect(settingsStore.getState().inputMode).toBe("face");
+    });
+
+    test.each([
+      ["pause: false", { pause: false }],
+      ["only: []", { only: [] }],
+      ["only: undo", { only: ["undo"] as const }],
+    ])("is gated like the other shortcuts (%s)", (_, opts) => {
+      renderHook(() => useShortcuts(opts));
+      const e = press({ key: "f" });
+      expect(settingsStore.getState().inputMode).toBe("mark");
+      expect(e.defaultPrevented).toBe(false);
     });
 
     test("ignores modified f, repeats, and non-playing states", () => {

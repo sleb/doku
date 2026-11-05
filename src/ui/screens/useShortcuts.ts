@@ -16,7 +16,8 @@ export interface ShortcutOptions {
 
 /**
  * Window shortcuts, active only while playing: z / Ctrl-or-Cmd+Z undo;
- * Shift+Z / Ctrl-or-Cmd+Shift+Z / Ctrl+Y redo; h hint; f toggles whether a tap places faces; Esc pause. Undo, redo
+ * Shift+Z / Ctrl-or-Cmd+Shift+Z / Ctrl+Y redo; h hint; f (any case, no Shift) toggles whether a tap places faces, only when
+ * pause and all of undo, redo and hint are enabled; Esc pause. Undo, redo
  * and hint do nothing during a hold; Esc still pauses.
  */
 export function useShortcuts({
@@ -27,13 +28,19 @@ export function useShortcuts({
 }: ShortcutOptions = {}): void {
   // Compared by content, so an inline array does not rebind the listener.
   const allowed = only.join();
+  const fullControls =
+    pause &&
+    ["undo", "redo", "hint"].every((c) => allowed.split(",").includes(c));
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // A dialog that already handled the key (Esc closing it) owns it.
       if (e.defaultPrevented || e.repeat || e.altKey) return;
       if (store.getState().status !== "playing") return;
       const key = e.key.toLowerCase();
-      if (e.key === "f" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      if (key === "f" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        // Part of the full control set: a restricted screen (the tutorial)
+        // must not change the mode behind its back.
+        if (!fullControls) return;
         e.preventDefault();
         const { inputMode, set } = settingsStore.getState();
         set({ inputMode: inputMode === "face" ? "mark" : "face" });
@@ -53,5 +60,5 @@ export function useShortcuts({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [holdOwner, store, pause, allowed]);
+  }, [holdOwner, store, pause, allowed, fullControls]);
 }
