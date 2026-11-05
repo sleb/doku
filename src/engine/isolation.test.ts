@@ -19,6 +19,23 @@ function findForbiddenImports(source: string): string[] {
   return found;
 }
 
+function findNondeterminism(source: string): string[] {
+  return [...source.matchAll(/\bMath\.random\b|\bDate\./g)].map((m) => m[0]);
+}
+
+describe("findNondeterminism", () => {
+  it.each([
+    ["const x = Math.random();", ["Math.random"]],
+    ["const t = Date.now();", ["Date."]],
+  ])("flags %j", (source, expected) => {
+    expect(findNondeterminism(source)).toEqual(expected);
+  });
+
+  it("allows deterministic code", () => {
+    expect(findNondeterminism("const x = Math.floor(1.5);")).toEqual([]);
+  });
+});
+
 describe("findForbiddenImports", () => {
   it.each([
     [`import { x } from "../ui/x";`, "../ui/x"],
@@ -67,6 +84,15 @@ describe("engine isolation", () => {
       .filter(([file]) => file !== "./isolation.test.ts")
       .flatMap(([file, src]) =>
         findForbiddenImports(src).map((spec) => `${file} imports ${spec}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
+  it("uses no Math.random or Date in engine sources", () => {
+    const offenders = Object.entries(sources)
+      .filter(([file]) => !/\.test\.[a-z]+$/.test(file))
+      .flatMap(([file, src]) =>
+        findNondeterminism(src).map((tok) => `${file} uses ${tok}`),
       );
     expect(offenders).toEqual([]);
   });

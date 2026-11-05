@@ -79,7 +79,7 @@ engine/
   difficulty.ts   rate()
   hints.ts        nextHint()
   generator.ts    generate()
-  seed.ts         Rng, hashSeed(), shuffle()
+  seed.ts         makeRng(), Rng, hashSeed()
   index.ts        public API (only what the rest of the app may import)
 ```
 
@@ -236,7 +236,7 @@ Pipeline for each attempt (all randomness from `Rng` seeded by `hashSeed(seed + 
 
 Returns `null` after `maxAttempts` (the caller treats this as "combination not available" and hides it from level select). The same `generate` call with the same options always returns the same level.
 
-`seed.ts`: `mulberry32` PRNG behind a small `Rng` interface (`next()`, `int(n)`, `shuffle(arr)`), and `hashSeed(string) → uint32` (xmur3 or FNV-1a).
+`seed.ts`: `makeRng(seed: string)` returns an `Rng` (`next()`, `int(n)`, `shuffle(arr)`, `pick(arr)`) backed by mulberry32 seeded from `hashSeed(string) → uint32` (FNV-1a over UTF-16 code units, then murmur3 fmix32). Only `Math.imul` and `>>> 0`, so streams are identical on every runtime; `makeRng("doku")` is pinned by a frozen vector. `int(n)` is `floor(next() * n)` and throws `RangeError` unless `n` is an integer >= 1. `shuffle` is Fisher-Yates on a copy, drawing `int(i + 1)` for `i` from `len-1` down to 1 (the draw order is contract: generator goldens depend on it). `pick([])` throws `RangeError`. `isolation.test.ts` fails on `Math.random` or `Date.` in engine sources.
 
 **Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The app can later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only an `AbortSignal` for cancellation.
 
