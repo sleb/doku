@@ -42,6 +42,8 @@ function build(shape: string | null): CSSProperties {
   return {
     backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
     // Tiles scale with the board.
+    // Anchor to the border box so tiles line up across the 1px grid borders.
+    backgroundOrigin: "border-box",
     backgroundSize: "calc(var(--cell) / 4) calc(var(--cell) / 4)",
   };
 }

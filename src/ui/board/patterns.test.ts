@@ -19,7 +19,9 @@ describe("patterns", () => {
 
   test("every other region has an inline SVG background", () => {
     for (const r of REGIONS.slice(1)) {
-      const { backgroundImage, backgroundSize } = patternStyle(r);
+      const { backgroundImage, backgroundSize, backgroundOrigin } =
+        patternStyle(r);
+      expect(backgroundOrigin).toBe("border-box");
       expect(backgroundImage, PATTERN_NAMES[r]).toMatch(
         /^url\("data:image\/svg\+xml,/,
       );

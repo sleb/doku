@@ -11,7 +11,7 @@ import { Cell } from "../../engine";
 import { holdCell } from "../../test/hold";
 import { CellView } from "./Cell";
 import { HOLD_DELAY_MS, HOLD_MS, HOLD_TOTAL_MS } from "./hold";
-import { GLYPH_COLOR, REGION_NAMES, regionClass, WRONG_COLOR } from "./palette";
+import { GLYPH_COLOR, regionClass, WRONG_COLOR } from "./palette";
 import { patternStyle } from "./patterns";
 
 type Props = Parameters<typeof CellView>[0];
@@ -40,14 +40,14 @@ function renderCell(over: Partial<Props> = {}) {
 }
 
 const REGION = 5;
-const NAME = REGION_NAMES[REGION];
+const NAME = `region ${REGION + 1}`;
 
 const icon = (b: HTMLElement) => b.querySelector("[data-icon]");
 
 describe("CellView", () => {
   test("labels each state with row, column, region and state", () => {
     expect(renderCell().getAttribute("aria-label")).toBe(
-      `Row 2, column 3, ${NAME} region, empty`,
+      `Row 2, column 3, ${NAME}, empty`,
     );
   });
 
@@ -58,7 +58,7 @@ describe("CellView", () => {
   ] as const)("%j shows %s with the %s icon", (over, label, kind) => {
     const b = renderCell(over);
     expect(b.getAttribute("aria-label")).toBe(
-      `Row 2, column 3, ${NAME} region, ${label}`,
+      `Row 2, column 3, ${NAME}, ${label}`,
     );
     expect(icon(b)?.getAttribute("data-icon")).toBe(kind);
   });
@@ -71,7 +71,7 @@ describe("CellView", () => {
     (state, label) => {
       expect(
         renderCell({ state, isConflict: true }).getAttribute("aria-label"),
-      ).toBe(`Row 2, column 3, ${NAME} region, ${label}, conflict`);
+      ).toBe(`Row 2, column 3, ${NAME}, ${label}, conflict`);
     },
   );
 
@@ -414,6 +414,52 @@ describe("CellView", () => {
       expect(onGlow).toHaveBeenLastCalledWith(17);
       unmount();
       expect(onGlow).toHaveBeenLastCalledWith(null, 17);
+    });
+
+    test("a cell whose hold is not owned never starts a hold or glow", () => {
+      const onGlow = vi.fn();
+      const b = renderCell({ onGlow, holdOwner: { current: 3 } });
+      down(b);
+      tick(HOLD_DELAY_MS);
+      expect(holding(b)).toBeUndefined();
+      expect(onGlow).not.toHaveBeenCalled();
+      tick(HOLD_MS * 2);
+      expect(onGlow).not.toHaveBeenCalled();
+      expect(b.onPlaceFace).not.toHaveBeenCalled();
+    });
+
+    test("an overlapping second hold leaves the owner's glow untouched", () => {
+      const holdOwner = { current: null as number | null };
+      const onGlowA = vi.fn();
+      const onGlowB = vi.fn();
+      const base = {
+        row: 0,
+        col: 0,
+        region: 0,
+        state: Cell.Empty,
+        isWrong: false,
+        isConflict: false,
+        disabled: false,
+        onToggleMark: vi.fn(),
+        onPlaceFace: vi.fn(),
+        holdOwner,
+      };
+      render(
+        <>
+          <CellView {...base} index={1} onGlow={onGlowA} />
+          <CellView {...base} index={2} onGlow={onGlowB} />
+        </>,
+      );
+      const [a, b] = screen.getAllByRole("button");
+      down(a);
+      tick(100);
+      down(b);
+      tick(HOLD_DELAY_MS - 100);
+      expect(onGlowA).toHaveBeenLastCalledWith(1);
+      tick(HOLD_DELAY_MS);
+      expect(onGlowB).not.toHaveBeenCalled();
+      expect(onGlowA).toHaveBeenCalledTimes(1);
+      expect(holdOwner.current).toBe(1);
     });
 
     test("a keyboard hold reports the glow too", () => {
