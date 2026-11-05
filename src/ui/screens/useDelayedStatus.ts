@@ -7,7 +7,24 @@ export const WIN_DELAY_MS = 900;
 /** How long the final wrong-tap effect plays before the result modal opens. */
 export const LOSE_DELAY_MS = 450;
 
-const MODIFIERS = new Set(["Shift", "Control", "Alt", "Meta"]);
+/** Keys that never skip: modifiers, and focus/dismiss keys. */
+const NO_SKIP = new Set(["Shift", "Control", "Alt", "Meta", "Tab", "Escape"]);
+/** Keys that activate a focused button. */
+const ACTIVATE = new Set([" ", "Enter"]);
+
+/**
+ * The skip key is pressed while the result modal's button is about to take
+ * focus: swallow its keyup (which would click that button) once released.
+ */
+function swallowKeyUp(key: string) {
+  const onUp = (e: KeyboardEvent) => {
+    if (e.key !== key) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.removeEventListener("keyup", onUp, true);
+  };
+  window.addEventListener("keyup", onUp, true);
+}
 
 /**
  * The status to display: a `won`/`lost` is held back (the previous status is
@@ -32,7 +49,12 @@ export function useDelayedStatus(
     const release = () => setShown(status);
     const timer = setTimeout(release, delay);
     const onKey = (e: KeyboardEvent) => {
-      if (!e.repeat && !MODIFIERS.has(e.key)) release();
+      if (e.repeat || NO_SKIP.has(e.key)) return;
+      if (ACTIVATE.has(e.key)) {
+        e.preventDefault();
+        swallowKeyUp(e.key);
+      }
+      release();
     };
     window.addEventListener("keydown", onKey, true);
     return () => {

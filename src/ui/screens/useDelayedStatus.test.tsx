@@ -95,6 +95,36 @@ describe("useDelayedStatus", () => {
     expect(result.current.status).toBe("won");
   });
 
+  test.each(["Tab", "Escape"])("%s does not skip", (key) => {
+    const { result, rerender } = setup("playing");
+    rerender({ s: "won" });
+    act(() => {
+      fireEvent.keyDown(window, { key });
+    });
+    expect(result.current.pending).toBe(true);
+  });
+
+  test.each([" ", "Enter"])(
+    "skipping with %j prevents the keydown and swallows its keyup once",
+    (key) => {
+      const { result, rerender } = setup("playing");
+      rerender({ s: "won" });
+      let notPrevented = true;
+      act(() => {
+        notPrevented = fireEvent.keyDown(window, { key });
+      });
+      expect(notPrevented).toBe(false);
+      expect(result.current.status).toBe("won");
+      const seen = vi.fn();
+      document.body.addEventListener("keyup", seen);
+      expect(fireEvent.keyUp(document.body, { key })).toBe(false);
+      expect(seen).not.toHaveBeenCalled();
+      expect(fireEvent.keyUp(document.body, { key })).toBe(true);
+      expect(seen).toHaveBeenCalledTimes(1);
+      document.body.removeEventListener("keyup", seen);
+    },
+  );
+
   test.each(["Shift", "Control", "Alt", "Meta"])(
     "a lone %s does not skip",
     (key) => {
