@@ -1,4 +1,4 @@
-import { memo, type RefObject } from "react";
+import { memo, type RefObject, useRef } from "react";
 import { Cell } from "../../engine";
 import { HOLD_MS } from "./hold";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
@@ -20,6 +20,10 @@ export interface CellProps {
   onPlaceFace: (index: number) => void;
   /** Shared by a board's cells: the index of the cell being held, if any. Other cells ignore marks meanwhile. */
   holdOwner?: RefObject<number | null>;
+  /** One-shot effect for the outcome that just hit this cell. Primitives only, so other cells stay memoised. */
+  fx?: "place" | "wrong";
+  /** Changes with every outcome; keys the effect so a repeat restarts it. */
+  fxSeq?: number;
 }
 
 function stateLabel(state: Cell, isWrong: boolean): string {
@@ -43,6 +47,8 @@ export const CellView = memo(function CellView({
   onToggleMark,
   onPlaceFace,
   holdOwner,
+  fx,
+  fxSeq,
 }: CellProps) {
   const hold = useHold(
     () => onPlaceFace(index),
@@ -59,6 +65,9 @@ export const CellView = memo(function CellView({
     const owner = holdOwner?.current;
     if (owner == null || owner === index) onToggleMark(index);
   };
+  // Keep the last seq so the wrapper (and icon) keep their identity when fx clears.
+  const seqRef = useRef(fxSeq);
+  if (fx) seqRef.current = fxSeq;
   const label = stateLabel(state, isWrong);
   const className = [
     "cell relative touch-none select-none flex size-full items-center justify-center border-neutral-800",
@@ -71,6 +80,14 @@ export const CellView = memo(function CellView({
   ]
     .filter(Boolean)
     .join(" ");
+  const icon =
+    label === "wrong" ? (
+      <WrongIcon />
+    ) : state === Cell.Mark ? (
+      <MarkIcon />
+    ) : state === Cell.Face ? (
+      <FaceIcon />
+    ) : null;
   return (
     <button
       type="button"
@@ -143,13 +160,21 @@ export const CellView = memo(function CellView({
           />
         </svg>
       ) : null}
-      {label === "wrong" ? (
-        <WrongIcon />
-      ) : state === Cell.Mark ? (
-        <MarkIcon />
-      ) : state === Cell.Face ? (
-        <FaceIcon />
+      {fx === "place" ? (
+        <span
+          key={`ring${fxSeq}`}
+          aria-hidden="true"
+          data-fx-ring
+          className="fx-ring pointer-events-none absolute inset-0 text-neutral-900"
+        />
       ) : null}
+      <span
+        key={seqRef.current}
+        data-fx={fx}
+        className="fx-icon flex size-full items-center justify-center"
+      >
+        {icon}
+      </span>
     </button>
   );
 });

@@ -496,3 +496,72 @@ describe("CellView", () => {
     });
   });
 });
+
+describe("CellView fx", () => {
+  const wrap = (b: HTMLElement) => b.querySelector("[data-fx]");
+
+  test("no fx wrapper without an fx prop", () => {
+    expect(wrap(renderCell({ state: Cell.Face }))).toBeNull();
+  });
+
+  test.each(["place", "wrong"] as const)("%s marks the icon wrapper", (fx) => {
+    const b = renderCell({
+      state: fx === "place" ? Cell.Face : Cell.Mark,
+      isWrong: fx === "wrong",
+      fx,
+      fxSeq: 1,
+    });
+    const w = wrap(b);
+    expect(w?.getAttribute("data-fx")).toBe(fx);
+    expect(w?.querySelector("[data-icon]")).not.toBeNull();
+    expect(b.querySelector("[data-fx-ring]") !== null).toBe(fx === "place");
+  });
+
+  test("the icon keeps its DOM node when fx clears", () => {
+    const props = {
+      index: 17,
+      row: 1,
+      col: 2,
+      region: REGION,
+      state: Cell.Face,
+      isWrong: false,
+      isConflict: false,
+      disabled: false,
+      onToggleMark: vi.fn(),
+      onPlaceFace: vi.fn(),
+    } as const;
+    const { container, rerender } = render(
+      <CellView {...props} fx="place" fxSeq={1} />,
+    );
+    const icon = container.querySelector("[data-icon]");
+    rerender(<CellView {...props} />);
+    expect(container.querySelector("[data-icon]")).toBe(icon);
+  });
+
+  test("the shake is not on the button", () => {
+    const b = renderCell({ state: Cell.Face, fx: "place", fxSeq: 1 });
+    expect(b.hasAttribute("data-fx")).toBe(false);
+  });
+
+  test("a new seq remounts the wrapper so the effect restarts", () => {
+    const props = {
+      index: 17,
+      row: 1,
+      col: 2,
+      region: REGION,
+      state: Cell.Face,
+      isWrong: false,
+      isConflict: false,
+      disabled: false,
+      onToggleMark: vi.fn(),
+      onPlaceFace: vi.fn(),
+    } as const;
+    const { container, rerender } = render(
+      <CellView {...props} fx="place" fxSeq={1} />,
+    );
+    const first = wrap(container as HTMLElement);
+    rerender(<CellView {...props} fx="place" fxSeq={2} />);
+    expect(wrap(container as HTMLElement)).not.toBe(first);
+    expect(container.querySelectorAll("[data-fx]")).toHaveLength(1);
+  });
+});

@@ -1,12 +1,13 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { haptics } from "../../platform/haptics";
 import { sound } from "../../platform/sound";
 import { idleState } from "../../store/game";
 import { createGameStore, gameStore } from "../../store/gameStore";
 import { settingsStore } from "../../store/settings";
-import { useFeedback } from "./useFeedback";
+import { fxStore } from "../fx/fxStore";
+import { FX_MS, useFeedback } from "./useFeedback";
 
 vi.mock("../../platform/haptics", () => ({
   haptics: { play: vi.fn().mockResolvedValue(undefined) },
@@ -29,6 +30,7 @@ const wrongCell = Array.from({ length: n * n }, (_, i) => i).find(
 const play = () => vi.mocked(haptics.play);
 
 beforeEach(() => {
+  fxStore.setState({ last: null, seq: 0 }, false);
   play().mockClear();
   for (const f of Object.values(sound)) vi.mocked(f).mockClear();
   vi.mocked(sound.unlock).mockResolvedValue(false);
@@ -147,6 +149,19 @@ describe("useFeedback sound", () => {
     expect(sound.unlock).toHaveBeenCalledTimes(1);
   });
 
+  test("unlock runs before a bubble-phase handler below the window", () => {
+    renderHook(() => useFeedback());
+    const el = document.createElement("button");
+    document.body.append(el);
+    let unlocked = -1;
+    el.addEventListener("click", () => {
+      unlocked = vi.mocked(sound.unlock).mock.calls.length;
+    });
+    el.click();
+    el.remove();
+    expect(unlocked).toBe(1);
+  });
+
   test("pointerdown alone does not unlock", () => {
     renderHook(() => useFeedback());
     window.dispatchEvent(new Event("pointerdown"));
@@ -201,5 +216,63 @@ describe("useFeedback sound", () => {
     setVisibility("hidden");
     window.dispatchEvent(new Event("pagehide"));
     expect(sound.suspend).not.toHaveBeenCalled();
+  });
+});
+
+describe("useFeedback fx", () => {
+  afterEach(() => vi.useRealTimers());
+
+  test("sets fx for every outcome, independent of haptics and sound", () => {
+    settingsStore.getState().set({ haptics: false, sound: false });
+    renderHook(() => useFeedback());
+    act(() => gameStore.getState().placeFace(solution[0]));
+    expect(fxStore.getState().last).toMatchObject({
+      kind: "place",
+      cell: solution[0],
+    });
+    act(() => gameStore.getState().placeFace(wrongCell));
+    expect(fxStore.getState().last).toMatchObject({
+      kind: "wrong",
+      cell: wrongCell,
+      hearts: 2,
+    });
+  });
+
+  test("a non-outcome change does not touch fx", () => {
+    renderHook(() => useFeedback());
+    act(() => gameStore.getState().placeFace(solution[0]));
+    const seq = fxStore.getState().last?.seq;
+    act(() => gameStore.getState().toggleMark(wrongCell));
+    expect(fxStore.getState().last?.seq).toBe(seq);
+  });
+
+  test("clears on level start and restart", () => {
+    renderHook(() => useFeedback());
+    act(() => gameStore.getState().placeFace(solution[0]));
+    act(() => gameStore.getState().restart());
+    expect(fxStore.getState().last).toBeNull();
+    act(() => gameStore.getState().placeFace(solution[0]));
+    act(() => gameStore.getState().startLevel(level));
+    expect(fxStore.getState().last).toBeNull();
+  });
+
+  test("clears itself after FX_MS, restarted by each outcome", () => {
+    vi.useFakeTimers();
+    renderHook(() => useFeedback());
+    act(() => gameStore.getState().placeFace(solution[0]));
+    act(() => vi.advanceTimersByTime(FX_MS - 50));
+    act(() => gameStore.getState().placeFace(solution[1]));
+    act(() => vi.advanceTimersByTime(FX_MS - 50));
+    expect(fxStore.getState().last).not.toBeNull();
+    act(() => vi.advanceTimersByTime(50));
+    expect(fxStore.getState().last).toBeNull();
+  });
+
+  test("unmount cancels the timer", () => {
+    vi.useFakeTimers();
+    const { unmount } = renderHook(() => useFeedback());
+    act(() => gameStore.getState().placeFace(solution[0]));
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

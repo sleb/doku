@@ -154,11 +154,11 @@ Master gain 0.18 so default is polite; all envelopes ramp from/to 0 over ≥ 5 m
 
 ```ts
 // src/ui/fx/fxStore.ts   (vanilla zustand, not persisted)
-interface Fx { seq: number; kind: OutcomeKind; cell?: number }
+interface Fx { seq: number; kind: OutcomeKind; cell?: number; hearts: number }
 fxStore: { last: Fx | null; set(o: Outcome): void; clear(): void }
 ```
 
-`Board` selects `last` and passes each `CellView` a primitive `fx?: "place" | "wrong"` plus `fxSeq` only for the one matching `cell`, so the other `N²−1` memoized cells keep identical props and do not re-render (the `Cell` contract in `DESIGN.md` §7). `Cell` stays presentational. The seq is the React `key` of the icon wrapper, so repeating the same effect on the same cell restarts it.
+`Board` selects `last` and passes each `CellView` a primitive `fx?: "place" | "wrong"` plus `fxSeq` only for the one matching `cell`, so the other `N²−1` memoized cells keep identical props and do not re-render (the `Cell` contract in `DESIGN.md` §7). `Cell` stays presentational. The seq is the React `key` of the icon wrapper, so repeating the same effect on the same cell restarts it. `hearts` is the count after the outcome, so `Hearts` pops the icon at that index (narrow `fxStore` selector; `TopBar` does not re-render). `useFeedback` sets `fxStore` for every outcome regardless of the haptics and sound settings, and clears it on level change/restart/restore, on unmount, and `FX_MS = 350` ms after the last outcome (one timer, restarted by each outcome), so remounting the board (Pause/Resume) can never replay an effect. A `lose` with a cell plays `wrong`; `win` affects no cell (§6.3).
 
 | Effect | Visual | Duration |
 |---|---|---|
@@ -166,7 +166,7 @@ fxStore: { last: Fx | null; set(o: Outcome): void; clear(): void }
 | `wrong` | Cell shakes ±3 px (three swings) while the red ✕ fades in; the **Hearts** icon that just emptied does a brief scale-pop then settles to the existing empty style | 280 ms |
 | restore / level start | none (`clear()` on level change and restore) | n/a |
 
-A restored game must not replay animations for faces already on the board: effects are keyed to *outcomes*, not to a face existing, so the icon has no mount animation of its own.
+A restored game must not replay animations for faces already on the board: effects are keyed to *outcomes*, not to a face existing, so the icon has no mount animation of its own: `Cell` wraps the icon in the keyed `data-fx` wrapper only while `fx` is set. Dialogs fade in with a 120 ms `dialog-in` keyframe (class only; focus, `inert` and input are untouched). Reduced motion turns the cell effect into a ~150 ms opacity fade and removes the ring, heart pop and dialog rise (asserted by `src/app/motion.test.ts`).
 
 ### 6.3 Win and loss
 

@@ -98,3 +98,16 @@ test("children scroll inside a capped panel", () => {
     screen.getByRole("button", { name: "first" }),
   );
 });
+
+test("animates in with a class only: focus and input are unaffected", async () => {
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  render(<Page onClose={onClose} />);
+  const dialog = screen.getByRole("dialog", { name: "Hello" });
+  expect(dialog.parentElement).toHaveClass("dialog-backdrop");
+  expect(dialog).toHaveClass("dialog-in");
+  expect(dialog.parentElement).not.toHaveAttribute("inert");
+  expect(screen.getByRole("button", { name: "first" })).toHaveFocus();
+  await user.keyboard("{Escape}");
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
