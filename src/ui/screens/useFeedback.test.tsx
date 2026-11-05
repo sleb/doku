@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { uniqueLevel7 as level } from "../../engine/__fixtures__/levels";
 import { haptics } from "../../platform/haptics";
 import { sound } from "../../platform/sound";
-import { idleState } from "../../store/game";
+import {
+  idleState,
+  pause as pauseState,
+  startLevel as startState,
+} from "../../store/game";
 import { createGameStore, gameStore } from "../../store/gameStore";
+import { progressStore } from "../../store/progress";
 import { settingsStore } from "../../store/settings";
+import { announcerStore } from "../a11y/announcerStore";
 import { fxStore } from "../fx/fxStore";
 import { FX_MS, useFeedback } from "./useFeedback";
 
@@ -30,6 +36,13 @@ const wrongCell = Array.from({ length: n * n }, (_, i) => i).find(
 const play = () => vi.mocked(haptics.play);
 
 beforeEach(() => {
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(0);
+    return 0;
+  });
+  announcerStore.getState().reset();
+  settingsStore.getState().set({ seenTutorial: true });
+  progressStore.setState({ bestMs: {} });
   fxStore.setState({ last: null, seq: 0 }, false);
   play().mockClear();
   for (const f of Object.values(sound)) vi.mocked(f).mockClear();
@@ -274,5 +287,113 @@ describe("useFeedback fx", () => {
     act(() => gameStore.getState().placeFace(solution[0]));
     unmount();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("useFeedback announcements", () => {
+  const text = () => announcerStore.getState().text;
+  const describeLevel = () => ({ number: 3, count: 20 });
+  const mount = (opts = {}) =>
+    renderHook(() => useFeedback(gameStore, { describeLevel, ...opts }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("announces place and wrong, independent of haptics and sound", () => {
+    settingsStore.getState().set({ haptics: false, sound: false });
+    mount();
+    act(() => gameStore.getState().placeFace(solution[0]));
+    expect(text()).toBe(
+      `Face placed, row ${Math.floor(solution[0] / n) + 1}, column ${(solution[0] % n) + 1}. 1 of ${n} placed.`,
+    );
+    act(() => gameStore.getState().placeFace(wrongCell));
+    expect(text()).toMatch(
+      /^Not there\. Row \d+, column \d+ is wrong\. 2 hearts left\.$/,
+    );
+  });
+
+  test("the tutorial flag drops the hearts sentence", () => {
+    mount({ tutorial: true });
+    act(() => gameStore.getState().placeFace(wrongCell));
+    expect(text()).not.toMatch(/heart/);
+  });
+
+  test("announces a win with the time and New best", () => {
+    mount();
+    act(() => {
+      for (const c of solution.slice(0, -1)) gameStore.getState().placeFace(c);
+      gameStore.setState({ elapsedMs: 83_000 });
+    });
+    progressStore.setState({ bestMs: { [level.id]: 83_000 } });
+    act(() => gameStore.getState().placeFace(solution[solution.length - 1]));
+    expect(text()).toBe("Solved in 1 minute 23 seconds. New best.");
+  });
+
+  test("a win slower than the best has no New best", () => {
+    mount();
+    progressStore.setState({ bestMs: { [level.id]: 10_000 } });
+    act(() => {
+      for (const c of solution.slice(0, -1)) gameStore.getState().placeFace(c);
+      gameStore.setState({ elapsedMs: 83_000 });
+      gameStore.getState().placeFace(solution[solution.length - 1]);
+    });
+    expect(text()).toBe("Solved in 1 minute 23 seconds.");
+  });
+
+  test("announces a loss", () => {
+    mount();
+    const wrongs = Array.from({ length: n * n }, (_, i) => i).filter(
+      (i) => !solution.includes(i),
+    );
+    act(() => {
+      for (const c of wrongs.slice(0, 3)) gameStore.getState().placeFace(c);
+    });
+    expect(text()).toBe("Out of hearts. Retry is available.");
+  });
+
+  test("announces the level on restart and a new level, not on restore", () => {
+    mount();
+    act(() => gameStore.getState().placeFace(solution[0]));
+    act(() => gameStore.getState().restart());
+    expect(text()).toBe("Level 3 of 20, 7 by 7.");
+    announcerStore.getState().reset();
+    act(() => gameStore.getState().startLevel(level));
+    expect(text()).toBe("Level 3 of 20, 7 by 7.");
+    announcerStore.getState().reset();
+    act(() => {
+      gameStore.setState(idleState, false);
+    });
+    act(() => gameStore.setState(pauseState(startState(level))));
+    expect(text()).toBe("");
+  });
+
+  test("pause and resume are announced", () => {
+    mount();
+    act(() => gameStore.getState().pause());
+    expect(text()).toBe("Paused.");
+    act(() => gameStore.getState().resume());
+    expect(text()).toBe("Resumed.");
+  });
+
+  test("a pause forced before the rules are seen is silent, with its resume", () => {
+    settingsStore.getState().set({ seenTutorial: false });
+    mount();
+    act(() => gameStore.getState().pause());
+    expect(text()).toBe("");
+    act(() => gameStore.getState().resume());
+    expect(text()).toBe("");
+  });
+
+  test("clears the announcer when the level resets and on unmount", () => {
+    const { unmount } = mount();
+    act(() => gameStore.getState().placeFace(solution[0]));
+    expect(text()).not.toBe("");
+    unmount();
+    expect(text()).toBe("");
+  });
+
+  test("without describeLevel and an unknown level, no level text", () => {
+    renderHook(() => useFeedback());
+    act(() => gameStore.getState().restart());
+    expect(text()).toBe("");
   });
 });

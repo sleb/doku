@@ -26,7 +26,12 @@ export function Dialog({
     const previous = document.activeElement as HTMLElement | null;
     const inerted: Element[] = [];
     for (const sibling of Array.from(el.parentElement?.children ?? [])) {
-      if (sibling !== el && !sibling.hasAttribute("inert")) {
+      // A live region must stay reachable so announcements are still spoken.
+      if (
+        sibling !== el &&
+        sibling.getAttribute("role") !== "status" &&
+        !sibling.hasAttribute("inert")
+      ) {
         sibling.setAttribute("inert", "");
         inerted.push(sibling);
       }

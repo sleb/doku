@@ -10,6 +10,7 @@ import { gameStore } from "../../store/gameStore";
 import { defaultProgress, progressStore } from "../../store/progress";
 import { defaultSettings, settingsStore } from "../../store/settings";
 import { holdCell } from "../../test/hold";
+import { announcerStore } from "../a11y/announcerStore";
 import { HOLD_DELAY_MS, HOLD_MS } from "../board/hold";
 import { GameScreen } from "./GameScreen";
 import { LOSE_DELAY_MS, WIN_DELAY_MS } from "./useDelayedStatus";
@@ -765,5 +766,50 @@ describe("tap places faces mode", () => {
     await user.click(screen.getByRole("button", { name: "Tap places faces" }));
     await user.click(cell(solution[0]));
     expect(label(solution[0])).toBe("face");
+  });
+});
+
+describe("GameScreen announcer", () => {
+  const status = () => screen.getByRole("status");
+
+  beforeEach(() => {
+    announcerStore.getState().reset();
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+  });
+
+  test("a live region exists, outside any inert subtree, also while paused", () => {
+    renderGame();
+    expect(status().closest("[inert]")).toBeNull();
+    act(() => gameStore.getState().pause());
+    expect(status().closest("[inert]")).toBeNull();
+    expect(status()).toHaveTextContent("Paused.");
+  });
+
+  test("a win announces while the result is pending", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    renderGame();
+    act(() => {
+      for (const c of solution) gameStore.getState().placeFace(c);
+    });
+    expect(status()).toHaveTextContent(/^Solved in/);
+    expect(status().closest("[inert]")).toBeNull();
+  });
+
+  test("the f key and the action bar announce the input mode", async () => {
+    renderGame();
+    const user = userEvent.setup();
+    await user.keyboard("f");
+    expect(status()).toHaveTextContent("Tapping now places faces.");
+    await user.click(screen.getByRole("button", { name: "Tap places faces" }));
+    expect(status()).toHaveTextContent("Tapping now marks cells.");
+  });
+
+  test("the first-run Rules pause is not announced", () => {
+    settingsStore.setState({ seenTutorial: false });
+    renderGame();
+    expect(status()).toHaveTextContent("");
   });
 });
