@@ -1,6 +1,6 @@
 # Doku — Component-Level Design (draft 2)
 
-A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. The full app (milestones 1 to 4: engine, board, mobile, campaign with persistence) is implemented; iOS runs on the simulator; Android is pending (#64). Milestones 5 and 6 (generator, polish) are not started.
+A Tauri 2 puzzle game based on a generic region-placement logic puzzle (the same family as Queens-style games). Desktop first; mobile (iOS/Android via Tauri 2 mobile) second. The full app (milestones 1 to 4: engine, board, mobile, campaign with persistence) and the level generator with difficulty tiers (milestone 5) are implemented; iOS runs on the simulator; Android is pending (#64). Milestone 6 (polish) is not started.
 
 ## 1. Game rules
 
@@ -25,10 +25,12 @@ Grid sizes, controls, hints, scoring and modes are our own design; items not yet
                 │ plugin calls — thin, async, never on the hot path
 ┌───────────────┴──────────── Frontend (TypeScript + React) ─────────────────┐
 │  UI components  →  Game store (state machine)  →  Engine (pure TS)         │
-│                                    │                  └ Worker: generator  │
+│                                    │                  └ Worker: generator* │
 │                                    └→ Storage adapter → plugin-store       │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+\* The Worker is designed for, not built: v1 generates offline in `tools/` and bundles the packs (§10); the engine has no worker-specific code, so on-device generation (milestone 6) can add it.
 
 **Key decision: game logic lives in pure TypeScript, not Rust.** Validation, solving, hints and generation are small, need instant feedback, and must behave identically on desktop and mobile. Rust stays a thin shell for storage and native features. This avoids IPC latency on every tap and keeps the engine unit-testable with no Tauri runtime (and runnable in a browser for fast dev). Revisit only if generation proves too slow in a Worker.
 
@@ -62,14 +64,14 @@ Low-level design (data structures, algorithms, tests): `docs/ENGINE_DESIGN.md`.
 
 | Module | Responsibility |
 |---|---|
-| `types.ts` | `Level { id, size, regions: number[][], solution: number[] }` (`solution[r]` is the column of the face in row r), `Cell = empty \| mark \| face`, `Board`, `Coord` |
+| `types.ts` | `Level { id, size, regions: number[][], solution: number[], tier?, seed? }` (`solution[r]` is the column of the face in row r; `tier` is the `Tier` `rate` assigns and `seed` the generator seed that reproduces the level, both set on generated levels), `Cell = empty \| mark \| face`, `Board`, `Coord` |
 | `rules.ts` | `findConflicts(board, level)` → list of `{ reason, cells }` conflicts (`region`/`row`/`col`/`adjacent`); `isSolved(board, level)` → true iff the board holds exactly the solution's N faces; `judgeTap(level, cell)` (flat row-major `cell`; `RangeError` if out of range) → `correct`/`wrong` (the heart-cost rule below) |
 | `solver.ts` | Constraint-propagation solver; `solve(level)` and `countSolutions(level, limit=2)` share one backtracker over a `Level` (ignores `level.solution`); `countSolutions` is the uniqueness check |
 | `hints.ts` | `nextHint(board, level)` → `{ deduction, message }` (`Hint`): the simplest ladder deduction the player has not yet acted on (a placement, or an elimination with at least one cell not already marked), with a message rendered from a per-technique template in `hintText.ts`. `null` when the board is complete or the ladder is stuck (M5-06; it was a first-open-row stub from M4-04) |
-| `generator.ts` *(M5)* | Build a random valid placement, grow regions around it, accept only if `countSolutions == 1`; difficulty scored by deepest technique required |
-| `techniques.ts` *(M5)* | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Easy and Medium landed in M5-04 (`single-candidate`, `region-in-line`, `line-in-region`) and Hard in M5-06 (`adjacency-pressure`, `subset-regions-lines`, `subset-lines-regions`); Expert (`lookahead`, depth 1) landed in M5-07. Shared by the hint system and difficulty rating |
-| `difficulty.ts` *(M5, landed M5-04)* | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
-| `seed.ts` *(M5)* | `makeRng(seed)` / `Rng` (`next`, `int`, `shuffle`, `pick`): mulberry32 seeded by `hashSeed` (FNV-1a + fmix32), so daily puzzles are deterministic across devices |
+| `generator.ts` | `generate({ size, seed, tier?, shape?, maxAttempts?, signal? })` → `Level \| null`. Each attempt (`tryCandidate`): `randomSolution`, `growRegions` around it, `repairUniqueness` (moves rival cells until `countSolutions == 1`), `passesShape` (`ShapeLimits`), and, when `tier` is given, a `rate` filter that keeps only that tier. Deterministic from `seed`; details in `docs/GENERATOR_DESIGN.md` §5 |
+| `techniques.ts` | The ordered technique ladder; each technique is a pure function `(puzzle, candidates) → Deduction \| null` (the first forced face or set of eliminated cells it finds). Easy and Medium landed in M5-04 (`single-candidate`, `region-in-line`, `line-in-region`) and Hard in M5-06 (`adjacency-pressure`, `subset-regions-lines`, `subset-lines-regions`); Expert (`lookahead`, depth 1) landed in M5-07. Shared by the hint system and difficulty rating |
+| `difficulty.ts` | `rate(level)` → tier: solve with techniques only, simplest first; the tier is the hardest technique the solve needs. Returns `unrated` if techniques alone cannot finish |
+| `seed.ts` | `makeRng(seed)` / `Rng` (`next`, `int`, `shuffle`, `pick`): mulberry32 seeded by `hashSeed` (FNV-1a + fmix32), so generation is reproducible across devices (and a daily puzzle could be, later) |
 
 Design notes:
 - **Wrong tap = deviation from the unique solution.** Placing a face on a cell that is not in `level.solution` costs a heart. The wrong face is not placed; the cell is auto-marked ✕ instead, so the player is never stuck in a dead-end board and a mistake is never silently carried forward. Rule conflicts (`findConflicts`, faces only; marks never conflict) are still used for optional highlighting, but cost nothing by themselves. Because correctness depends on the stored solution, the generator must guarantee uniqueness (`countSolutions == 1`) and the loader should verify `solution` against `rules.ts` in dev/test builds.
@@ -84,13 +86,13 @@ A puzzle's tier is the hardest technique a human-style solve needs (`difficulty.
 | Easy | Region with one candidate cell left; row/column with one candidate cell left; eliminate cells in the row, column and neighbors of a placed face |
 | Medium | A region confined to one row or column eliminates the rest of that line (and the reverse: a row/column confined to one region) |
 | Hard | Adjacency pressure: a cell is impossible if placing a face there would leave some region, row or column with no candidates. M regions confined to the same M rows or columns (pairs, triples) eliminate everything else in those lines, and the converse (M lines confined to M regions) |
-| Expert | Needs lookahead: assume a cell, derive a contradiction (depth-limited), or chained deductions |
+| Expert | Needs lookahead: assume a cell and propagate with the Easy to Hard techniques to a contradiction (depth 1, no nesting) |
 
-Implemented so far (M5-04 to M5-07): all four tiers as in the table (Expert is depth-1 lookahead over rungs 1 to 6); `rate` returns `unrated` only for a level the ladder cannot finish, which the generator always rejects (none occurred in the `--stats` runs). `generate` honours `tier` for every tier. Shipped cells: Easy 7 to 10, Medium 7 to 11, Hard 7 to 11 and Expert 7 to 11 (109 levels, Expert three per size); Easy 11x11 is dropped (fewer than 18 of 20 stats seeds fill within the budget, `docs/GENERATOR_DESIGN.md` §16, §17).
+The ladder has seven rungs (`docs/ENGINE_DESIGN.md` §6): rungs 1 to 6 give Easy to Hard and `lookahead` is rung 7. `rate` returns `unrated` only for a level the ladder cannot finish, which the generator always rejects (none occurred in the `--stats` runs). `generate` honours `tier` for every tier. The shipped size and tier cells are in §10; Easy 11x11 is dropped (`docs/GENERATOR_DESIGN.md` §16, §17).
 
 Rules of the system:
 - The solver applies the simplest technique that makes progress each step, so the rating is the minimum hardest technique, not whatever a particular path happened to use.
-- Players choose a size (7–11) and a tier (Easy–Expert). The generator keeps puzzles only if `rate(level)` matches the requested tier, and `countSolutions == 1`. Combinations it cannot fill reliably (only 11×11 Easy so far) are hidden in level select.
+- The generator is asked for a size (7–11) and a tier (Easy–Expert) and keeps a puzzle only if `rate(level)` matches the tier and `countSolutions == 1`. A combination it cannot fill reliably (Easy 11×11) is left out of the curriculum. There is no level select in v1 (§13), so players do not choose a tier; the campaign ramps through them.
 - Techniques are also the hint vocabulary, so hint text ("This region only fits in row 4") needs no separate content.
 - Tier definitions are v1 starting points; adjust the ladder after playtesting.
 
@@ -163,8 +165,8 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 
 ## 10. Content pipeline
 
-- Today: `src/levels/pack-1.json` holds 69 tiered generated levels (Easy 7 to 10 and Medium 7 to 10, 8 each, then 5 Medium at 11; every level satisfies `rate(level) === level.tier`), written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
-- Milestone 5: the tool (M5-03), the ladder (M5-04), tiered generation (M5-05) and Hard techniques with ladder hints (M5-06) and Expert lookahead with its campaign cells (M5-07) have landed.
+- Today: `src/levels/pack-1.json` holds 109 tiered generated levels, in tier order and each satisfying `rate(level) === level.tier`: Easy 7 to 10 (8 each, 32), Medium 7 to 10 (8 each) and 11 (5, 37), Hard 7 to 11 (5 each, 25) and Expert 7 to 11 (3 each, 15). It is written by `bun tools/generate-levels.ts --pack 1` from the ordered list in `tools/curriculum.ts`. The output is byte-reproducible, de-duplicated up to rotation, reflection and region renaming, and re-verified (valid, exactly one solution, `solve` equals the stored solution). `src/levels/campaign.ts` loads every `pack-*.json` into `LEVELS`, ordered by numeric suffix (`orderPackKeys`, so `pack-2` precedes `pack-10`).
+- Milestone 5 is done; how it was built, and the measurements behind the curriculum, are in `docs/GENERATOR_DESIGN.md` §14 to §18.
 - Levels are bundled with the app (offline-first). *Proposed:* seeded daily puzzle generated on-device from the date, so no server is needed.
 
 ## 11. Testing
@@ -181,7 +183,7 @@ Mobile (see `docs/MOBILE_DESIGN.md` §7): `tauri-plugin-haptics` in `Cargo.toml`
 2. **Playable desktop board** (Board/Cell, store, hearts, win/lose) (done).
 3. **Mobile**: touch input, responsive layout, safe areas, haptics, iOS then Android builds (done for iOS; Android #64 pending).
 4. **Full app** (done: play through a fixed series of levels with no level select; persistence, undo/redo, hints, settings, keyboard, desktop window; low-level design in `docs/APP_DESIGN.md`; manual desktop/iOS persistence and window-state checks outstanding).
-5. **Generator + level packs + difficulty tiers.**
+5. **Generator + level packs + difficulty tiers** (done: 109-level tiered campaign; low-level design and as-built notes in `docs/GENERATOR_DESIGN.md`).
 6. **Polish**: sound, animations, daily puzzle, accessibility pass.
 
 ## 13. Decisions and open questions
@@ -206,5 +208,7 @@ Decided:
 17. **No right-click or drag-to-paint marks**: click and hold are the only pointer gestures.
 18. **One screen and one shared `<Dialog>`** for pause, rules, settings and results; the store is pure and time is injected by `useClock`.
 
+19. **Which size/tier combinations ship (milestone 5):** Easy 7 to 10, Medium 7 to 11, Hard 7 to 11, Expert 7 to 11 (counts in §10). Easy 11x11 is dropped for v1: only 16 of 20 `--stats` seeds fill within the attempt budget, below the 18 of 20 criterion, and a level takes about 30 s. Expert ships three levels per size, a cost choice (about 6.4 s per 11x11 level), not a limit. Expert is depth-1 lookahead (no nesting; it solved every level the other rungs left unrated). Steering the generator toward a tier (`docs/GENERATOR_DESIGN.md` §7.3) is not built because nothing needed it.
+
 Still open:
-1. **Which size/tier combinations to ship:** answered for Easy and Medium (M5-05): Easy 7 to 10 and Medium 7 to 11 ship, Easy 11x11 is dropped; Hard and Expert fill at every size (M5-06, M5-07). (The naive seed script could not find a unique 11x11 in 60 s, a first data point.)
+- Daily puzzle and on-device generation (milestone 6): would add the Worker in §2 and a date-derived seed.

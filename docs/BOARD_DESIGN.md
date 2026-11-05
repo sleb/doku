@@ -56,7 +56,7 @@ e2e/
 
 The Tauri scaffold in `App.tsx`/`App.css` (greet demo, logos) is deleted. The Rust `greet` command was removed separately (M3-05); it was a shell cleanup, not a board concern.
 
-The first level of `src/levels/pack-1.json` (a generated Easy 7x7, `easy-07-001`; 69 levels in all) is loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`, `levelBySize`, `levelCount`, `levelIds`); they do not import the JSON module. That helper reads every `src/levels/pack-*.json` and orders them with the app's own `orderPackKeys` (`src/levels/packOrder.ts`, numeric suffix, so `pack-2` precedes `pack-10`), so e2e sees the same campaign as `campaign.ts`.
+The first level of `src/levels/pack-1.json` (a generated Easy 7x7, `easy-07-001`; 109 levels in all) is loaded with `loadLevel` by `campaign.ts`. Production code must not import from `engine/__fixtures__`, and a JSON file matches the planned level-pack format (`DESIGN.md` §10). The Playwright specs read the pack with `node:fs` and `JSON.parse` via `e2e/levels.ts` (`levelById`, `levelBySize`, `levelCount`, `levelIds`); they do not import the JSON module. That helper reads every `src/levels/pack-*.json` and orders them with the app's own `orderPackKeys` (`src/levels/packOrder.ts`, numeric suffix, so `pack-2` precedes `pack-10`), so e2e sees the same campaign as `campaign.ts`.
 
 ## 3. Store (`src/store`)
 
@@ -256,7 +256,7 @@ export const REGION_BG = ["bg-region-0", ..., "bg-region-10"] as const;
 export const REGION_NAMES = ["red", "orange", ..., ] as const;  // same order as the tokens
 ```
 
-Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. The demo level is now the first generated level in `src/levels/pack-1.json` (the original `demo-7` was replaced in M5-03), available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
+Implemented in M2-02: the hex values are Tailwind-300-ish pastels (red, orange, amber, lime, emerald, teal, sky, indigo, violet, pink, stone), `palette.ts` also exports `GLYPH_COLOR` (`#1f1f1f`), and a node test enforces the two requirements below. The temporary swatch strip in `App.tsx` was removed in M2-10; the e2e test now checks the token against a real board cell's `.bg-region-N` background. (M2 history) The demo level became the first generated level in `src/levels/pack-1.json` (the original `demo-7` was replaced in M5-03), available as `LEVELS[0]` from `src/levels/campaign.ts`. Biome needs `css.parser.tailwindDirectives` enabled.
 
 Hex values were chosen under two requirements: the 11 colors are pairwise distinguishable, and the face/mark glyph (dark stroke) reaches ≥ 3:1 contrast on every one. The color-blind variant and pattern overlay (`DESIGN.md` §7 Theming) are not part of milestone 3: the palette setting arrives with settings in milestone 4 and the accessibility pass is milestone 6 (`DESIGN.md` §12), but tokens plus a lookup keep that a one-file swap.
 

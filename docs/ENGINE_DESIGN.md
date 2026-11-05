@@ -8,7 +8,7 @@ Companion to `DESIGN.md` §4. This describes `src/engine/`: data structures, alg
 - **Unique solution:** every shipped level has exactly one solution, stored with the level.
 - **Deterministic:** no `Math.random`, no `Date`. All randomness comes from a seeded PRNG passed in, so a seed reproduces a puzzle on any device.
 - **Immutable boards:** functions return new boards; nothing mutates inputs. (A board is ≤121 bytes, so copying is cheap, and undo/redo becomes a list of boards.)
-- **Fast:** rule checks per tap < 1 ms; `rate()` < 10 ms for N=11; hint < 10 ms. Generation may take seconds and runs in a Worker.
+- **Fast:** rule checks per tap < 1 ms; `rate()` < 10 ms for N=11; hint < 10 ms. Generation may take seconds (up to ~6 s per 11×11 Expert level) and runs offline in `tools/`; a Worker is possible later (§9).
 - **Sound:** no technique may ever eliminate a cell that is in the solution. This is the central invariant and is tested directly (§9).
 
 ## 2. Data model
@@ -41,7 +41,7 @@ type Tier = 'easy' | 'medium' | 'hard' | 'expert';
 
 ### Compiled puzzle (derived, not serialized)
 
-`compile(level)` (M5-04) precomputes the geometry the technique solver needs. It is deliberately minimal: only what the Easy and Medium techniques read.
+`compile(level)` (M5-04) precomputes the geometry the technique solver needs. It is deliberately minimal: only what the technique ladder reads (the units, `regionOf` and the neighbour helper; Hard and Expert needed no more geometry).
 
 ```ts
 interface Puzzle {
@@ -229,25 +229,29 @@ interface GenerateOptions {
   tier?: Tier;                            // omitted: no rating (M5-05)
   seed: string;
   maxAttempts?: number;                   // default 2000
+  shape?: Partial<ShapeLimits>;           // overrides defaultShape(size)
   signal?: AbortSignal;
 }
 function generate(o: GenerateOptions): Level | null;
+// One attempt, with the rejecting filter reported (used by --stats):
+function tryCandidate(size, rng, shape?, tier?):
+  { level: Level } | { reject: 'repair' | 'shape' | 'tier' | 'unrated' };
 ```
 
 Pipeline for each attempt (all randomness from `Rng` seeded by `hashSeed(seed + attempt)`):
 
-1. **Solution:** build a random valid placement row by row: random column order each row, skipping used columns and columns within 1 of the previous row's column; backtrack on dead end. Result is `solution[]` (one per row/col, non-adjacent).
-2. **Regions:** seed region `i` at the solution cell in row `i` (so each region contains exactly one solution cell). Then grow: repeatedly pick a random unassigned cell that touches an assigned cell and give it a random adjacent region (weighted toward smaller regions to avoid one giant region). This yields connected regions by construction.
-3. **Uniqueness repair:** `countSolutions(limit = 2)`. If 1, go on. If ≥ 2, take the second solution found and *mutate*: move a boundary cell (not a solution cell) from one region to an adjacent region such that (a) the source region stays connected, (b) the alternative solution becomes invalid. Re-check. Cap at ~50 mutations per attempt; then discard and restart.
-4. **Shape filter:** reject if any region has fewer than `minRegionSize` cells (default 2; a one-cell region is a free give-away) or the size spread is extreme (largest region > ~35% of the grid).
+1. **Solution:** `randomSolution`, a row-by-row backtracking search over shuffled column order (`GENERATOR_DESIGN.md` §5.1).
+2. **Regions:** `growRegions` seeds region `i` at the solution cell of row `i` and grows size-targeted, connected regions (§5.2).
+3. **Uniqueness repair:** `repairUniqueness` moves rival-solution cells into a neighbouring region until `countSolutions == 1`, within 60 moves (§5.3).
+4. **Shape filter:** `passesShape(regions, shape)` with `ShapeLimits { minRegion, maxSingletons, maxRegion }`; `defaultShape(n)` is `minRegion` 2, `maxSingletons` 1 for n <= 8 and 2 for n >= 9, `maxRegion` `ceil(0.35 n²)` (§5.4).
 5. **Rate:** when `tier` is given, `rate(p)` must equal it, else the candidate is discarded (as built in M5-05; mutating for difficulty is not built, see `GENERATOR_DESIGN.md` §7.3 and §16). Without `tier`, `rate` is not called.
 6. **Output:** `Level { …, tier, seed }` after `validateLevel`.
 
-Returns `null` after `maxAttempts` (the caller treats this as "combination not available" and hides it from level select). The same `generate` call with the same options always returns the same level.
+Returns `null` after `maxAttempts` (the caller treats this as "combination not available" and the curriculum omits it; there is no level select in v1). The same `generate` call with the same options always returns the same level.
 
 `seed.ts`: `makeRng(seed: string)` returns an `Rng` (`next()`, `int(n)`, `shuffle(arr)`, `pick(arr)`) backed by mulberry32 seeded from `hashSeed(string) → uint32` (FNV-1a over UTF-16 code units, then murmur3 fmix32). Only `Math.imul` and `>>> 0`, so streams are identical on every runtime; `makeRng("doku")` is pinned by a frozen vector. `int(n)` is `floor(next() * n)` and throws `RangeError` unless `n` is an integer >= 1. `shuffle` is Fisher-Yates on a copy, drawing `int(i + 1)` for `i` from `len-1` down to 1 (the draw order is contract: generator goldens depend on it). `pick([])` throws `RangeError`. `isolation.test.ts` fails on `Math.random` or `Date.` in engine sources.
 
-**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The app can later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only an `AbortSignal` for cancellation.
+**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The Worker call is not built: v1 ships bundled packs. The app could later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only an `AbortSignal` for cancellation.
 
 ## 10. Public API (index.ts)
 
@@ -272,7 +276,7 @@ Only these are exported to the store/UI: `Level`, `Board`, `Tier`, `Cell`, `Coor
 
 Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/engine`). `src/engine/isolation.test.ts` scans every file under `src/engine` and fails if any imports from `src/ui`, `src/store`, `src/platform` or `@tauri-apps/*`, and asserts `window` and `document` are undefined.
 
-## 12. Build order within milestone 1
+## 12. Build order (milestones 1 and 5)
 
 1. `types`, `compile`, `board`, `rules` + tests, with 2–3 hand-written fixtures.
 2. `seed`, `countSolutions` + uniqueness tests.
@@ -285,6 +289,6 @@ Tests need no Tauri or DOM; Vitest only (`bun run test:engine` runs just `src/en
 ## 13. Open questions
 
 1. **Generator success rates:** answered by `--stats` (`GENERATOR_DESIGN.md` §16 to §18): only Easy 11×11 is dropped; every Expert cell fills 20 of 20.
-2. **Minimum region size** and max region share (defaults above are guesses that affect puzzle feel).
+2. **Minimum region size** and max region share: shipped defaults are `minRegion` 2, `maxSingletons` 1 (n <= 8) or 2 (n >= 9) and `maxRegion` `ceil(0.35 n²)` (§9); still guesses, tune by playing (`GENERATOR_DESIGN.md` §12).
 3. **Expert definition:** resolved in M5-07: depth-1 lookahead, no nesting. It solved every unrated level measured, so depth 2 is unnecessary at N ≤ 11.
 4. **Pre-generated vs on-device generation:** v1 ships bundled packs; the Worker path is designed in but not required for v1.
