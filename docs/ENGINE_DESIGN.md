@@ -230,12 +230,12 @@ interface GenerateOptions {
   seed: string;
   maxAttempts?: number;                   // default 2000
   shape?: Partial<ShapeLimits>;           // overrides defaultShape(size)
-  signal?: AbortSignal;
+  shouldStop?: () => boolean;             // polled per attempt and inside it; true returns null
 }
 function generate(o: GenerateOptions): Level | null;
 // One attempt, with the rejecting filter reported (used by --stats):
-function tryCandidate(size, rng, shape?, tier?):
-  { level: Level } | { reject: 'repair' | 'shape' | 'tier' | 'unrated' };
+function tryCandidate(size, rng, shape?, tier?, shouldStop?):
+  { level: Level } | { reject: 'repair' | 'shape' | 'tier' | 'unrated' | 'stopped' };
 ```
 
 Pipeline for each attempt (all randomness from `Rng` seeded by `hashSeed(seed + attempt)`):
@@ -251,7 +251,7 @@ Returns `null` after `maxAttempts` (the caller treats this as "combination not a
 
 `seed.ts`: `makeRng(seed: string)` returns an `Rng` (`next()`, `int(n)`, `shuffle(arr)`, `pick(arr)`) backed by mulberry32 seeded from `hashSeed(string) → uint32` (FNV-1a over UTF-16 code units, then murmur3 fmix32). Only `Math.imul` and `>>> 0`, so streams are identical on every runtime; `makeRng("doku")` is pinned by a frozen vector. `int(n)` is `floor(next() * n)` and throws `RangeError` unless `n` is an integer >= 1. `shuffle` is Fisher-Yates on a copy, drawing `int(i + 1)` for `i` from `len-1` down to 1 (the draw order is contract: generator goldens depend on it). `pick([])` throws `RangeError`. `isolation.test.ts` fails on `Math.random` or `Date.` in engine sources.
 
-**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The Worker call is not built: v1 ships bundled packs. The app could later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only an `AbortSignal` for cancellation.
+**Execution:** `tools/generate-levels.ts` calls `generate` offline to build bundled packs. The Worker call is not built: v1 ships bundled packs. The app could later call the same function from a Web Worker for on-device/daily puzzles; the engine has no worker-specific code, only the polled `shouldStop` callback for cancellation (the engine reads no clock, so a caller wanting a deadline closes over its own).
 
 ## 10. Public API (index.ts)
 

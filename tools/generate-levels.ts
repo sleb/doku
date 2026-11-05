@@ -59,14 +59,17 @@ const others = readdirSync(dir)
   }));
 
 const result = buildPack(CURRICULUM, packNumber, others, {
-  generate: ({ size, seed, tier }) =>
-    generate({
+  generate: ({ size, seed, tier }) => {
+    // The engine reads no clock, so the deadline lives here and is polled.
+    const deadline = performance.now() + timeoutMs;
+    return generate({
       size,
       seed,
       tier,
       maxAttempts,
-      signal: AbortSignal.timeout(timeoutMs),
-    }),
+      shouldStop: () => performance.now() > deadline,
+    });
+  },
   filter: onlyRows
     ? (row) =>
         row.size === Number(onlyRows[0]) &&

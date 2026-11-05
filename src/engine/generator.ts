@@ -183,15 +183,18 @@ function connectedWithout(
 // Breaks rival solutions one at a time by moving a rival's face cell into a
 // neighbouring region. The moved cell is never a solution cell, so the stored
 // solution stays valid. Returns the level itself when already unique, null
-// when no move helps or the budget runs out.
+// when no move helps, the budget runs out or `shouldStop` fires (polled before
+// each move's solver call, the slow part).
 export function repairUniqueness(
   level: Level,
   rng: Rng,
   maxMoves: number,
+  shouldStop?: () => boolean,
 ): Level | null {
   const n = level.size;
   let current = level;
   for (let move = 0; ; move++) {
+    if (shouldStop?.()) return null;
     // Rivals beyond the first widen the choice of movable cells: a rival whose
     // faces all sit mid-region cannot be broken by itself.
     const found = solutions(current, RIVALS);
@@ -243,13 +246,17 @@ export interface GenerateOptions {
   shape?: Partial<ShapeLimits>;
   /** Keep only levels `rate` puts in this tier; omitted means never rate. */
   tier?: Tier;
-  /** Checked once per attempt; abort returns null. */
-  signal?: AbortSignal;
+  /**
+   * Polled before each attempt and at checkpoints inside one (every repair
+   * move, before the rating); true makes `generate` return null. The engine
+   * reads no clock, so a caller wanting a deadline closes over its own.
+   */
+  shouldStop?: () => boolean;
 }
 
 export type CandidateResult =
   | { level: Level }
-  | { reject: "repair" | "shape" | "tier" | "unrated" };
+  | { reject: "repair" | "shape" | "tier" | "unrated" | "stopped" };
 
 // One attempt: solution, regions, uniqueness repair, shape filter and, when
 // `tier` is given, the rating filter, reporting which filter rejected it. The level has an empty id and no seed.
@@ -258,7 +265,15 @@ export function tryCandidate(
   rng: Rng,
   shape?: Partial<ShapeLimits>,
   tier?: Tier,
+  shouldStop?: () => boolean,
 ): CandidateResult {
+  let stopped = false;
+  const poll = shouldStop
+    ? () => {
+        stopped = stopped || shouldStop();
+        return stopped;
+      }
+    : undefined;
   const limits = { ...defaultShape(size), ...shape };
   const solution = randomSolution(size, rng);
   const regions = growRegions(size, solution, rng, limits);
@@ -266,10 +281,12 @@ export function tryCandidate(
     { id: "", size, regions, solution },
     rng,
     MAX_MOVES,
+    poll,
   );
-  if (!repaired) return { reject: "repair" };
+  if (!repaired) return { reject: stopped ? "stopped" : "repair" };
   if (!passesShape(repaired.regions, limits)) return { reject: "shape" };
   if (tier) {
+    if (poll?.()) return { reject: "stopped" };
     const rating = rate(repaired);
     if (rating === "unrated") return { reject: "unrated" };
     if (rating !== tier) return { reject: "tier" };
@@ -284,8 +301,9 @@ export function generateCandidate(
   rng: Rng,
   shape?: Partial<ShapeLimits>,
   tier?: Tier,
+  shouldStop?: () => boolean,
 ): Level | null {
-  const result = tryCandidate(size, rng, shape, tier);
+  const result = tryCandidate(size, rng, shape, tier, shouldStop);
   return "level" in result ? result.level : null;
 }
 
@@ -293,7 +311,7 @@ export function generateCandidate(
 // that survives. id and seed are both the attempt seed, so
 // generateCandidate(size, makeRng(level.seed)) reproduces the level.
 export function generate(options: GenerateOptions): Level | null {
-  const { size, seed, shape, tier, signal } = options;
+  const { size, seed, shape, tier, shouldStop } = options;
   if (!Number.isInteger(size) || size < MIN_SIZE || size > MAX_SIZE) {
     throw new RangeError(
       `size must be an integer in ${MIN_SIZE}..${MAX_SIZE}, got ${size}`,
@@ -301,13 +319,14 @@ export function generate(options: GenerateOptions): Level | null {
   }
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   for (let k = 0; k < maxAttempts; k++) {
-    if (signal?.aborted) return null;
+    if (shouldStop?.()) return null;
     const attemptSeed = `${seed}#${k}`;
     const candidate = generateCandidate(
       size,
       makeRng(attemptSeed),
       shape,
       tier,
+      shouldStop,
     );
     if (candidate) return { ...candidate, id: attemptSeed, seed: attemptSeed };
   }

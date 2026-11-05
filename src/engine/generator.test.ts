@@ -283,10 +283,8 @@ describe("generate", () => {
   it("returns null once shouldStop turns true after some polls", () => {
     let polls = 0;
     const shouldStop = () => ++polls > 20;
-    expect(
-      generate({ size: 11, seed: NEEDS_RETRY, shouldStop }),
-    ).toBeNull();
-    expect(polls).toBe(21);
+    expect(generate({ size: 11, seed: NEEDS_RETRY, shouldStop })).toBeNull();
+    expect(polls).toBeGreaterThan(20);
   });
 
   it("does not change the level when shouldStop never fires", () => {

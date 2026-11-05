@@ -245,7 +245,7 @@ export function computeStats(
       );
       used++;
       if ("level" in result) ok = true;
-      else rejects[result.reject]++;
+      else if (result.reject !== "stopped") rejects[result.reject]++;
     }
     attempts += used;
     if (ok) perSeed.push(used);
