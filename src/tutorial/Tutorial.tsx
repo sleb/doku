@@ -104,6 +104,7 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
   }, [progress, index, last, store, step]);
 
   // The first step is announced on mount; later ones by `load`.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: index is the trigger
   useEffect(() => {
     if (first.current) {
       first.current = false;
