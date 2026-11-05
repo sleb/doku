@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Cell, isSolved, type Level, nextHint } from "../engine";
 import { uniqueLevel7 } from "../engine/__fixtures__/levels";
+import { expertLevel1 } from "../engine/__fixtures__/rated";
+import { solveByTechniques } from "../engine/solver";
 import {
   type GameState,
   hint,
@@ -640,6 +642,25 @@ describe("hint", () => {
       cells: h.deduction.because.cells,
       targets: h.deduction.eliminate,
       message: h.message,
+    });
+  });
+
+  it("a lookahead hint highlights the assumed cell for a heart and writes nothing", () => {
+    const start = live(startLevel(expertLevel1));
+    const { steps } = solveByTechniques(expertLevel1);
+    const at = steps.findIndex((s) => s.technique === "lookahead");
+    const board = start.board.slice();
+    for (const s of steps.slice(0, at)) {
+      if (s.place !== undefined) board[s.place] = Cell.Face;
+      else for (const i of s.eliminate) board[i] = Cell.Mark;
+    }
+    const s1 = live(hint({ ...start, board }));
+    expect(s1.board).toEqual(board);
+    expect(s1.hearts).toBe(MAX_HEARTS - 1);
+    expect(s1.hintShown).toEqual({
+      cells: steps[at].because.cells,
+      targets: steps[at].eliminate,
+      message: expect.stringMatching(/after the forced moves/),
     });
   });
 

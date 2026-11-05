@@ -11,8 +11,8 @@ import { CURRICULUM } from "./curriculum";
 import { buildPack, computeStats, formatStats } from "./pack";
 
 const SIZES = [7, 8, 9, 10, 11];
-// Untiered, then every tier the generator can fill (expert arrives with #93).
-const TIERS = [undefined, "easy", "medium", "hard"] as const;
+// Untiered, then every tier.
+const TIERS = [undefined, "easy", "medium", "hard", "expert"] as const;
 const dir = new URL("../src/levels/", import.meta.url);
 
 function flag(name: string): string | undefined {

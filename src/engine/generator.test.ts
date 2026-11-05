@@ -375,9 +375,19 @@ describe("generate with a tier", () => {
     spy.mockRestore();
   });
 
+  it("honours expert over several seeds at 7x7", () => {
+    for (let i = 0; i < 4; i++) {
+      const level = generate({ size: 7, tier: "expert", seed: `x/${i}` });
+      if (!level) throw new Error(`no expert level for x/${i}`);
+      expect(level.tier).toBe("expert");
+      expect(rate(level)).toBe("expert");
+      expect(countSolutions(level)).toBe(1);
+    }
+  }, 60_000);
+
   it("returns null for a tier it cannot fill within the budget", () => {
     expect(
-      generate({ size: 7, tier: "expert", seed: "h", maxAttempts: 20 }),
+      generate({ size: 7, tier: "expert", seed: "h", maxAttempts: 1 }),
     ).toBeNull();
   });
 });

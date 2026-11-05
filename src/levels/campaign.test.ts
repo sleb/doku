@@ -27,6 +27,18 @@ describe("campaign", () => {
     expect(ranks).toEqual([...ranks].sort((x, y) => x - y));
   });
 
+  test("ends with three Expert levels at each of sizes 7 to 11", () => {
+    const counts: Record<string, number> = {};
+    for (const l of LEVELS)
+      counts[l.tier ?? ""] = (counts[l.tier ?? ""] ?? 0) + 1;
+    expect(counts).toEqual({ easy: 32, medium: 37, hard: 25, expert: 15 });
+    const expert = LEVELS.filter((l) => l.tier === "expert");
+    expect(expert).toEqual(LEVELS.slice(-15));
+    expect(expert.map((l) => l.size)).toEqual(
+      [7, 8, 9, 10, 11].flatMap((n) => [n, n, n]),
+    );
+  });
+
   test("every level is valid, in range and uniquely solvable", () => {
     for (const level of LEVELS) {
       expect(validateLevel(level), level.id).toEqual([]);

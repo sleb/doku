@@ -283,9 +283,15 @@ describe("computeStats", () => {
   });
 
   it("counts a cell it cannot fill as not filled", () => {
-    const expert = computeStats(7, "expert", 1, 30);
+    const expert = computeStats(7, "expert", 1, 1);
     expect(expert.filled).toBe(0);
-    expect(expert.attempts).toBe(30);
+    expect(expert.attempts).toBe(1);
+  });
+
+  it("fills an expert cell and counts what it rejects", () => {
+    const expert = computeStats(7, "expert", 2);
+    expect(expert.tier).toBe("expert");
+    expect(expert.filled).toBe(2);
   });
 
   it("fills a hard cell and counts what it rejects", () => {
