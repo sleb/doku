@@ -47,20 +47,33 @@ test("sound off in Settings persists across reload", async ({ page }) => {
   );
 });
 
-test("Settings sections scroll on a short landscape screen", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 667, height: 375 });
-  await page.goto("/");
-  await page.getByRole("button", { name: "Pause" }).click();
-  await page.getByRole("button", { name: "Settings" }).click();
-  const body = page.getByTestId("settings-body");
-  await expect(body).toBeVisible();
-  expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
-    true,
-  );
-  const startOver = page.getByRole("button", { name: "Start over" });
-  await startOver.scrollIntoViewIfNeeded();
-  await startOver.click();
-  await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
-});
+for (const [w, h] of [
+  [667, 375],
+  [667, 300],
+] as const) {
+  test(`Settings stays inside a ${w}x${h} viewport and scrolls`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Pause" }).click();
+    await page.getByRole("button", { name: "Settings" }).click();
+    const body = page.getByTestId("settings-body");
+    await expect(body).toBeVisible();
+    const panel = page.getByRole("dialog", { name: "Settings" });
+    const box = await panel.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(h);
+    expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
+      true,
+    );
+    const done = page.getByRole("button", { name: "Done" });
+    await done.scrollIntoViewIfNeeded();
+    await expect(done).toBeInViewport();
+    const startOver = page.getByRole("button", { name: "Start over" });
+    await startOver.scrollIntoViewIfNeeded();
+    await startOver.click();
+    await expect(page.getByRole("button", { name: "Confirm" })).toBeVisible();
+  });
+}

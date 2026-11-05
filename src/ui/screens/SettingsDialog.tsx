@@ -87,14 +87,14 @@ export function SettingsDialog({
     >
       <div
         data-testid="settings-body"
-        className="flex w-full max-h-[calc(100dvh-8rem)] flex-col gap-4 overflow-y-auto"
+        className="flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto"
       >
         <Section title="Feedback">
           {haptics.supported() && (
             <SwitchRow
               label="Haptics"
               checked={s.haptics}
-              onChange={(haptics) => set({ haptics })}
+              onChange={(on) => set({ haptics: on })}
             />
           )}
           <SwitchRow

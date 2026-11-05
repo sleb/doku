@@ -151,5 +151,6 @@ test("the body scrolls inside the safe area", () => {
   open();
   const body = screen.getByTestId("settings-body");
   expect(body).toHaveClass("overflow-y-auto");
-  expect(body.className).toMatch(/max-h-/);
+  expect(body).toHaveClass("flex-1", "min-h-0");
+  expect(screen.getByRole("dialog")).toHaveClass("max-h-full", "min-h-0");
 });
