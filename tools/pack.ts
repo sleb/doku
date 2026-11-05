@@ -131,6 +131,13 @@ export function verifyLevel(level: Level): string[] {
   return out;
 }
 
+// 2-space JSON with number arrays on one line, which is how Biome formats
+// pack files, so a generated pack passes `biome check` untouched.
+function serialize(levels: readonly Level[]): string {
+  const text = JSON.stringify({ levels }, null, 2);
+  return `${text.replace(/\[\s*(-?\d+(?:,\s*-?\d+)*)\s*\]/g, (_, nums: string) => `[${nums.split(/,\s*/).join(", ")}]`)}\n`;
+}
+
 export interface BuildResult {
   levels: Level[];
   json: string;
@@ -174,7 +181,7 @@ export function buildPack(
       levels.push(level);
     }
   });
-  return { levels, json: `${JSON.stringify({ levels }, null, 2)}\n`, failures };
+  return { levels, json: serialize(levels), failures };
 }
 
 export interface SizeStats {

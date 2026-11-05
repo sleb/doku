@@ -7,5 +7,5 @@ export const CURRICULUM: readonly CurriculumRow[] = [
   { pack: 1, size: 8, count: 8 },
   { pack: 1, size: 9, count: 8 },
   { pack: 1, size: 10, count: 8 },
-  { pack: 1, size: 11, count: 8 },
+  { pack: 1, size: 11, count: 10 },
 ];

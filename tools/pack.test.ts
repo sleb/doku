@@ -157,6 +157,9 @@ describe("buildPack", () => {
       "any-07-004",
     ]);
     expect(a.json.endsWith("}\n")).toBe(true);
+    // Number arrays stay on one line, the way Biome formats JSON.
+    expect(a.json).toContain('"solution": [');
+    expect(a.json.split("\n").some((l) => /^\s*\d+,?$/.test(l))).toBe(false);
     expect(JSON.parse(a.json).levels).toEqual(a.levels);
   });
 
