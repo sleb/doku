@@ -31,3 +31,10 @@ export function levelById(id: string): PackLevel {
 export const levelCount: number = levels.length;
 
 export const levelIds: string[] = levels.map((l) => l.id);
+
+/** The first campaign level of a given size. */
+export function levelBySize(size: number): PackLevel {
+  const level = levels.find((l) => l.size === size);
+  if (!level) throw new Error(`no ${size}x${size} level in the campaign packs`);
+  return level;
+}

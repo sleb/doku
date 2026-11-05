@@ -1,7 +1,17 @@
 import { expect, type Page, test } from "@playwright/test";
-import { levelById } from "./levels";
+import { levelBySize } from "./levels";
 
-const { regions } = levelById("demo-7");
+const { regions } = levelBySize(7);
+
+/** First [row, col] whose right (dr=0) or lower (dr=1) neighbour is another region. */
+function edge(dr: 0 | 1): [number, number] {
+  for (let r = 0; r < regions.length - dr; r++) {
+    for (let c = 0; c < regions.length - (1 - dr); c++) {
+      if (regions[r][c] !== regions[r + dr][c + 1 - dr]) return [r, c];
+    }
+  }
+  throw new Error("level has no region edge");
+}
 
 const cell = (page: Page, r: number, c: number) =>
   page.getByRole("button", {
@@ -56,20 +66,20 @@ test("thick region edges are centered on the thin grid line", async ({
   page,
 }) => {
   await page.goto("/");
-  await expect(cell(page, 1, 1)).toBeVisible();
+  const [vr, vc] = edge(0);
+  const [hr, hc] = edge(1);
+  await expect(cell(page, vr, vc)).toBeVisible();
 
-  // Vertical edge: row 1, between col 1 (region 0) and col 2 (region 1).
-  expect(regions[1][1]).not.toBe(regions[1][2]);
-  const a = await box(page, 1, 1);
+  // Vertical edge: between two columns of different regions.
+  const a = await box(page, vr, vc);
   // A thin line is a 1px border inside the cell, ending on the cell boundary.
   const thinX = a.x + a.width - 0.5;
   const [x0, x1] = await darkRun(page, "x", a.y + a.height / 2, thinX);
   expect(x1 - x0).toBeGreaterThanOrEqual(3);
   expect(Math.abs((x0 + x1) / 2 - thinX)).toBeLessThanOrEqual(1);
 
-  // Horizontal edge: col 2, between row 0 (region 0) and row 1 (region 1).
-  expect(regions[0][2]).not.toBe(regions[1][2]);
-  const b = await box(page, 0, 2);
+  // Horizontal edge: between two rows of different regions.
+  const b = await box(page, hr, hc);
   const thinY = b.y + b.height - 0.5;
   const [y0, y1] = await darkRun(page, "y", b.x + b.width / 2, thinY);
   expect(y1 - y0).toBeGreaterThanOrEqual(3);

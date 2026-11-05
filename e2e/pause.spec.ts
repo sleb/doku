@@ -1,11 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { open } from "./helpers";
+import { levelBySize } from "./levels";
 
 const paused = (page: import("@playwright/test").Page) =>
   page.getByRole("dialog", { name: "Paused" });
 
 test("the clock advances and Pause then Resume works", async ({ page }) => {
-  await open(page, 400, 800, "demo-7");
+  await open(page, 400, 800, levelBySize(7).id);
   await expect(page.getByText("0:00")).toBeVisible();
   await expect(page.getByText("0:01")).toBeVisible({ timeout: 3000 });
 
@@ -18,7 +19,7 @@ test("the clock advances and Pause then Resume works", async ({ page }) => {
 });
 
 test("the clock stops while paused", async ({ page }) => {
-  await open(page, 400, 800, "demo-7");
+  await open(page, 400, 800, levelBySize(7).id);
   await page.getByRole("button", { name: "Pause" }).click();
   const time = await page.locator("time").textContent();
   await page.waitForTimeout(1500);
@@ -26,7 +27,7 @@ test("the clock stops while paused", async ({ page }) => {
 });
 
 test("a hidden document auto-pauses", async ({ page }) => {
-  await open(page, 400, 800, "demo-7");
+  await open(page, 400, 800, levelBySize(7).id);
   await page.evaluate(() => {
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
