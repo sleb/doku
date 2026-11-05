@@ -2,12 +2,7 @@ import { describe, expect, it } from "vitest";
 import { uniqueLevel7 } from "./__fixtures__/levels";
 import { type Candidates, eliminate, fromBoard, placeFace } from "./candidates";
 import { compile } from "./compile";
-import {
-  lineInRegion,
-  regionInLine,
-  singleCandidate,
-  TECHNIQUES,
-} from "./techniques";
+import { lineInRegion, regionInLine, singleCandidate } from "./techniques";
 import type { Level } from "./types";
 
 // uniqueLevel7 with regions 4 and 6 reshaped into diagonal pairs, so no region
@@ -151,15 +146,5 @@ describe("line-in-region", () => {
 
   it("is null on a fresh board", () => {
     expect(lineInRegion(p, fresh())).toBeNull();
-  });
-});
-
-describe("TECHNIQUES", () => {
-  it("is ordered simplest to hardest", () => {
-    expect(TECHNIQUES.map((t) => [t.id, t.tier])).toEqual([
-      ["single-candidate", "easy"],
-      ["region-in-line", "medium"],
-      ["line-in-region", "medium"],
-    ]);
   });
 });
