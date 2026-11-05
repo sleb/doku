@@ -166,3 +166,12 @@ test("the body scrolls inside the safe area", () => {
   expect(body).toHaveClass("flex-1", "min-h-0");
   expect(screen.getByRole("dialog")).toHaveClass("max-h-full", "min-h-0");
 });
+
+test("Theme radiogroup is operable by arrow keys", async () => {
+  open();
+  const group = screen.getByRole("radiogroup", { name: "Theme" });
+  within(group).getByRole("radio", { name: "System" }).focus();
+  await userEvent.keyboard("{ArrowRight}");
+  expect(settingsStore.getState().theme).toBe("light");
+  expect(within(group).getByRole("radio", { name: "Light" })).toHaveFocus();
+});

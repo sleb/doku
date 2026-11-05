@@ -69,6 +69,20 @@ body {
   background: var(--color-surface);
 }
 
+/* One focus style for every control (POLISH_DESIGN 9.3). Cell overrides the offset only. */
+@layer base {
+  :where(button, [role="switch"], [role="radio"], a, [tabindex]):focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Pressed feedback for buttons; board cells have their own press and hold effects. */
+button:not(.cell):active:not(:disabled) {
+  transform: scale(0.97);
+  transition: transform 80ms ease;
+}
+
 body {
   color: var(--color-ink);
   touch-action: manipulation;
@@ -388,5 +402,12 @@ body {
 
   .dialog-in {
     animation-name: fx-fade;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(.cell):active:not(:disabled) {
+    transform: none;
+    transition: none;
   }
 }

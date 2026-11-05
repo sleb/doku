@@ -6,6 +6,7 @@ import {
   useSettingsStore,
 } from "../../store/settings";
 import { Dialog } from "../Dialog";
+import { RadioGroup } from "../RadioGroup";
 import { SwitchRow } from "../SwitchRow";
 
 const set = (patch: Partial<Settings>) => settingsStore.getState().set(patch);
@@ -24,43 +25,6 @@ function Section({
       </h3>
       {children}
     </section>
-  );
-}
-
-function RadioGroup<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: readonly (readonly [T, string])[];
-  onChange: (next: T) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex flex-col gap-1">
-      <span className="text-sm">{label}</span>
-      <div className="flex gap-2">
-        {options.map(([v, text]) => (
-          // biome-ignore lint/a11y/useSemanticElements: styled button radio
-          <button
-            key={v}
-            type="button"
-            role="radio"
-            aria-checked={value === v}
-            onClick={() => onChange(v)}
-            className={`flex-1 rounded border px-3 py-2 min-h-11 ${
-              value === v
-                ? "border-accent bg-accent text-on-accent"
-                : "border-line"
-            }`}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
