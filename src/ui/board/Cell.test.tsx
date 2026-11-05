@@ -332,7 +332,7 @@ describe("CellView", () => {
       expect(b.querySelector("[data-hold-glow]")).toBeNull();
       tick(HOLD_MS);
       expect(holding(b)).toBeUndefined();
-      expect(onGlow).toHaveBeenLastCalledWith(null);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
     });
 
     test.each([
@@ -345,7 +345,7 @@ describe("CellView", () => {
       down(b);
       tick(HOLD_DELAY_MS);
       end(b);
-      expect(onGlow).toHaveBeenLastCalledWith(null);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
     });
 
     test("onGlow(null) when disabled mid-hold and on unmount", () => {
@@ -369,13 +369,13 @@ describe("CellView", () => {
       down(b);
       tick(HOLD_DELAY_MS);
       rerender(<CellView {...props} disabled={true} />);
-      expect(onGlow).toHaveBeenLastCalledWith(null);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
       rerender(<CellView {...props} disabled={false} />);
       down(b);
       tick(HOLD_DELAY_MS);
       expect(onGlow).toHaveBeenLastCalledWith(17);
       unmount();
-      expect(onGlow).toHaveBeenLastCalledWith(null);
+      expect(onGlow).toHaveBeenLastCalledWith(null, 17);
     });
 
     test("a keyboard hold reports the glow too", () => {

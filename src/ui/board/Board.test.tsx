@@ -424,5 +424,29 @@ describe("Board", () => {
       expect(glows()).toHaveLength(0);
       expect(onHoldGlow).not.toHaveBeenCalled();
     });
+
+    test("a released cell does not clear another cell's glow", () => {
+      const { cell, onHoldGlow } = setup();
+      vi.useFakeTimers();
+      try {
+        const a = cell(0, 0);
+        const b = cell(3, 3);
+        fireEvent.pointerDown(a, { button: 0, pointerId: 1 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
+        fireEvent.pointerDown(b, { button: 0, pointerId: 2 });
+        act(() => vi.advanceTimersByTime(HOLD_DELAY_MS));
+        expect(onHoldGlow).toHaveBeenLastCalledWith(3 * n + 3);
+        onHoldGlow.mockClear();
+        fireEvent.pointerUp(a, { button: 0, pointerId: 1 });
+        expect(glows()).toHaveLength(1);
+        expect(onHoldGlow).not.toHaveBeenCalled();
+        fireEvent.pointerUp(b, { button: 0, pointerId: 2 });
+        expect(glows()).toHaveLength(0);
+        expect(onHoldGlow).toHaveBeenCalledTimes(1);
+        expect(onHoldGlow).toHaveBeenLastCalledWith(null);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

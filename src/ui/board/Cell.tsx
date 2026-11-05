@@ -20,7 +20,7 @@ export interface CellProps {
   /** Shared by a board's cells: the index of the cell being held, if any. Other cells ignore marks meanwhile. */
   holdOwner?: RefObject<number | null>;
   /** Reports the cell while its hold glows (`index`) and when it stops (`null`). Must be stable. */
-  onGlow?: (index: number | null) => void;
+  onGlow?: (glowing: number | null, owner?: number) => void;
   /** One-shot effect for the outcome that just hit this cell. Primitives only, so other cells stay memoised. */
   fx?: "place" | "wrong";
   /** Changes with every outcome; keys the effect so a repeat restarts it. */
@@ -65,7 +65,7 @@ export const CellView = memo(function CellView({
   useEffect(() => {
     if (!holding || !onGlow) return;
     onGlow(index);
-    return () => onGlow(null);
+    return () => onGlow(null, index);
   }, [holding, onGlow, index]);
   // A second finger or palm on a neighbor must not mark it mid-hold.
   const toggleMark = () => {

@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type RefObject,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -48,6 +49,12 @@ export function Board({
   const ownHoldOwner = useRef<number | null>(null);
   const holdOwner = sharedHoldOwner ?? ownHoldOwner;
   const [glowCell, setGlowCell] = useState<number | null>(null);
+  // A cell's release (null) only clears the glow it still owns.
+  const onCellGlow = useCallback(
+    (v: number | null, owner?: number) =>
+      setGlowCell((c) => (v === null ? (c === owner ? null : c) : v)),
+    [],
+  );
   const onHoldGlowRef = useRef(onHoldGlow);
   onHoldGlowRef.current = onHoldGlow;
   const reportedGlow = useRef<number | null>(null);
@@ -145,7 +152,7 @@ export function Board({
                 onToggleMark={onToggleMark}
                 onPlaceFace={onPlaceFace}
                 holdOwner={holdOwner}
-                onGlow={setGlowCell}
+                onGlow={onCellGlow}
                 fx={g.index === last?.cell ? fxKind : undefined}
                 fxSeq={g.index === last?.cell ? last?.seq : undefined}
               />
