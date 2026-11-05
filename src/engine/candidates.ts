@@ -66,3 +66,12 @@ export function eliminate(
   for (const cell of cells) kill(p, next, cell);
   return next;
 }
+
+// True when some unsatisfied unit has no alive cell left, so no face can ever
+// fill it.
+export function contradiction(c: Candidates): boolean {
+  for (let u = 0; u < c.aliveCount.length; u++) {
+    if (!c.satisfied[u] && c.aliveCount[u] === 0) return true;
+  }
+  return false;
+}
