@@ -137,3 +137,94 @@ export function growRegions(
 
   return Array.from({ length: n }, (_, r) => owner.slice(r * n, r * n + n));
 }
+
+// Rivals examined per repair move.
+const RIVALS = 8;
+
+interface Move {
+  cell: number;
+  to: number;
+}
+
+// True when region `id` is non-empty and 4-connected ignoring `skip`.
+function connectedWithout(
+  grid: readonly number[],
+  n: number,
+  id: number,
+  skip: number,
+): boolean {
+  const cells: number[] = [];
+  for (let i = 0; i < grid.length; i++) {
+    if (grid[i] === id && i !== skip) cells.push(i);
+  }
+  if (cells.length === 0) return false;
+  const seen = new Set<number>([cells[0]]);
+  const stack = [cells[0]];
+  while (stack.length > 0) {
+    const cur = stack.pop() as number;
+    const r = Math.floor(cur / n);
+    const c = cur % n;
+    for (const [dr, dc] of DIRS) {
+      const rr = r + dr;
+      const cc = c + dc;
+      if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue;
+      const nb = rr * n + cc;
+      if (nb !== skip && grid[nb] === id && !seen.has(nb)) {
+        seen.add(nb);
+        stack.push(nb);
+      }
+    }
+  }
+  return seen.size === cells.length;
+}
+
+// Breaks rival solutions one at a time by moving a rival's face cell into a
+// neighbouring region. The moved cell is never a solution cell, so the stored
+// solution stays valid. Returns the level itself when already unique, null
+// when no move helps or the budget runs out.
+export function repairUniqueness(
+  level: Level,
+  rng: Rng,
+  maxMoves: number,
+): Level | null {
+  const n = level.size;
+  let current = level;
+  for (let move = 0; ; move++) {
+    // Rivals beyond the first widen the choice of movable cells: a rival whose
+    // faces all sit mid-region cannot be broken by itself.
+    const found = solutions(current, RIVALS);
+    if (found.length === 1) return current;
+    if (found.length === 0 || move >= maxMoves) return null;
+
+    const grid = current.regions.flat();
+    const moves: Move[] = [];
+    const seen = new Set<string>();
+    for (const rival of found) {
+      rival.forEach((c, r) => {
+        if (c === level.solution[r]) return;
+        const cell = r * n + c;
+        const from = grid[cell];
+        if (!connectedWithout(grid, n, from, cell)) return;
+        const targets = new Set<number>();
+        for (const [dr, dc] of DIRS) {
+          const rr = r + dr;
+          const cc = c + dc;
+          if (rr < 0 || rr >= n || cc < 0 || cc >= n) continue;
+          const to = grid[rr * n + cc];
+          if (to !== from) targets.add(to);
+        }
+        for (const to of [...targets].sort((x, y) => x - y)) {
+          if (seen.has(`${cell}:${to}`)) continue;
+          seen.add(`${cell}:${to}`);
+          moves.push({ cell, to });
+        }
+      });
+    }
+    if (moves.length === 0) return null;
+
+    const chosen = rng.pick(moves);
+    const regions = current.regions.map((row) => [...row]);
+    regions[Math.floor(chosen.cell / n)][chosen.cell % n] = chosen.to;
+    current = { ...current, regions };
+  }
+}
