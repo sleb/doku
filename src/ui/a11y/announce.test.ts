@@ -22,6 +22,30 @@ const wrong = (hearts: number): Outcome => ({
 });
 
 describe("announce", () => {
+  test("a placement hint speaks the message, then where the face went", () => {
+    expect(
+      announce(
+        {
+          kind: "hint",
+          cell: 2 * 8 + 4,
+          message: "Because.",
+          faces: 1,
+          hearts: 2,
+        },
+        { size: 8 },
+      ),
+    ).toBe("Because. Face placed, row 3, column 5.");
+  });
+
+  test("an elimination hint speaks just the message", () => {
+    expect(
+      announce(
+        { kind: "hint", message: "Cannot hold.", faces: 1, hearts: 2 },
+        { size: 8 },
+      ),
+    ).toBe("Cannot hold.");
+  });
+
   test("place names the cell and the progress", () => {
     expect(announce(place(4), { size: 8 })).toBe(
       "Face placed, row 3, column 5. 4 of 8 placed.",

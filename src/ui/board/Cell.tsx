@@ -1,7 +1,13 @@
 import { memo, type RefObject, useEffect, useRef } from "react";
-import { Cell, REGION_NAMES } from "../../engine";
+import { Cell } from "../../engine";
+import { HINT_RING_MS } from "./hintRing";
 import { FaceIcon, MarkIcon, WrongIcon } from "./icons";
-import { type PaletteName, regionClass } from "./palette";
+import {
+  HINT_RING_COLOR,
+  HINT_RING_UNDERSTROKE_COLOR,
+  type PaletteName,
+  regionClass,
+} from "./palette";
 import { patternStyle } from "./patterns";
 import { useHold } from "./useHold";
 
@@ -32,6 +38,8 @@ export interface CellProps {
   holdOwner?: RefObject<number | null>;
   /** Reports the cell while its hold glows (`index`) and when it stops (`null`). Must be stable. */
   onGlow?: (glowing: number | null, owner?: number) => void;
+  /** Set on the cell a hint just filled; the value keys the 2 s ring so a new hint restarts it. */
+  hintRing?: number;
   /** One-shot effect for the outcome that just hit this cell. Primitives only, so other cells stay memoised. */
   fx?: "place" | "wrong";
   /** Changes with every outcome; keys the effect so a repeat restarts it. */
@@ -67,6 +75,7 @@ export const CellView = memo(function CellView({
   onGlow,
   fx,
   fxSeq,
+  hintRing,
 }: CellProps) {
   const hold = useHold(
     () => {
@@ -129,7 +138,7 @@ export const CellView = memo(function CellView({
   return (
     <button
       type="button"
-      aria-label={`Row ${row + 1}, column ${col + 1}, ${REGION_NAMES[region]} region, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
+      aria-label={`Row ${row + 1}, column ${col + 1}, region ${region + 1}, ${label}${isConflict ? ", conflict" : ""}${highlight ? ", highlighted" : ""}`}
       data-conflict={isConflict ? "true" : undefined}
       data-highlight={highlight ? "true" : undefined}
       data-hint={hint}
@@ -208,6 +217,19 @@ export const CellView = memo(function CellView({
           aria-hidden="true"
           data-fx-ring
           className="fx-ring pointer-events-none absolute inset-0 text-neutral-900"
+        />
+      ) : null}
+      {hintRing !== undefined ? (
+        <span
+          key={`hint-ring${hintRing}`}
+          aria-hidden="true"
+          data-hint-ring
+          className="hint-ring pointer-events-none absolute inset-0"
+          style={{
+            animationDuration: `${HINT_RING_MS}ms`,
+            borderColor: HINT_RING_COLOR,
+            boxShadow: `0 0 0 2px ${HINT_RING_UNDERSTROKE_COLOR}`,
+          }}
         />
       ) : null}
       <span

@@ -1,6 +1,7 @@
 import {
   type Board,
   Cell,
+  type Deduction,
   emptyBoard,
   isSolved,
   judgeTap,
@@ -35,7 +36,11 @@ export type GameState =
 export interface HintShown {
   cells: number[];
   targets: number[];
+  /** The default-naming text; the UI re-renders `deduction` for the palette. */
   message: string;
+  deduction: Deduction;
+  /** The cell a placement hint just filled; keys the timed ring. */
+  placed?: number;
 }
 
 export const idleState: GameState = {
@@ -172,6 +177,8 @@ export function hint(state: GameState): GameState {
     cells: because.cells,
     targets: place === undefined ? eliminate : [],
     message: found.message,
+    deduction: found.deduction,
+    ...(place === undefined ? {} : { placed: place }),
   };
   const current = state.hintShown;
   if (

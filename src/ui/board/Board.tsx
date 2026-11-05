@@ -30,6 +30,8 @@ export interface BoardProps {
   disabled: boolean;
   /** True during the win wave (result modal pending); sets `data-celebrate` and a `--row` per row. */
   celebrate?: boolean;
+  /** The face a hint just placed, ringed for `HINT_RING_MS`; `key` restarts the ring for a new hint. */
+  hintRing?: { cell: number; key: number };
   /** Cells to ring (the tutorial's "look here" cue). */
   highlight?: ReadonlySet<number>;
   /** "face": a click places a face. Defaults to "mark". */
@@ -55,6 +57,7 @@ export function Board({
   targets,
   disabled,
   highlight,
+  hintRing,
   celebrate,
   inputMode,
   palette,
@@ -94,7 +97,7 @@ export function Board({
   const fxKind =
     last?.cell === undefined
       ? undefined
-      : last.kind === "place"
+      : last.kind === "place" || last.kind === "hint"
         ? "place"
         : last.kind === "wrong" || last.kind === "lose"
           ? "wrong"
@@ -183,6 +186,7 @@ export function Board({
                 onPlaceFace={onPlaceFace}
                 holdOwner={holdOwner}
                 onGlow={onCellGlow}
+                hintRing={g.index === hintRing?.cell ? hintRing.key : undefined}
                 fx={g.index === last?.cell ? fxKind : undefined}
                 fxSeq={g.index === last?.cell ? last?.seq : undefined}
               />

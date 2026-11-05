@@ -53,11 +53,22 @@ describe("outcomeFor", () => {
     expect(outcomeFor(prev, next)?.kind).toBe("lose");
   });
 
-  it("is place for a hint, though it costs a heart", () => {
+  it("is hint for a hint, though it costs a heart", () => {
     const prev = fresh();
     const next = hint(prev);
     expect(next).not.toBe(prev);
-    expect(outcomeFor(prev, next)?.kind).toBe("place");
+    expect(outcomeFor(prev, next)?.kind).toBe("hint");
+  });
+
+  it("is hint with no cell and the message for an elimination hint", () => {
+    const prev = hint(fresh());
+    const next = hint(prev);
+    expect(next.board).toEqual(prev.board);
+    const o = outcomeFor(prev, next) as Outcome;
+    expect(o.kind).toBe("hint");
+    expect("cell" in o && o.cell).toBeFalsy();
+    expect(o.kind === "hint" && o.message).toMatch(/cannot hold a face/);
+    expect(o.hearts).toBe(1);
   });
 
   it("is win, not place, for a hint that finishes the board", () => {
@@ -125,10 +136,9 @@ describe("outcomeFor", () => {
   it("carries the committed cell for a hint", () => {
     const prev = fresh();
     const o = outcomeFor(prev, hint(prev)) as Outcome;
-    expect(o.kind).toBe("place");
-    expect(o.kind !== "win" && solution).toContain(
-      o.kind !== "win" ? o.cell : -1,
-    );
+    expect(o.kind).toBe("hint");
+    expect(o.kind === "hint" && o.message).toMatch(/only one cell left/);
+    expect(solution).toContain(o.kind !== "win" ? (o.cell as number) : -1);
     expect(o.faces).toBe(1);
     expect(o.hearts).toBe(2);
   });
@@ -147,7 +157,7 @@ describe("outcomeFor", () => {
       .place as number;
     const prev = toggleMark(base, target);
     const o = outcomeFor(prev, hint(prev)) as Outcome;
-    expect(o.kind).toBe("place");
+    expect(o.kind).toBe("hint");
     expect(o.kind !== "win" && o.cell).toBe(target);
   });
 

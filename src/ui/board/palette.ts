@@ -48,3 +48,8 @@ export const HOLD_UNDERSTROKE_COLOR = "#ffffff";
 
 // The board frame border (Board's `border-neutral-800`).
 export const BOARD_FRAME_COLOR = "#262626";
+
+// Hint ring on a hint-placed face: dark stroke with a light under-stroke, so
+// it reads on every region color and over the board frame.
+export const HINT_RING_COLOR = "#1e3a8a";
+export const HINT_RING_UNDERSTROKE_COLOR = "#ffffff";

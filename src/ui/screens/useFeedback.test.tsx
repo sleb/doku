@@ -311,6 +311,51 @@ describe("useFeedback announcements", () => {
     );
   });
 
+  test("an elimination hint announces its message, plays place feedback, sets fx with no cell", () => {
+    mount();
+    act(() => gameStore.getState().hint());
+    act(() => gameStore.getState().hint());
+    expect(text()).toMatch(/cannot hold a face/);
+    expect(text()).not.toMatch(/Face placed/);
+    expect(play()).toHaveBeenLastCalledWith("place");
+    expect(vi.mocked(sound.play)).toHaveBeenLastCalledWith(
+      "place",
+      expect.any(Number),
+      n,
+    );
+    const fx = fxStore.getState().last;
+    expect(fx?.kind).toBe("hint");
+    expect(fx?.cell).toBeUndefined();
+  });
+
+  test("a placement hint announces the message and where the face went", () => {
+    mount();
+    act(() => gameStore.getState().hint());
+    expect(text()).toMatch(
+      /only one cell left.* Face placed, row \d+, column \d+\.$/,
+    );
+  });
+
+  test("a hint is spoken with region numbers under the accessible palette", () => {
+    settingsStore.getState().set({ palette: "accessible" });
+    mount();
+    act(() => gameStore.getState().hint());
+    expect(text()).toMatch(/egion \d/);
+    expect(text()).not.toMatch(/the \w+ region/);
+    settingsStore.getState().set({ palette: "default" });
+  });
+
+  test("a free re-ask of the same hint is silent", () => {
+    mount();
+    act(() => gameStore.getState().hint());
+    act(() => gameStore.getState().hint());
+    const said = text();
+    play().mockClear();
+    act(() => gameStore.getState().hint());
+    act(() => gameStore.getState().hint());
+    expect(text()).toBe(said);
+  });
+
   test("the tutorial flag drops the hearts sentence", () => {
     mount({ tutorial: true });
     act(() => gameStore.getState().placeFace(wrongCell));

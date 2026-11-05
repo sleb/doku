@@ -17,6 +17,7 @@ import {
 } from "../a11y/announce";
 import { announcerStore } from "../a11y/announcerStore";
 import { fxStore } from "../fx/fxStore";
+import { hintMessage } from "./hintMessage";
 
 /** How long an outcome stays in `fxStore` (longer than any effect). */
 export const FX_MS = 350;
@@ -106,9 +107,21 @@ export function useFeedback(
         return;
       }
       fxStore.getState().set(outcome);
+      const settings = settingsStore.getState();
+      // The hint text names regions for the palette in use.
+      const spoken =
+        outcome.kind === "hint" && "hintShown" in next && next.hintShown
+          ? {
+              ...outcome,
+              message: hintMessage(next.hintShown, {
+                palette: settings.palette,
+                patterns: settings.patterns,
+              }),
+            }
+          : outcome;
       if (next.level)
         announcerStore.getState().say(
-          announce(outcome, {
+          announce(spoken, {
             size: next.level.size,
             tutorial: opts.current.tutorial,
             elapsedMs: next.elapsedMs,
@@ -117,10 +130,11 @@ export function useFeedback(
         );
       clearTimeout(timer);
       timer = setTimeout(clear, FX_MS);
-      const settings = settingsStore.getState();
-      if (settings.haptics) void haptics.play(outcome.kind);
+      // A hint is felt and heard like a placement.
+      const kind = outcome.kind === "hint" ? "place" : outcome.kind;
+      if (settings.haptics) void haptics.play(kind);
       if (settings.sound && next.level)
-        void sound.play(outcome.kind, outcome.faces, next.level.size);
+        void sound.play(kind, outcome.faces, next.level.size);
     });
     return () => {
       unsubscribe();

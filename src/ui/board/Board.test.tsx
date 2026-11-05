@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
-import { Cell, emptyBoard, REGION_NAMES } from "../../engine";
+import { Cell, emptyBoard } from "../../engine";
 import {
   uniqueLevel7 as level,
   multiSolutionLevel7,
@@ -75,7 +75,7 @@ describe("Board", () => {
       [3, 0],
       [6, 6],
     ]) {
-      const name = `Row ${r + 1}, column ${c + 1}, ${REGION_NAMES[level.regions[r][c]]} region, empty`;
+      const name = `Row ${r + 1}, column ${c + 1}, region ${level.regions[r][c] + 1}, empty`;
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
   });
@@ -511,5 +511,49 @@ describe("Board hint markers", () => {
       ["4", "cause"],
       ["10", "target"],
     ]);
+  });
+});
+
+describe("Board hint ring", () => {
+  const renderRing = (hintRing?: { cell: number; key: number }) =>
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        hintRing={hintRing}
+        {...handlers()}
+      />,
+    );
+
+  test("rings only the placed cell", () => {
+    const { container } = renderRing({ cell: 5, key: 1 });
+    const rings = container.querySelectorAll("[data-hint-ring]");
+    expect(rings).toHaveLength(1);
+    expect(rings[0].closest("button")?.dataset.index).toBe("5");
+  });
+
+  test("no ring without a placed hint", () => {
+    const { container } = renderRing();
+    expect(container.querySelector("[data-hint-ring]")).toBeNull();
+  });
+
+  test("a new hint remounts the ring so it restarts", () => {
+    const { container, rerender } = renderRing({ cell: 5, key: 1 });
+    const first = container.querySelector("[data-hint-ring]");
+    rerender(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        hintRing={{ cell: 5, key: 2 }}
+        {...handlers()}
+      />,
+    );
+    expect(container.querySelector("[data-hint-ring]")).not.toBe(first);
   });
 });

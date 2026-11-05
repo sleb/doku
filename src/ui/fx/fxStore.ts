@@ -1,11 +1,11 @@
 import { createStore } from "zustand/vanilla";
-import type { Outcome, OutcomeKind } from "../../platform/outcome";
+import type { Outcome } from "../../platform/outcome";
 
 /** The latest outcome, for one-shot cell and heart animations. */
 export interface Fx {
   /** Increments on every `set`, so a repeated effect restarts. */
   seq: number;
-  kind: OutcomeKind;
+  kind: Outcome["kind"];
   cell?: number;
   /** Hearts after the outcome; the heart at this index just emptied. */
   hearts: number;
