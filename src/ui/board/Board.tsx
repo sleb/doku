@@ -26,6 +26,8 @@ export interface BoardProps {
   disabled: boolean;
   /** True during the win wave (result modal pending); sets `data-celebrate` and a `--row` per row. */
   celebrate?: boolean;
+  /** Cells to ring (the tutorial's "look here" cue). */
+  highlight?: ReadonlySet<number>;
   /** "face": a click places a face. Defaults to "mark". */
   inputMode?: "mark" | "face";
   /** Region color set. Defaults to "default". */
@@ -46,6 +48,7 @@ export function Board({
   wrong,
   conflicts,
   disabled,
+  highlight,
   celebrate,
   inputMode,
   palette,
@@ -157,6 +160,7 @@ export function Board({
                 state={board[g.index]}
                 isWrong={wrong.has(g.index)}
                 isConflict={conflicts.has(g.index)}
+                highlight={highlight?.has(g.index)}
                 disabled={disabled || isLocked(board, wrong, g.index)}
                 inputMode={inputMode}
                 palette={palette}

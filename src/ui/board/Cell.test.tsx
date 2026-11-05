@@ -127,6 +127,20 @@ describe("CellView", () => {
     expect(cls).toContain("focus-visible:-outline-offset-8");
   });
 
+  test("highlight sets data-highlight and says so in the label", () => {
+    const b = renderCell({ highlight: true });
+    expect(b.dataset.highlight).toBe("true");
+    expect(b.getAttribute("aria-label")).toBe(
+      `Row 2, column 3, ${NAME}, empty, highlighted`,
+    );
+  });
+
+  test("no highlight leaves the label and attribute alone", () => {
+    const b = renderCell();
+    expect(b.dataset.highlight).toBeUndefined();
+    expect(b.getAttribute("aria-label")).not.toContain("highlighted");
+  });
+
   test("no conflict means no ring", () => {
     const b = renderCell();
     expect(b.dataset.conflict).toBeUndefined();

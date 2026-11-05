@@ -15,6 +15,27 @@ const n = level.size;
 const none: ReadonlySet<number> = new Set();
 const handlers = () => ({ onToggleMark: vi.fn(), onPlaceFace: vi.fn() });
 
+describe("Board highlight", () => {
+  test("rings exactly the highlighted cells", () => {
+    render(
+      <Board
+        level={level}
+        board={emptyBoard(level)}
+        wrong={none}
+        conflicts={none}
+        disabled={false}
+        highlight={new Set([0, 9])}
+        {...handlers()}
+      />,
+    );
+    const marked = screen
+      .getAllByRole("button")
+      .filter((b) => b.dataset.highlight === "true")
+      .map((b) => b.dataset.index);
+    expect(marked).toEqual(["0", "9"]);
+  });
+});
+
 describe("Board", () => {
   test("is an accessible grid of rows and gridcells with one button each", () => {
     render(
