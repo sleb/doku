@@ -121,7 +121,7 @@ export function createSound(deps: SoundDeps = defaultDeps): Sound {
         // currentTime is frozen, so wait for the resume rather than schedule
         // into it (that would pile up and burst later) or drop the cue.
         await resumeOnce(c);
-        if (c.state !== "running") return;
+        if ((c.state as AudioContextState) !== "running") return;
       }
       let voice: Voice | null = null;
       try {

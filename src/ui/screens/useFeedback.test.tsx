@@ -59,6 +59,16 @@ describe("useFeedback", () => {
     expect(play()).toHaveBeenCalledWith("place");
   });
 
+  test("a clock tick does no board scan", () => {
+    renderHook(() => useFeedback());
+    const board = gameStore.getState().board;
+    if (!board) throw new Error("no board");
+    const filter = vi.spyOn(board, "filter");
+    act(() => gameStore.getState().tick(16));
+    expect(filter).not.toHaveBeenCalled();
+    expect(play()).not.toHaveBeenCalled();
+  });
+
   test("plays wrong for a wrong face", () => {
     renderHook(() => useFeedback());
     act(() => gameStore.getState().placeFace(wrongCell));

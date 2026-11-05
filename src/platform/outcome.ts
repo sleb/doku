@@ -16,8 +16,9 @@ export type Outcome =
   /** A hint taken: `cell` is the placed face, absent for an elimination. */
   | ({ kind: "hint"; cell?: number; message: string } & Counts);
 
-function faceCount(state: GameState): number {
-  return state.board ? state.board.filter((c) => c === Cell.Face).length : 0;
+/** Faces on a board (0 when there is none). */
+export function faceCount(board: GameState["board"]): number {
+  return board ? board.filter((c) => c === Cell.Face).length : 0;
 }
 
 function hinted(prev: GameState, next: GameState): boolean {
@@ -44,7 +45,7 @@ function newWrongCell(prev: GameState, next: GameState): number | undefined {
 /** What a state change amounted to for the player, or null. Pure. */
 export function outcomeFor(prev: GameState, next: GameState): Outcome | null {
   if (prev.status !== "playing") return null;
-  const after = { faces: faceCount(next), hearts: next.hearts };
+  const after = { faces: faceCount(next.board), hearts: next.hearts };
   if (next.status === "won") return { kind: "win", ...after };
   if (hinted(prev, next)) {
     const cell = changedCell(prev, next);
@@ -61,6 +62,7 @@ export function outcomeFor(prev: GameState, next: GameState): Outcome | null {
   if (cell === undefined) return null;
   if (next.status === "lost") return { kind: "lose", cell, ...after };
   if (next.hearts < prev.hearts) return { kind: "wrong", cell, ...after };
-  if (after.faces > faceCount(prev)) return { kind: "place", cell, ...after };
+  if (after.faces > faceCount(prev.board))
+    return { kind: "place", cell, ...after };
   return null;
 }

@@ -3,7 +3,7 @@ import type { StoreApi } from "zustand/vanilla";
 import { Cell, type Level } from "../../engine";
 import { LEVELS, levelIndex } from "../../levels/campaign";
 import { haptics } from "../../platform/haptics";
-import { outcomeFor } from "../../platform/outcome";
+import { faceCount, outcomeFor } from "../../platform/outcome";
 import { sound } from "../../platform/sound";
 import { MAX_HEARTS } from "../../store/game";
 import { type GameStore, gameStore } from "../../store/gameStore";
@@ -22,8 +22,7 @@ import { hintMessage } from "./hintMessage";
 /** How long an outcome stays in `fxStore` (longer than any effect). */
 export const FX_MS = 350;
 
-const faces = (b: GameStore["board"]) =>
-  b ? b.filter((c) => c === Cell.Face).length : 0;
+const hintsUsed = (s: GameStore) => ("hintsUsed" in s ? s.hintsUsed : 0);
 
 export interface FeedbackOptions {
   /** Speak no hearts: the tutorial does not show them. */
@@ -74,6 +73,15 @@ export function useFeedback(
       fxStore.getState().clear();
     };
     const unsubscribe = store.subscribe((next, prev) => {
+      // Clock ticks change only elapsedMs: no board scans for them.
+      if (
+        next.board === prev.board &&
+        next.status === prev.status &&
+        next.level === prev.level &&
+        next.hearts === prev.hearts &&
+        hintsUsed(next) === hintsUsed(prev)
+      )
+        return;
       const outcome = outcomeFor(prev, next);
       if (!outcome) {
         // A new level, restart or restore must never animate or replay.
@@ -81,7 +89,7 @@ export function useFeedback(
           next.level !== prev.level ||
           prev.status !== "playing" ||
           next.hearts > prev.hearts ||
-          faces(next.board) < faces(prev.board);
+          faceCount(next.board) < faceCount(prev.board);
         if (reset) {
           clear();
           announcerStore.getState().reset();
