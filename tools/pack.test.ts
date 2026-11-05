@@ -9,6 +9,8 @@ import {
   type CurriculumRow,
   canonicalForm,
   collectRow,
+  computeStats,
+  formatStats,
   levelId,
   rowStartIndexes,
   verifyLevel,
@@ -194,5 +196,36 @@ describe("buildPack", () => {
     expect(() => buildPack(curriculum, 1, [], { generate: bad })).toThrow(
       /verif/i,
     );
+  });
+});
+
+describe("computeStats", () => {
+  const stats = computeStats(7, 5);
+
+  it("measures attempts to first success over fixed seeds", () => {
+    expect(stats.size).toBe(7);
+    expect(stats.seeds).toBe(5);
+    expect(stats.failed).toBe(0);
+    expect(stats.medianAttempts).toBeGreaterThanOrEqual(1);
+    expect(stats.p90Attempts).toBeGreaterThanOrEqual(stats.medianAttempts);
+    expect(stats.attempts).toBe(
+      stats.seeds + stats.rejects.repair + stats.rejects.shape,
+    );
+    expect(stats.wallMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("is deterministic apart from wall time", () => {
+    expect({ ...computeStats(7, 5), wallMs: 0 }).toEqual({
+      ...stats,
+      wallMs: 0,
+    });
+  });
+
+  it("formats one line per size under a header", () => {
+    const text = formatStats([stats]);
+    const lines = text.trimEnd().split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/size.*median.*p90.*repair.*shape.*ms/);
+    expect(lines[1]).toMatch(/^\s*7\b/);
   });
 });
