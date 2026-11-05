@@ -15,7 +15,7 @@ import { GameLayout } from "../ui/screens/GameLayout";
 import { useFeedback } from "../ui/screens/useFeedback";
 import { useHoldRamp } from "../ui/screens/useHoldRamp";
 import { useShortcuts } from "../ui/screens/useShortcuts";
-import { evaluate } from "./progress";
+import { evaluate, gestureSlip } from "./progress";
 import { STEPS, type TutorialStep } from "./steps";
 import { TutorialCard } from "./TutorialCard";
 
@@ -62,6 +62,9 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
   const holdOwner = useRef<number | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
+  const boardBox = useRef<HTMLDivElement>(null);
+  const lastCell = useRef(0);
+  const restoreFocus = useRef(false);
 
   const inputMode = useSettingsStore((s) => s.inputMode);
   const palette = useSettingsStore((s) => s.palette);
@@ -72,6 +75,7 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
   const wrong = useStore(store, (s) => ("wrong" in s ? s.wrong : none));
   const hearts = useStore(store, (s) => s.hearts);
   const progress = useStore(store, (s) => evaluate(step, s));
+  const slip = useStore(store, (s) => gestureSlip(step, s));
 
   useFeedback(store, { tutorial: true, describeLevel: () => null });
   useInputModeAnnouncement();
@@ -98,7 +102,10 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
     if (progress === "broken") {
       // After the generic "Not there" the store's feedback just spoke.
       announcerStore.getState().say(step.onWrong);
-      const t = setTimeout(() => load(store, index), RESET_MS);
+      const t = setTimeout(() => {
+        restoreFocus.current = true;
+        load(store, index);
+      }, RESET_MS);
       return () => clearTimeout(t);
     }
   }, [progress, index, last, store, step]);
@@ -114,9 +121,19 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
     }
   }, [index]);
 
+  // The board is inert while a slip is explained, which drops focus to the
+  // body; put it back once the reset reopens the board.
+  const open = status === "playing" && progress === "progress";
+  useEffect(() => {
+    if (!open || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    boardBox.current
+      ?.querySelector<HTMLElement>(`[data-index="${lastCell.current}"]`)
+      ?.focus();
+  }, [open]);
+
   const highlight = useMemo(() => new Set(step.highlight), [step]);
   if (!board || status === "idle") return null;
-  const open = status === "playing" && progress === "progress";
   return (
     <>
       <Announcer />
@@ -128,6 +145,7 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
             total={STEPS.length}
             inputMode={inputMode}
             broken={progress === "broken"}
+            slip={slip}
             hearts={
               step.showHearts ? <Hearts remaining={hearts} max={3} /> : null
             }
@@ -136,7 +154,15 @@ export function Tutorial({ onDone }: { onDone: () => void }) {
           />
         }
         board={
-          <div inert={!open}>
+          // biome-ignore lint/a11y/noStaticElementInteractions: only records which cell last had focus; the cells are the interactive elements
+          <div
+            ref={boardBox}
+            inert={!open}
+            onFocus={(e) => {
+              const i = (e.target as HTMLElement).dataset.index;
+              if (i !== undefined) lastCell.current = Number(i);
+            }}
+          >
             <Board
               level={step.level}
               board={board}

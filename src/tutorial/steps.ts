@@ -6,8 +6,9 @@ export interface Goal {
   cell: number;
   /**
    * face: the correct face is placed. mark: a ✕ note stands. wrong: a wrong
-   * tap landed here (the lesson of the hearts step). undone: a ✕ note here
-   * was placed and then taken back with Undo.
+   * tap landed here (the lesson of the hearts step). undone: this is one of
+   * the step's note cells, and the last note placed was taken back with Undo,
+   * whichever order they were marked in.
    */
   kind: "face" | "mark" | "wrong" | "undone";
 }
@@ -26,7 +27,7 @@ export interface TutorialStep {
   goal: readonly Goal[];
   /** Cells to ring: the "look here" cue. */
   highlight: readonly number[];
-  /** Action buttons and shortcuts this step has introduced. */
+  /** Action buttons and shortcuts available, cumulative from the step that introduces them. */
   controls?: readonly Control[];
   /** Show the (display-only) hearts. */
   showHearts?: boolean;
@@ -51,7 +52,7 @@ export const STEPS: readonly TutorialStep[] = [
   {
     id: "region",
     title: "One face per region",
-    body: "Each colored region holds exactly one face. Three regions are done; place the face in the last one.",
+    body: "Each colored region holds exactly one face. Two regions are done; place the face in the highlighted cell of the next one.",
     how: {
       mark: "Press and hold the highlighted cell until it fills. On a keyboard, hold Space on it.",
       face: "Tap the highlighted cell. On a keyboard, press Space on it.",
@@ -66,7 +67,7 @@ export const STEPS: readonly TutorialStep[] = [
         [3, 3, 3, 2],
       ],
     ),
-    start: start(4, [2, 4, 11]),
+    start: start(4, [2, 4]),
     goal: [{ cell: 13, kind: "face" }],
     highlight: [13],
     onWrong:
@@ -75,7 +76,7 @@ export const STEPS: readonly TutorialStep[] = [
   {
     id: "lines",
     title: "Rows and columns",
-    body: "Each row and each column holds exactly one face too. Rows 1 to 3 are done, so the last two faces belong in rows 4 and 5.",
+    body: "Each row and each column holds exactly one face too. Rows 1 and 2 are done. Rows 4 and 5 each have one cell left that is free of faces in its column and row: place those.",
     how: {
       mark: "Press and hold each highlighted cell until it fills.",
       face: "Tap each highlighted cell.",
@@ -91,7 +92,7 @@ export const STEPS: readonly TutorialStep[] = [
         [2, 2, 3, 3, 4],
       ],
     ),
-    start: start(5, [1, 8, 10]),
+    start: start(5, [1, 8]),
     goal: [
       { cell: 17, kind: "face" },
       { cell: 24, kind: "face" },
@@ -179,6 +180,7 @@ export const STEPS: readonly TutorialStep[] = [
       { cell: 11, kind: "face" },
     ],
     highlight: [14, 11],
+    controls: ["undo", "redo"],
     showHearts: true,
     onWrong:
       "Only the first highlighted cell is wrong on purpose. Try that one, then the second.",
@@ -206,7 +208,7 @@ export const STEPS: readonly TutorialStep[] = [
     start: start(6, [5, 9]),
     goal: [{ cell: 12, kind: "face" }],
     highlight: [12],
-    controls: ["hint"],
+    controls: ["undo", "redo", "hint"],
     showHearts: true,
     onWrong: "Use the Hint button for this one.",
   },

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { Cell } from "../engine";
 import { type Started, startLevel } from "../store/game";
-import { evaluate } from "./progress";
+import { evaluate, gestureSlip } from "./progress";
 import { STEPS, type TutorialStep } from "./steps";
 
 const step = (id: string): TutorialStep => {
@@ -105,6 +105,51 @@ describe("evaluate", () => {
     expect(evaluate(s, both)).toBe("progress");
     const undone = with_(f, { board: [[1, Cell.Mark]], future: [6] });
     expect(evaluate(s, undone)).toBe("complete");
+  });
+
+  test("the undone goal works in either marking order", () => {
+    const s = step("notes");
+    const f = fresh(s);
+    // Marked 6 then 1, then undid 1.
+    const other = with_(f, { board: [[6, Cell.Mark]], future: [1] });
+    expect(evaluate(s, other)).toBe("complete");
+    // Undoing both is not it yet.
+    expect(evaluate(s, with_(f, { future: [1, 6] }))).toBe("progress");
+    // Nothing undone yet.
+    expect(
+      evaluate(
+        s,
+        with_(f, {
+          board: [
+            [6, Cell.Mark],
+            [1, Cell.Mark],
+          ],
+        }),
+      ),
+    ).toBe("progress");
+  });
+
+  test("a note on a face-goal cell is a gesture slip, not a broken lesson", () => {
+    const s = step("region");
+    const marked = with_(fresh(s), { board: [[13, Cell.Mark]] });
+    expect(evaluate(s, marked)).toBe("progress");
+    expect(gestureSlip(s, marked)).toBe(true);
+    expect(gestureSlip(s, fresh(s))).toBe(false);
+    // Marks that are not on a solution cell are not a slip.
+    expect(gestureSlip(s, with_(fresh(s), { board: [[0, Cell.Mark]] }))).toBe(
+      false,
+    );
+    // Still placeable after the slip.
+    expect(evaluate(s, with_(fresh(s), { board: [[13, Cell.Face]] }))).toBe(
+      "complete",
+    );
+  });
+
+  test("a note on a solution cell is no slip on a notes step", () => {
+    const s = step("touching");
+    expect(gestureSlip(s, with_(fresh(s), { board: [[8, Cell.Mark]] }))).toBe(
+      false,
+    );
   });
 
   test("the hearts step completes on the expected wrong tap plus the right face", () => {

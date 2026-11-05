@@ -11,6 +11,7 @@ export function TutorialCard({
   total,
   inputMode,
   broken,
+  slip,
   hearts,
   onDone,
   headingRef,
@@ -21,6 +22,8 @@ export function TutorialCard({
   inputMode: "mark" | "face";
   /** True while the player's slip is being explained: shows `onWrong`. */
   broken: boolean;
+  /** True while a stray ✕ stands where a face goes: points at the gesture. */
+  slip?: boolean;
   hearts?: ReactNode;
   onDone: () => void;
   headingRef?: Ref<HTMLHeadingElement>;
@@ -54,6 +57,11 @@ export function TutorialCard({
       <p>{step.body}</p>
       <p className="text-ink-muted">{step.how[inputMode]}</p>
       <p className="text-ink-muted">{`Highlighted: ${cells}.`}</p>
+      {slip && !broken && (
+        <p data-testid="gesture-hint" className="font-semibold">
+          {`That made a ✕ note, not a face. ${step.how[inputMode]}`}
+        </p>
+      )}
       {broken && (
         <p data-testid="on-wrong" className="font-semibold">
           {step.onWrong}

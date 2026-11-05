@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { Cell, countSolutions, findConflicts, nextHint } from "../engine";
+import {
+  Cell,
+  countSolutions,
+  findConflicts,
+  isSolved,
+  nextHint,
+} from "../engine";
 import { LEVELS } from "../levels/campaign";
 import { STEPS } from "./steps";
 
@@ -72,10 +78,20 @@ describe("tutorial steps", () => {
     expect(step[0].showHearts).toBe(true);
   });
 
-  test("only the notes step offers undo and redo", () => {
-    expect(
-      STEPS.filter((s) => s.controls?.includes("undo")).map((s) => s.id),
-    ).toEqual(["notes"]);
+  test("no step's goal completes the board, so the store never reports a win", () => {
+    for (const s of STEPS) {
+      const board = s.start.slice();
+      for (const g of s.goal) if (g.kind === "face") board[g.cell] = Cell.Face;
+      expect(isSolved(board, s.level), s.id).toBe(false);
+    }
+  });
+
+  test("controls are cumulative: undo and redo from the notes step on, hint only at the end", () => {
+    const has = (c: "undo" | "redo" | "hint") =>
+      STEPS.filter((s) => s.controls?.includes(c)).map((s) => s.id);
+    expect(has("undo")).toEqual(["notes", "hearts", "hint"]);
+    expect(has("redo")).toEqual(["notes", "hearts", "hint"]);
+    expect(has("hint")).toEqual(["hint"]);
   });
 
   test("every step has copy, a gesture per input mode and highlights in range", () => {

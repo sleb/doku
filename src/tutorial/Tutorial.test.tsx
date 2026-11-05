@@ -103,7 +103,7 @@ describe("Tutorial", () => {
     render(<Tutorial onDone={() => {}} />);
     const s = STEPS[0];
     const placed = screen.getAllByRole("button", { name: /, face$/ });
-    expect(placed).toHaveLength(3);
+    expect(placed).toHaveLength(2);
     for (const p of placed) expect(p).toHaveAttribute("aria-disabled", "true");
     const lit = screen
       .getAllByRole("button", { name: /^Row / })
@@ -230,13 +230,50 @@ describe("Tutorial", () => {
     });
   });
 
+  describe("gesture slips and focus", () => {
+    test("a tap that makes a note on the goal cell hints at the gesture and keeps playing", () => {
+      render(<Tutorial onDone={() => {}} />);
+      fireEvent.click(cellBtn(STEPS[0], 13));
+      expect(screen.queryByTestId("on-wrong")).toBeNull();
+      expect(screen.getByTestId("gesture-hint")).toHaveTextContent(
+        STEPS[0].how.mark,
+      );
+      advance(RESET);
+      holdPointer(cellBtn(STEPS[0], 13));
+      advance(BEAT);
+      expect(heading()).toHaveTextContent(STEPS[1].title);
+    });
+
+    test("focus returns to the last focused cell after a reset", () => {
+      render(<Tutorial onDone={() => {}} />);
+      play(STEPS[0]);
+      advance(BEAT);
+      const s = STEPS[1];
+      const slip = cellBtn(s, 15);
+      slip.focus();
+      holdPointer(slip);
+      expect(screen.getByTestId("on-wrong")).toBeInTheDocument();
+      (document.activeElement as HTMLElement | null)?.blur();
+      advance(RESET);
+      expect(cellBtn(s, 15)).toHaveFocus();
+    });
+  });
+
   describe("controls appear where the step introduces them", () => {
-    test("Undo and Redo only on the notes step", () => {
-      toStep(3);
+    test("Undo and Redo from the notes step on, and not before", () => {
+      toStep(2);
+      expect(button("Undo")).toBeNull();
+      play(STEPS[2]);
+      advance(BEAT);
       expect(heading()).toHaveTextContent(STEPS[3].title);
       expect(button("Undo")).toBeInTheDocument();
       expect(button("Redo")).toBeInTheDocument();
       expect(button(/^Hint/)).toBeNull();
+      play(STEPS[3]);
+      advance(BEAT);
+      expect(heading()).toHaveTextContent(STEPS[4].title);
+      expect(button("Undo")).toBeInTheDocument();
+      expect(button("Redo")).toBeInTheDocument();
     });
 
     test("notes step: two notes then Undo completes it", () => {
@@ -256,7 +293,7 @@ describe("Tutorial", () => {
       // Step 1 has no hint: h must not place anything.
       fireEvent.keyDown(window, { key: "h" });
       expect(screen.getAllByRole("button", { name: /, face$/ })).toHaveLength(
-        3,
+        2,
       );
       fireEvent.keyDown(window, { key: "Escape" });
       expect(screen.getByRole("grid")).toBeVisible();
@@ -266,7 +303,7 @@ describe("Tutorial", () => {
       toStep(5);
       expect(heading()).toHaveTextContent(STEPS[5].title);
       expect(button(/^Hint/)).toBeInTheDocument();
-      expect(button("Undo")).toBeNull();
+      expect(button("Undo")).toBeInTheDocument();
     });
   });
 
