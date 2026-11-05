@@ -1,11 +1,14 @@
 import type { Candidates } from "./candidates";
-import type { Puzzle, UnitKind } from "./compile";
+import { neighborsOf, type Puzzle, type UnitKind } from "./compile";
 import type { Tier } from "./types";
 
 export type TechniqueId =
   | "single-candidate"
   | "region-in-line"
-  | "line-in-region";
+  | "line-in-region"
+  | "adjacency-pressure"
+  | "subset-regions-lines"
+  | "subset-lines-regions";
 
 export interface UnitRef {
   kind: UnitKind;
@@ -104,9 +107,136 @@ export const lineInRegion: Technique = (p, c) => {
   return null;
 };
 
+// If a face at X would leave some other unsatisfied unit with no alive cell,
+// X is impossible. Checked without cloning: the cells a face at X removes are
+// exactly its row, column, region and neighbors.
+export const adjacencyPressure: Technique = (p, c) => {
+  const covered = new Uint8Array(p.n * p.n);
+  for (let x = 0; x < p.n * p.n; x++) {
+    if (!c.alive[x] || c.placed[x]) continue;
+    covered.fill(0);
+    for (const u of [
+      Math.floor(x / p.n),
+      p.n + (x % p.n),
+      2 * p.n + p.regionOf[x],
+    ]) {
+      for (const cell of p.units[u].cells) covered[cell] = 1;
+    }
+    for (const cell of neighborsOf(p, x)) covered[cell] = 1;
+    for (let u = 0; u < p.units.length; u++) {
+      if (c.satisfied[u] || c.aliveCount[u] === 0) continue;
+      const cells = aliveCells(p, c, u);
+      if (cells.includes(x) || !cells.every((i) => covered[i])) continue;
+      return {
+        technique: "adjacency-pressure",
+        tier: "hard",
+        eliminate: [x],
+        because: { units: [ref(p, u)], cells },
+      };
+    }
+  }
+  return null;
+};
+
+// Calls `visit` with each subset of `items` of exactly `size` members whose
+// merged bitmask has `size` bits, stopping at the first truthy result.
+function tightSubset<T>(
+  items: { id: number; mask: number }[],
+  size: number,
+  visit: (ids: number[], mask: number) => T | null,
+): T | null {
+  const pick = (start: number, ids: number[], mask: number): T | null => {
+    if (popcount(mask) > size) return null;
+    if (ids.length === size)
+      return popcount(mask) === size ? visit(ids, mask) : null;
+    for (let k = start; k < items.length; k++) {
+      const found = pick(k + 1, [...ids, items[k].id], mask | items[k].mask);
+      if (found) return found;
+    }
+    return null;
+  };
+  return pick(0, [], 0);
+}
+
+function popcount(mask: number): number {
+  let n = 0;
+  for (let m = mask; m; m &= m - 1) n++;
+  return n;
+}
+
+// M units of one kind (A) that between them touch only M units of the other
+// kind (B) own those B units: every other alive cell of the B units goes. A is
+// regions and B is rows or columns, or the reverse.
+function subset(
+  p: Puzzle,
+  c: Candidates,
+  technique: "subset-regions-lines" | "subset-lines-regions",
+): Deduction | null {
+  const n = p.n;
+  const regionsFirst = technique === "subset-regions-lines";
+  for (const lineBase of [0, n]) {
+    const aBase = regionsFirst ? 2 * n : lineBase;
+    const bBase = regionsFirst ? lineBase : 2 * n;
+    const bOf = (cell: number) =>
+      regionsFirst
+        ? lineBase === 0
+          ? Math.floor(cell / n)
+          : cell % n
+        : p.regionOf[cell];
+    const aOf = (cell: number) =>
+      regionsFirst
+        ? p.regionOf[cell]
+        : lineBase === 0
+          ? Math.floor(cell / n)
+          : cell % n;
+    const items: { id: number; mask: number }[] = [];
+    for (let a = 0; a < n; a++) {
+      if (c.satisfied[aBase + a]) continue;
+      let mask = 0;
+      for (const cell of aliveCells(p, c, aBase + a)) mask |= 1 << bOf(cell);
+      if (mask) items.push({ id: a, mask });
+    }
+    for (let size = 2; size <= Math.floor(n / 2); size++) {
+      const found = tightSubset(items, size, (ids, mask) => {
+        const bs = Array.from({ length: n }, (_, b) => b).filter(
+          (b) => (mask >> b) & 1,
+        );
+        const out = bs
+          .flatMap((b) => aliveCells(p, c, bBase + b))
+          .filter((i) => !ids.includes(aOf(i)) && !c.placed[i]);
+        if (out.length === 0) return null;
+        const cells = ids.flatMap((a) => aliveCells(p, c, aBase + a));
+        return {
+          technique,
+          tier: "hard" as const,
+          eliminate: out,
+          because: {
+            units: [
+              ...ids.map((a) => ref(p, aBase + a)),
+              ...bs.map((b) => ref(p, bBase + b)),
+            ],
+            cells,
+          },
+        };
+      });
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export const subsetRegionsLines: Technique = (p, c) =>
+  subset(p, c, "subset-regions-lines");
+
+export const subsetLinesRegions: Technique = (p, c) =>
+  subset(p, c, "subset-lines-regions");
+
 // Ordered simplest to hardest; the single source of truth for tier.
 export const TECHNIQUES: { id: TechniqueId; tier: Tier; run: Technique }[] = [
   { id: "single-candidate", tier: "easy", run: singleCandidate },
   { id: "region-in-line", tier: "medium", run: regionInLine },
   { id: "line-in-region", tier: "medium", run: lineInRegion },
+  { id: "adjacency-pressure", tier: "hard", run: adjacencyPressure },
+  { id: "subset-regions-lines", tier: "hard", run: subsetRegionsLines },
+  { id: "subset-lines-regions", tier: "hard", run: subsetLinesRegions },
 ];

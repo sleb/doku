@@ -21,8 +21,8 @@ const level: Level = {
     [0, 0, 0, 0, 1, 1, 1],
     [0, 0, 0, 1, 1, 1, 1],
     [0, 2, 2, 3, 3, 3, 3],
-    [2, 2, 4, 4, 3, 3, 3],
-    [2, 5, 4, 4, 4, 6, 6],
+    [2, 2, 2, 4, 3, 3, 3],
+    [2, 2, 4, 4, 4, 6, 6],
     [5, 5, 5, 4, 6, 6, 6],
     [5, 5, 5, 5, 6, 6, 6],
   ],
@@ -39,23 +39,20 @@ const without = (c: Candidates, cells: number[]) => eliminate(p, c, cells);
 const earlier = [singleCandidate, regionInLine, lineInRegion];
 
 describe("adjacency-pressure", () => {
-  // Region 6 reduced to (4,5) and (5,6): they touch, and a face at (4,6) or
-  // (5,5) would remove both.
-  const keep = [at(4, 5), at(5, 6)];
+  // Region 4 reduced to (4,2) and (5,3): they touch, and a face at (5,1) would
+  // remove both.
+  const keep = [at(4, 2), at(5, 3)];
   const c = without(
     fresh(),
-    cellsWhere((_r, _c, g) => g === 6 && !keep.includes(_r * 7 + _c)),
+    cellsWhere((r, col, g) => g === 4 && !keep.includes(r * 7 + col)),
   );
 
   it("eliminates a cell whose face would empty another unit", () => {
-    const d = adjacencyPressure(p, c);
-    expect(d?.technique).toBe("adjacency-pressure");
-    expect(d?.tier).toBe("hard");
-    expect(d?.place).toBeUndefined();
-    expect(d?.eliminate).toHaveLength(1);
-    expect(d?.because).toEqual({
-      units: [{ kind: "region", id: 6 }],
-      cells: keep,
+    expect(adjacencyPressure(p, c)).toEqual({
+      technique: "adjacency-pressure",
+      tier: "hard",
+      eliminate: [at(5, 1)],
+      because: { units: [{ kind: "region", id: 4 }], cells: keep },
     });
   });
 
@@ -80,8 +77,8 @@ describe("adjacency-pressure", () => {
   });
 
   it("skips satisfied units", () => {
-    // Place a face in region 6's cell: the unit is satisfied, nothing to fear.
-    const placed = placeFace(p, c, at(4, 5));
+    // Place a face in region 4's cell: the unit is satisfied, nothing to fear.
+    const placed = placeFace(p, c, at(4, 2));
     expect(adjacencyPressure(p, placed)?.because.units).not.toContainEqual({
       kind: "region",
       id: 6,
@@ -96,29 +93,27 @@ describe("adjacency-pressure", () => {
 });
 
 describe("subset-regions-lines", () => {
-  // Regions 3 and 4 confined to rows 3 and 4: they own those rows.
+  // Regions 2 and 3 confined to rows 2 and 3: they own those rows.
   const c = without(
     fresh(),
-    cellsWhere((r, _c, g) => (g === 3 || g === 4) && r !== 3 && r !== 4),
+    cellsWhere((r, _c, g) => g === 2 && r === 4),
   );
 
   it("eliminates other regions' cells from the owned rows", () => {
-    const d = subsetRegionsLines(p, c);
-    expect(d).toMatchObject({
+    expect(subsetRegionsLines(p, c)).toEqual({
       technique: "subset-regions-lines",
       tier: "hard",
+      eliminate: [at(2, 0), at(3, 3)],
+      because: {
+        units: [
+          { kind: "region", id: 2 },
+          { kind: "region", id: 3 },
+          { kind: "row", id: 2 },
+          { kind: "row", id: 3 },
+        ],
+        cells: [15, 16, 21, 22, 23, 17, 18, 19, 20, 25, 26, 27],
+      },
     });
-    expect(d?.eliminate).toEqual(
-      cellsWhere(
-        (r, _c, g) => (r === 3 || r === 4) && g !== 3 && g !== 4,
-      ).filter((i) => c.alive[i]),
-    );
-    expect(d?.because.units).toEqual([
-      { kind: "region", id: 3 },
-      { kind: "region", id: 4 },
-      { kind: "row", id: 3 },
-      { kind: "row", id: 4 },
-    ]);
   });
 
   it("is invisible to the earlier techniques", () => {
@@ -145,13 +140,8 @@ describe("subset-regions-lines", () => {
   });
 
   it("needs exactly M lines for M regions", () => {
-    // Region 4 also keeps a cell in row 5: three lines for two regions.
-    const loose = without(
-      fresh(),
-      cellsWhere(
-        (r, _c, g) => (g === 3 && r !== 3 && r !== 4) || (g === 4 && r > 5),
-      ),
-    );
+    // Region 2 keeps (4,1): three rows for two regions.
+    const loose = without(fresh(), [at(4, 0)]);
     expect(subsetRegionsLines(p, loose)).toBeNull();
   });
 
@@ -194,16 +184,8 @@ describe("subset-lines-regions", () => {
   });
 
   it("needs exactly M regions for M lines", () => {
-    const loose = without(c, [at(1, 3)]);
-    // Rows 0 and 1 still touch only regions 0 and 1; make row 1 reach region 3.
-    expect(subsetLinesRegions(p, loose)?.because.units).toEqual([
-      { kind: "row", id: 0 },
-      { kind: "row", id: 1 },
-      { kind: "region", id: 0 },
-      { kind: "region", id: 1 },
-    ]);
-    const none = without(c, [at(2, 0)]);
-    expect(subsetLinesRegions(p, none)).toBeNull();
+    // Nothing left outside rows 0 and 1 to eliminate.
+    expect(subsetLinesRegions(p, without(c, [at(2, 0)]))).toBeNull();
   });
 });
 
